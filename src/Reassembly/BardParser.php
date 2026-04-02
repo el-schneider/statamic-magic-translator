@@ -44,9 +44,9 @@ final class BardParser
     /**
      * Parse an HTML-tagged string back into a ProseMirror inline content array.
      *
-     * @param  string  $html     The serialized HTML string from BardSerializer
+     * @param  string  $html  The serialized HTML string from BardSerializer
      * @param  array<int, array<string, mixed>>  $markMap  Mark definitions for custom marks
-     * @return array<int, array<string, mixed>>  ProseMirror text node array
+     * @return array<int, array<string, mixed>> ProseMirror text node array
      */
     public function parse(string $html, array $markMap): array
     {
@@ -61,26 +61,29 @@ final class BardParser
         foreach ($tokens as $token) {
             if ($token['type'] === 'open') {
                 $mark = $this->resolveMark($token, $markMap);
-                if ($mark !== null) {
-                    $markStack[] = $mark;
+                if ($mark !== null && ! ($token['selfClosing'] ?? false)) {
+                    $markStack[] = [
+                        'tag' => $token['tag'],
+                        'mark' => $mark,
+                    ];
                 }
             } elseif ($token['type'] === 'close') {
-                if (! empty($markStack)) {
-                    array_pop($markStack);
+                $tag = $token['tag'];
+
+                for ($i = count($markStack) - 1; $i >= 0; $i--) {
+                    if (($markStack[$i]['tag'] ?? null) === $tag) {
+                        array_splice($markStack, $i, 1);
+
+                        break;
+                    }
                 }
             } else {
-                // Text token — emit a ProseMirror text node.
-                // Key order must match ProseMirror convention: type, marks?, text.
-                if (! empty($markStack)) {
-                    $node = [
-                        'type' => 'text',
-                        'marks' => array_values($markStack),
-                        'text' => $token['text'],
-                    ];
-                } else {
-                    $node = ['type' => 'text', 'text' => $token['text']];
-                }
-                $nodes[] = $node;
+                $marks = array_map(
+                    static fn (array $entry): array => $entry['mark'],
+                    $markStack
+                );
+
+                $this->appendTextNode($nodes, $token['text'], $marks);
             }
         }
 
@@ -107,15 +110,22 @@ final class BardParser
 
                 if (str_starts_with($raw, '</')) {
                     // Closing tag: </tagname>
-                    $tagName = trim(substr($raw, 2, -1));
-                    $tokens[] = ['type' => 'close', 'tag' => strtolower($tagName)];
+                    $tagName = mb_trim(mb_substr($raw, 2, -1));
+                    $tokens[] = ['type' => 'close', 'tag' => mb_strtolower($tagName)];
                 } else {
+                    $selfClosing = preg_match('/\/\s*>$/', $raw) === 1;
+
                     // Opening tag: <tagname attrs>
-                    $inner = substr($raw, 1, -1); // strip < and >
+                    $inner = mb_substr($raw, 1, -1); // strip < and >
                     preg_match('/^([\w-]+)(.*)/su', $inner, $nameMatch);
-                    $tagName = strtolower($nameMatch[1] ?? '');
+                    $tagName = mb_strtolower($nameMatch[1] ?? '');
                     $attrString = $nameMatch[2] ?? '';
-                    $tokens[] = ['type' => 'open', 'tag' => $tagName, 'attrs' => $attrString];
+                    $tokens[] = [
+                        'type' => 'open',
+                        'tag' => $tagName,
+                        'attrs' => $attrString,
+                        'selfClosing' => $selfClosing,
+                    ];
                 }
             } elseif (isset($match[2]) && $match[2] !== '') {
                 $tokens[] = ['type' => 'text', 'text' => $match[2]];
@@ -163,27 +173,104 @@ final class BardParser
     }
 
     /**
-     * Parse HTML attribute pairs from an attribute string like:
-     *   ` href="https://example.com" target="_blank"`
+     * Parse HTML attributes from a tag attribute string like:
+     *   ` href="https://example.com" target='_blank' download`
      *
-     * Quoted attribute values are decoded from HTML entities back to their
-     * original characters (e.g. &quot; → ").
+     * Values are decoded from HTML entities (e.g. &quot; → ").
      *
-     * @return array<string, string>
+     * @return array<string, mixed>
      */
     private function parseAttributes(string $attrString): array
     {
         $attrs = [];
 
-        // Match name="value" pairs (the serializer always uses double-quoted values)
-        preg_match_all('/([\w-]+)="([^"]*)"/', $attrString, $matches, PREG_SET_ORDER);
+        // Match:
+        // - name="value"
+        // - name='value'
+        // - name=value
+        // - boolean name (e.g. `download`)
+        preg_match_all(
+            '/([^\s=\/>]+)(?:\s*=\s*(?:"([^"]*)"|\'([^\']*)\'|([^\s"\'=<>`]+)))?/u',
+            $attrString,
+            $matches,
+            PREG_SET_ORDER | PREG_UNMATCHED_AS_NULL
+        );
 
         foreach ($matches as $match) {
             $name = $match[1];
-            $value = html_entity_decode($match[2], ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8');
-            $attrs[$name] = $value;
+
+            if (($match[2] ?? null) !== null) {
+                $rawValue = $match[2];
+            } elseif (($match[3] ?? null) !== null) {
+                $rawValue = $match[3];
+            } elseif (($match[4] ?? null) !== null) {
+                $rawValue = $match[4];
+            } else {
+                $attrs[$name] = true;
+
+                continue;
+            }
+
+            $attrs[$name] = html_entity_decode($rawValue, ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8');
         }
 
         return $attrs;
+    }
+
+    /**
+     * Append a text node and merge with previous text node when marks match exactly.
+     *
+     * @param  array<int, array<string, mixed>>  $nodes
+     * @param  array<int, array<string, mixed>>  $marks
+     */
+    private function appendTextNode(array &$nodes, string $text, array $marks): void
+    {
+        if ($text === '') {
+            return;
+        }
+
+        // Key order must match ProseMirror convention: type, marks?, text.
+        if ($marks !== []) {
+            $node = [
+                'type' => 'text',
+                'marks' => array_values($marks),
+                'text' => $text,
+            ];
+        } else {
+            $node = ['type' => 'text', 'text' => $text];
+        }
+
+        $lastIndex = count($nodes) - 1;
+        if ($lastIndex >= 0 && $this->canMergeTextNodes($nodes[$lastIndex], $node)) {
+            $nodes[$lastIndex]['text'] .= $node['text'];
+
+            return;
+        }
+
+        $nodes[] = $node;
+    }
+
+    /**
+     * @param  array<string, mixed>  $left
+     * @param  array<string, mixed>  $right
+     */
+    private function canMergeTextNodes(array $left, array $right): bool
+    {
+        if (($left['type'] ?? null) !== 'text' || ($right['type'] ?? null) !== 'text') {
+            return false;
+        }
+
+        $leftHasMarks = array_key_exists('marks', $left);
+        $rightHasMarks = array_key_exists('marks', $right);
+
+        if ($leftHasMarks !== $rightHasMarks) {
+            return false;
+        }
+
+        if ($leftHasMarks && $left['marks'] !== $right['marks']) {
+            return false;
+        }
+
+        return true;
     }
 }

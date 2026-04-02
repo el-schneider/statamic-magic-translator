@@ -122,6 +122,24 @@ it('parses link with multiple attributes preserving all of them', function () {
     ]);
 });
 
+it('preserves all link attributes including booleans and mixed quoting styles', function () {
+    $html = "<a href='https://example.com' target = \"_blank\" rel='noopener noreferrer' download data-id=42 >click</a>";
+    $result = $this->parser->parse($html, []);
+
+    expect($result)->toBe([
+        ['type' => 'text', 'marks' => [[
+            'type' => 'link',
+            'attrs' => [
+                'href' => 'https://example.com',
+                'target' => '_blank',
+                'rel' => 'noopener noreferrer',
+                'download' => true,
+                'data-id' => '42',
+            ],
+        ]], 'text' => 'click'],
+    ]);
+});
+
 it('unescapes html entities in link attribute values', function () {
     $result = $this->parser->parse('<a href="https://example.com/?q=&quot;x&quot;">quoted</a>', []);
 
@@ -195,6 +213,22 @@ it('parses multiple text nodes with mixed marks', function () {
         ['type' => 'text', 'marks' => [['type' => 'bold']], 'text' => 'bold middle'],
         ['type' => 'text', 'text' => ', plain again, '],
         ['type' => 'text', 'marks' => [['type' => 'italic']], 'text' => 'italic end'],
+    ]);
+});
+
+it('merges adjacent text nodes that carry identical marks', function () {
+    $result = $this->parser->parse('<b>one</b><b>two</b>', []);
+
+    expect($result)->toBe([
+        ['type' => 'text', 'marks' => [['type' => 'bold']], 'text' => 'onetwo'],
+    ]);
+});
+
+it('does not leak marks from self-closing known tags', function () {
+    $result = $this->parser->parse('a<b/>b', []);
+
+    expect($result)->toBe([
+        ['type' => 'text', 'text' => 'ab'],
     ]);
 });
 
