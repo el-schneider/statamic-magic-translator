@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace ElSchneider\ContentTranslator;
 
+use Statamic\Facades\Utility;
 use Statamic\Providers\AddonServiceProvider;
 
 final class ServiceProvider extends AddonServiceProvider
@@ -26,7 +27,7 @@ final class ServiceProvider extends AddonServiceProvider
 
     public function supportsInertia(): bool
     {
-        return false;
+        return method_exists(Utility::class, 'inertia');
     }
 
     private function registerConfiguration(): void

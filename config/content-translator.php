@@ -64,7 +64,7 @@ return [
     |
     */
 
-    'log_completions' => env('CONTENT_TRANSLATOR_LOG_COMPLETIONS', false),
+    'log_completions' => env('CONTENT_TRANSLATOR_LOG_COMPLETIONS', true),
 
     /*
     |--------------------------------------------------------------------------
