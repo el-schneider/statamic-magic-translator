@@ -61,7 +61,13 @@ final class ContentReassembler
 
                 $this->reassembleBardBody($result, $bardPath, $unit);
             } else {
-                // Plain or Markdown unit: dot-path assignment.
+                // Plain or Markdown unit: only set existing paths.
+                // This avoids creating stale keys when blueprints/data changed
+                // after extraction but before reassembly.
+                if (! data_has($result, $unit->path)) {
+                    continue;
+                }
+
                 data_set($result, $unit->path, $unit->translatedText);
             }
         }
