@@ -37,6 +37,15 @@ it('serializes plain text with no marks', function () {
     expect($result->markMap)->toBe([]);
 });
 
+it('serializes text node with empty string', function () {
+    $content = [['type' => 'text', 'text' => '']];
+
+    $result = $this->serializer->serialize($content);
+
+    expect($result->text)->toBe('');
+    expect($result->markMap)->toBe([]);
+});
+
 it('serializes plain paragraph fixture', function () {
     $result = $this->serializer->serialize(bardFixture('plain-paragraph'));
 
@@ -147,8 +156,18 @@ it('serializes link fixture with href and additional attrs', function () {
 
     $result = $this->serializer->serialize($fixture);
 
-    expect($result->text)->toBe('Visit <a href="https://example.com">click here</a> for more');
+    expect($result->text)->toBe('Visit <a href="https://example.com" target="_blank">click here</a> for more');
     expect($result->markMap)->toBe([]);
+});
+
+it('escapes link attribute values when serializing', function () {
+    $content = [
+        ['type' => 'text', 'marks' => [['type' => 'link', 'attrs' => ['href' => 'https://example.com/?q="x"']]], 'text' => 'quoted'],
+    ];
+
+    $result = $this->serializer->serialize($content);
+
+    expect($result->text)->toBe('<a href="https://example.com/?q=&quot;x&quot;">quoted</a>');
 });
 
 // ── Nested marks ──────────────────────────────────────────────────────────────
