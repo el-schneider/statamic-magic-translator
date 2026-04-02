@@ -20,7 +20,7 @@ final class ContentExtractor
     /**
      * Extract translatable units from entry data.
      *
-     * @param  array<string, mixed>  $data    Entry data keyed by field handle.
+     * @param  array<string, mixed>  $data  Entry data keyed by field handle.
      * @param  array<string, array<string, mixed>>  $fields  Field definitions keyed by handle.
      * @return TranslationUnit[]
      */
@@ -34,9 +34,9 @@ final class ContentExtractor
      *
      * @param  array<string, mixed>  $data
      * @param  array<string, array<string, mixed>>  $fields
-     * @param  string  $pathPrefix   Already-built path prefix (e.g. "blocks.0")
-     * @param  bool    $insideContainer  When true, skip the `localizable` guard
-     *                                   (parent already passed it).
+     * @param  string  $pathPrefix  Already-built path prefix (e.g. "blocks.0")
+     * @param  bool  $insideContainer  When true, skip the `localizable` guard
+     *                                 (parent already passed it).
      * @return TranslationUnit[]
      */
     private function extractWithPrefix(
@@ -89,16 +89,16 @@ final class ContentExtractor
      * Dispatch extraction to the appropriate Tier 2 handler.
      *
      * @param  array<string, mixed>  $fieldConfig
-     * @param  array<int, mixed>     $value
+     * @param  array<int, mixed>  $value
      * @return TranslationUnit[]
      */
     private function extractTier2(array $fieldConfig, array $value, string $path): array
     {
         return match ($fieldConfig['type']) {
             'replicator' => $this->extractReplicator($fieldConfig, $value, $path),
-            'grid'       => $this->extractGrid($fieldConfig, $value, $path),
-            'table'      => $this->extractTable($value, $path),
-            default      => [],
+            'grid' => $this->extractGrid($fieldConfig, $value, $path),
+            'table' => $this->extractTable($value, $path),
+            default => [],
         };
     }
 

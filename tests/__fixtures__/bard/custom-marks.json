@@ -1,0 +1,9 @@
+[
+    { "type": "text", "text": "This is " },
+    {
+        "type": "text",
+        "marks": [{ "type": "btsSpan", "attrs": { "class": "brand", "id": "logo" } }],
+        "text": "styled text"
+    },
+    { "type": "text", "text": " here" }
+]
