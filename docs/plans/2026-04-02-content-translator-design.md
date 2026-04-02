@@ -28,7 +28,7 @@ The extraction handles arbitrary nesting depth. A Bard inside a Replicator insid
 
 **Phase 2 — Translate.** Send all units to the translation service in one batch. Both backends receive full entry context:
 - **LLMs via Prism:** all units in a single prompt; structured output enforces `[{id, text}]` response shape.
-- **DeepL:** units concatenated into a single text with `<u id="N">` delimiters; `tag_handling: "html"` preserves structure; split back by tags after.
+- **DeepL:** units concatenated into a single text with `<ct-unit id="N">` delimiters (custom tag avoids collision with HTML `<u>` underline); `tag_handling: "xml"` preserves structure; split back by tags after.
 
 Configurable `max_units_per_request` for chunking large entries (DeepL has a 50-text limit, LLM context windows have practical limits). Default: single batch per entry.
 
@@ -40,7 +40,7 @@ Configurable `max_units_per_request` for chunking large entries (DeepL has a 50-
 
 ### Field Classification
 
-Fields are classified by their blueprint fieldtype. The addon translates all fields by default; individual fields can be excluded via a `translatable: false` property on the field config in the blueprint.
+Fields are classified by their blueprint fieldtype. Only fields marked `localizable: true` in the blueprint are considered — non-localizable fields are shared across sites by design and never extracted. Among localizable fields, all are translated by default; individual fields can be excluded via a `translatable: false` property on the field config in the blueprint.
 
 **Tier 1 — Flat text (translate the string):**
 `text`, `textarea`, `markdown`
@@ -185,6 +185,21 @@ You MUST preserve all tags exactly as they appear. Do not translate tag attribut
 
 Users publish and override via `php artisan vendor:publish --tag=content-translator-views`.
 
+### Format-Aware Prompt Rules
+
+The prompt partials adapt based on which content formats are present in the batch:
+
+```blade
+{{-- resources/views/prompts/partials/format-rules.blade.php --}}
+@if ($hasHtmlUnits)
+Preserve all HTML tags exactly as they appear. Do not translate tag attributes. Do not add or remove tags.
+@endif
+@if ($hasMarkdownUnits)
+Preserve all Markdown formatting (bold, italic, links, images, headings, lists) exactly.
+Do not translate link URLs or image sources.
+@endif
+```
+
 ---
 
 ## Job Architecture
@@ -205,13 +220,19 @@ final class TranslateEntryJob implements ShouldQueue
 ```
 
 The job:
-1. Loads the origin entry
-2. Runs Phase 1 (extract)
-3. Runs Phase 2 (translate via configured service)
-4. Runs Phase 3 (reassemble)
-5. Creates or updates the localized entry
-6. Sets `last_translated_at` on the localized entry
-7. Reports status (success/failure) for polling
+1. Loads the source entry (origin by default, or user-selected source locale)
+2. Creates localization via `$entry->makeLocalization($site)` if it doesn't exist
+3. Runs Phase 1 (extract) — only `localizable: true` fields, respecting `translatable: false` opt-out
+4. Runs Phase 2 (translate via configured service)
+5. Runs Phase 3 (reassemble)
+6. Saves the localized entry with translated data
+7. Sets `last_translated_at` on the localized entry's `content_translator` field
+8. Optionally regenerates slug from translated title
+9. Reports status (success/failure) for polling
+
+Fires `BeforeEntryTranslation` before step 3 (listeners can modify field selection or bail) and `AfterEntryTranslation` after step 5 (listeners can modify translated data before save).
+
+Retries: uses Laravel's built-in job retry with exponential backoff (`$tries = 3`, `$backoff = [30, 60, 120]`).
 
 ### Queue Configuration
 
@@ -240,7 +261,43 @@ States:
 
 ### Sidebar Fieldtype
 
-A custom fieldtype (`content_translator`) added to the blueprint's sidebar section. Stores no data. Renders a "Translate" button that opens the translation dialog.
+Auto-injected into blueprints of configured collections via `EntryBlueprintFound` event. No manual blueprint editing required.
+
+```php
+// ServiceProvider::boot()
+Event::listen(EntryBlueprintFound::class, function ($event) {
+    $collection = $event->entry?->collection()?->handle();
+    $blueprint = $event->blueprint->handle();
+
+    if (! in_array($collection, config('content-translator.collections', []))) {
+        return;
+    }
+
+    if (in_array("{$collection}.{$blueprint}", config('content-translator.exclude_blueprints', []))) {
+        return;
+    }
+
+    $event->blueprint->ensureFieldInSection('content_translator', [
+        'type' => 'content_translator',
+        'visibility' => 'computed',  // prevents CP from overwriting our data on save
+        'localizable' => true,       // each localization stores its own translation metadata
+        'display' => 'Content Translator',
+        'listable' => 'hidden',
+    ], 'sidebar');
+});
+```
+
+The fieldtype renders a "Translate" button and serves as the data store for translation metadata:
+
+```yaml
+content_translator:
+  last_translated_at: '2026-04-02T10:00:00Z'
+  # phase 2: per-field translation ledger goes here too
+```
+
+`visibility: 'computed'` ensures the CP save pipeline never overwrites our stored metadata. The translation job writes timestamps via `$entry->set('content_translator', [...])` directly.
+
+The Vue component ignores the stored value for its UI (it reads localization state from the publish container). Users see a button, not data.
 
 ### Badge Injection into Locale Switcher
 
@@ -268,7 +325,8 @@ Shared component used from both the sidebar fieldtype and bulk actions.
 ```
 ┌─ Translate ──────────────────────────────────────┐
 │                                                    │
-│  Source: English (origin)                          │
+│  Source: [English (origin)        ▾]               │
+│          ↑ defaults to origin, allows override     │
 │                                                    │
 │  ☑ 🇫🇷 French      ✅ 2h ago                      │
 │  ☑ 🇩🇪 German      ◌ translating...               │
@@ -286,6 +344,7 @@ Shared component used from both the sidebar fieldtype and bulk actions.
 - Missing locales are checked by default.
 - Each row has its own compact status: spinner → ✓ → ⚠️ with inline error + retry.
 - "Overwrite existing" toggle gates selection of already-translated locales.
+- Overwrite is all-or-nothing for v1; field-level selection is phase 2.
 
 **Bulk action mode (N entries selected):**
 
@@ -305,6 +364,45 @@ Shared component used from both the sidebar fieldtype and bulk actions.
 
 - Per-locale rows with compact counters (`8/12`) and per-locale spinners.
 - Each locale's jobs are independent; one failing doesn't block others.
+
+### v5/v6 Compatibility
+
+The addon supports both Statamic v5 (Vue 2) and v6 (Vue 3). Feature detection via `supportsInertia()` determines which JS bundle to load:
+
+```php
+protected function supportsInertia(): bool
+{
+    return method_exists(Utility::class, 'inertia');
+}
+
+protected function viteConfig(): array
+{
+    return [
+        'input' => [
+            $this->supportsInertia()
+                ? 'resources/js/v6/addon.ts'
+                : 'resources/js/v5/addon.ts',
+        ],
+        'publicDirectory' => 'resources/dist',
+    ];
+}
+```
+
+JS source structure:
+
+```
+resources/js/
+├── core/               # shared, framework-agnostic
+│   ├── api.ts          # trigger/check endpoints
+│   ├── polling.ts      # polling with backoff
+│   └── injection.ts    # DOM selectors per version
+├── v5/
+│   └── addon.ts        # Vue 2 components, Vuex store integration
+├── v6/
+│   └── addon.ts        # Vue 3 components, publishContextKey integration
+```
+
+The `core/` layer handles all business logic. Version-specific entry points are thin wrappers that register components and wire up the appropriate state management. DOM selectors for badge injection are version-aware.
 
 ### Polling
 
@@ -350,6 +448,35 @@ Uses Statamic's `callback` return mechanism to open the shared dialog from JS.
 // config/content-translator.php
 
 return [
+    /*
+    |--------------------------------------------------------------------------
+    | Translatable Collections
+    |--------------------------------------------------------------------------
+    |
+    | Collections whose entries should be translatable. The addon auto-injects
+    | the content_translator fieldtype into all blueprints of these collections.
+    |
+    */
+    'collections' => [
+        // 'pages',
+        // 'blog',
+    ],
+
+    /*
+    |--------------------------------------------------------------------------
+    | Excluded Blueprints
+    |--------------------------------------------------------------------------
+    |
+    | Blueprints to exclude from auto-injection, using dot notation:
+    | 'collection.blueprint'. Useful for blueprints that should never
+    | be translated (e.g., a redirect or fragment blueprint).
+    |
+    */
+    'exclude_blueprints' => [
+        // 'pages.redirect',
+        // 'blog.link_post',
+    ],
+
     'service' => env('CONTENT_TRANSLATOR_SERVICE', 'prism'), // 'prism' or 'deepl'
 
     'prism' => [
@@ -381,7 +508,8 @@ return [
 
     'log_completions' => true,
 
-    'timestamp_field' => 'last_translated_at',
+    // Translation metadata is stored in the content_translator fieldtype's value.
+    // No separate timestamp field needed.
 ];
 ```
 
