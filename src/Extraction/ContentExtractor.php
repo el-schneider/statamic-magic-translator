@@ -13,10 +13,14 @@ use ElSchneider\ContentTranslator\Data\TranslationUnit;
  *
  * Tier 1 — flat text fields (text, textarea, markdown, link)
  * Tier 2 — structural containers (replicator, grid, table)
- * Tier 3 — bard (ProseMirror) — will be added in Task 7
+ * Tier 3 — bard (ProseMirror) — body text + set field recursion
  */
 final class ContentExtractor
 {
+    public function __construct(
+        private readonly BardSerializer $bardSerializer = new BardSerializer,
+    ) {}
+
     /**
      * Extract translatable units from entry data.
      *
@@ -78,8 +82,17 @@ final class ContentExtractor
                     $units,
                     $this->extractTier2($fieldConfig, $value, $fullPath),
                 );
+            } elseif ($tier === FieldTier::Tier3) {
+                // Skip absent, null, or non-array values.
+                if (! is_array($value) || $value === []) {
+                    continue;
+                }
+
+                $units = array_merge(
+                    $units,
+                    $this->extractBard($fieldConfig, $value, $fullPath),
+                );
             }
-            // Tier 3 (bard) and Skip — not handled here; bard comes in Task 7.
         }
 
         return $units;
@@ -197,5 +210,102 @@ final class ContentExtractor
         }
 
         return $units;
+    }
+
+    /**
+     * Extract from a bard (ProseMirror) field.
+     *
+     * Produces:
+     *  - One `TranslationUnit` (format: Html, path: "{path}.body") for all prose
+     *    block nodes joined by "\n\n", with "<x-set-N/>" placeholders in place
+     *    of set nodes.  Only emitted when at least one block node carries real
+     *    text content (i.e., not every part is a placeholder).
+     *  - Separate `TranslationUnit`s for each set's translatable fields, using
+     *    the existing Tier 1/2/3 logic recursively.
+     *
+     * The body unit is always prepended first in the returned array.
+     *
+     * @param  array<string, mixed>  $fieldConfig  Bard field definition
+     * @param  list<array<string, mixed>>  $nodes  ProseMirror document nodes
+     * @param  string  $path  Dot-path prefix for this bard field
+     * @return TranslationUnit[]
+     */
+    private function extractBard(array $fieldConfig, array $nodes, string $path): array
+    {
+        $setUnits = [];
+        $bodyParts = [];
+        $setCounter = 0;
+        $combinedMarkMap = [];
+        $markMapOffset = 0;
+        $sets = $fieldConfig['sets'] ?? [];
+
+        foreach ($nodes as $nodeIndex => $node) {
+            $nodeType = $node['type'] ?? '';
+
+            if ($nodeType === 'set') {
+                // Insert a placeholder so the body string preserves set positions.
+                $bodyParts[] = "<x-set-{$setCounter}/>";
+                $setCounter++;
+
+                // Recurse into the set's translatable fields.
+                $setValues = $node['attrs']['values'] ?? [];
+                $setType = $setValues['type'] ?? null;
+
+                if ($setType !== null && isset($sets[$setType]['fields'])) {
+                    $setPath = "{$path}.{$nodeIndex}.attrs.values";
+                    $setUnits = array_merge(
+                        $setUnits,
+                        $this->extractWithPrefix(
+                            $setValues,
+                            $sets[$setType]['fields'],
+                            $setPath,
+                            insideContainer: true,
+                        ),
+                    );
+                }
+            } elseif (isset($node['content']) && is_array($node['content'])) {
+                // Block node — serialize its inline content array.
+                $serialized = $this->bardSerializer->serialize($node['content']);
+
+                if ($serialized->text !== '') {
+                    if ($serialized->markMap !== []) {
+                        // Renumber custom-mark indices so they are globally sequential
+                        // across the combined body text (avoids collisions when merging).
+                        $renumberedText = (string) preg_replace_callback(
+                            '/data-mark-(\d+)/',
+                            fn (array $m): string => 'data-mark-'.((int) $m[1] + $markMapOffset),
+                            $serialized->text,
+                        );
+
+                        foreach ($serialized->markMap as $idx => $mark) {
+                            $combinedMarkMap[$idx + $markMapOffset] = $mark;
+                        }
+
+                        $markMapOffset += count($serialized->markMap);
+                        $bodyParts[] = $renumberedText;
+                    } else {
+                        $bodyParts[] = $serialized->text;
+                    }
+                }
+            }
+        }
+
+        // Only emit a body unit when there is at least one block with real
+        // translatable prose (not just set placeholders).
+        $hasRealText = count(array_filter(
+            $bodyParts,
+            static fn (string $part): bool => ! (bool) preg_match('/^<x-set-\d+\/>$/', $part),
+        )) > 0;
+
+        if ($hasRealText) {
+            array_unshift($setUnits, new TranslationUnit(
+                path: "{$path}.body",
+                text: implode("\n\n", $bodyParts),
+                format: TranslationFormat::Html,
+                markMap: $combinedMarkMap,
+            ));
+        }
+
+        return $setUnits;
     }
 }
