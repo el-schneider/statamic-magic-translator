@@ -60,7 +60,8 @@ final class FieldClassifier
      * Classify a field config array for use inside a structural container
      * (replicator set, grid row). The `localizable` guard is skipped because
      * the parent container already passed that check — nested field definitions
-     * typically do not carry a `localizable` key.
+     * typically do not carry a `localizable` key. If `localizable` is
+     * explicitly present and false, still skip.
      *
      * @param  array<string, mixed>  $fieldConfig
      */
@@ -68,6 +69,13 @@ final class FieldClassifier
     {
         // Custom addon opt-out — explicit translatable: false still applies.
         if (($fieldConfig['translatable'] ?? true) === false) {
+            return FieldTier::Skip;
+        }
+
+        // Nested fields usually omit `localizable`, but an explicit false
+        // should still be respected.
+        if (array_key_exists('localizable', $fieldConfig)
+            && $fieldConfig['localizable'] !== true) {
             return FieldTier::Skip;
         }
 

@@ -142,3 +142,13 @@ it('skips tier 2 fields with translatable false', function () {
 it('skips tier 3 fields with translatable false', function () {
     expect(FieldClassifier::classify(['type' => 'bard', 'localizable' => true, 'translatable' => false]))->toBe(FieldTier::Skip);
 });
+
+// ── nested classification (inside grid/replicator) ──────────────────────────
+
+it('classifies nested text without localizable key as tier 1', function () {
+    expect(FieldClassifier::classifyNested(['type' => 'text']))->toBe(FieldTier::Tier1);
+});
+
+it('skips nested fields with localizable false', function () {
+    expect(FieldClassifier::classifyNested(['type' => 'text', 'localizable' => false]))->toBe(FieldTier::Skip);
+});

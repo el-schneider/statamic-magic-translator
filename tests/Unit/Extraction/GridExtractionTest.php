@@ -243,6 +243,29 @@ it('skips fields with translatable false inside grid', function () {
     expect($units[0]->path)->toBe('links.0.label');
 });
 
+it('skips fields with localizable false inside grid', function () {
+    $data = [
+        'links' => [
+            ['label' => 'Example', 'internal_note' => 'Do not translate'],
+        ],
+    ];
+    $fields = [
+        'links' => [
+            'type' => 'grid',
+            'localizable' => true,
+            'fields' => [
+                'label' => ['type' => 'text'],
+                'internal_note' => ['type' => 'text', 'localizable' => false],
+            ],
+        ],
+    ];
+
+    $units = $this->extractor->extract($data, $fields);
+
+    expect($units)->toHaveCount(1);
+    expect($units[0]->path)->toBe('links.0.label');
+});
+
 // ── Edge cases ────────────────────────────────────────────────────────────────
 
 it('skips grid when field is not localizable', function () {
