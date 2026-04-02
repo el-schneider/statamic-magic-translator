@@ -48,6 +48,33 @@ it('skips units with null translatedText', function () {
     expect($result['title'])->toBe('Hello'); // unchanged
 });
 
+it('skips plain and markdown units whose paths no longer exist', function () {
+    $originalData = [
+        'title' => 'Hello',
+        'blocks' => [
+            ['type' => 'image', 'caption' => 'Existing caption'],
+        ],
+    ];
+    $units = [
+        // stale top-level path
+        (new TranslationUnit('subtitle', 'Old subtitle', TranslationFormat::Plain))
+            ->withTranslation('Sous-titre'),
+        // stale nested path (set/row removed since extraction)
+        (new TranslationUnit('blocks.5.caption', 'Old caption', TranslationFormat::Plain))
+            ->withTranslation('Ancienne légende'),
+        // real path still updates
+        (new TranslationUnit('title', 'Hello', TranslationFormat::Markdown))
+            ->withTranslation('Bonjour'),
+    ];
+
+    $result = $this->reassembler->reassemble($originalData, $units, []);
+
+    expect($result['title'])->toBe('Bonjour');
+    expect($result)->not->toHaveKey('subtitle');
+    expect($result['blocks'])->toHaveCount(1);
+    expect($result['blocks'][0]['caption'])->toBe('Existing caption');
+});
+
 // ── Replicator ────────────────────────────────────────────────────────────────
 
 it('reassembles replicator fields by dot-path', function () {
@@ -181,6 +208,46 @@ it('reassembles multiple bard paragraphs back into prosemirror', function () {
     expect($result['content'][1]['content'][0]['text'])->toBe('Le monde');
 });
 
+it('ignores extra bard translated blocks when there are more blocks than original nodes', function () {
+    $originalData = [
+        'content' => [
+            ['type' => 'paragraph', 'content' => [['type' => 'text', 'text' => 'One']]],
+            ['type' => 'paragraph', 'content' => [['type' => 'text', 'text' => 'Two']]],
+        ],
+    ];
+    $units = [
+        (new TranslationUnit('content.body', "One\n\nTwo", TranslationFormat::Html))
+            ->withTranslation("Un\n\nDeux\n\nTrois (extra)"),
+    ];
+
+    $result = $this->reassembler->reassemble($originalData, $units, []);
+
+    expect($result['content'])->toHaveCount(2);
+    expect($result['content'][0]['content'][0]['text'])->toBe('Un');
+    expect($result['content'][1]['content'][0]['text'])->toBe('Deux');
+});
+
+it('preserves remaining original bard blocks when translation has fewer blocks than original', function () {
+    $originalData = [
+        'content' => [
+            ['type' => 'paragraph', 'content' => [['type' => 'text', 'text' => 'One']]],
+            ['type' => 'paragraph', 'content' => [['type' => 'text', 'text' => 'Two']]],
+            ['type' => 'paragraph', 'content' => [['type' => 'text', 'text' => 'Three']]],
+        ],
+    ];
+    $units = [
+        (new TranslationUnit('content.body', "One\n\nTwo\n\nThree", TranslationFormat::Html))
+            ->withTranslation("Un\n\nDeux"),
+    ];
+
+    $result = $this->reassembler->reassemble($originalData, $units, []);
+
+    expect($result['content'][0]['content'][0]['text'])->toBe('Un');
+    expect($result['content'][1]['content'][0]['text'])->toBe('Deux');
+    // no translated block left, so original text remains unchanged
+    expect($result['content'][2]['content'][0]['text'])->toBe('Three');
+});
+
 it('reassembles heading and paragraph bard nodes', function () {
     $originalData = [
         'content' => [
@@ -303,6 +370,23 @@ it('preserves bard nodes without content key unchanged', function () {
     expect($result['content'][0]['type'])->toBe('horizontal_rule');
     expect($result['content'][0])->not->toHaveKey('content');
     expect($result['content'][1]['content'][0]['text'])->toBe('Après la règle');
+});
+
+it('preserves custom bard nodes that have no content array', function () {
+    $originalData = [
+        'content' => [
+            ['type' => 'btsDiv', 'attrs' => ['class' => 'callout']],
+            ['type' => 'paragraph', 'content' => [['type' => 'text', 'text' => 'Inside']]],
+        ],
+    ];
+    $units = [
+        (new TranslationUnit('content.body', 'Inside', TranslationFormat::Html))->withTranslation('À l’intérieur'),
+    ];
+
+    $result = $this->reassembler->reassemble($originalData, $units, []);
+
+    expect($result['content'][0])->toBe(['type' => 'btsDiv', 'attrs' => ['class' => 'callout']]);
+    expect($result['content'][1]['content'][0]['text'])->toBe('À l’intérieur');
 });
 
 // ── Bard with sets ────────────────────────────────────────────────────────────
