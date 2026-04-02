@@ -57,6 +57,36 @@ final class FieldClassifier
     }
 
     /**
+     * Classify a field config array for use inside a structural container
+     * (replicator set, grid row). The `localizable` guard is skipped because
+     * the parent container already passed that check — nested field definitions
+     * typically do not carry a `localizable` key.
+     *
+     * @param  array<string, mixed>  $fieldConfig
+     */
+    public static function classifyNested(array $fieldConfig): FieldTier
+    {
+        // Custom addon opt-out — explicit translatable: false still applies.
+        if (($fieldConfig['translatable'] ?? true) === false) {
+            return FieldTier::Skip;
+        }
+
+        return match ($fieldConfig['type'] ?? '') {
+            // ── Tier 1: flat text ──────────────────────────────────────────
+            'text', 'textarea', 'markdown', 'link' => FieldTier::Tier1,
+
+            // ── Tier 2: structural containers ─────────────────────────────
+            'replicator', 'grid', 'table' => FieldTier::Tier2,
+
+            // ── Tier 3: bard (ProseMirror) ────────────────────────────────
+            'bard' => FieldTier::Tier3,
+
+            // ── Skip: everything else ──────────────────────────────────────
+            default => FieldTier::Skip,
+        };
+    }
+
+    /**
      * Return the TranslationFormat appropriate for a given Tier 1 field type.
      * Defaults to Plain for any unrecognised type.
      */
