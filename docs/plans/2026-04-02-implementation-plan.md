@@ -53,10 +53,26 @@ Model after auto-alt-text's test setup:
 
 **Step 4: Create frontend build config**
 
-- `package.json` with `vite`, `laravel-vite-plugin`, `vue` (both 2 and 3 as optional peers), `typescript`.
+- `package.json` with `vite`, `laravel-vite-plugin`, `vue` (both 2 and 3 as optional peers), `typescript`, `prettier`, `husky`.
 - `vite.config.js` — two entry points: `resources/js/v5/addon.ts` and `resources/js/v6/addon.ts`.
 - `tsconfig.json` — standard TypeScript config.
 - `pint.json` — match auto-alt-text's pint config.
+- `.prettierrc` — consistent code formatting for JS/TS/Vue files.
+
+**Step 4a: Set up Husky with pre-commit hooks**
+
+```bash
+npx husky init
+```
+
+Configure `.husky/pre-commit`:
+
+```bash
+npx prettier --write --cache "resources/**/*.{js,ts,vue}"
+./vendor/bin/pint
+```
+
+This ensures all JS/TS/Vue files are formatted by Prettier and all PHP files are formatted by Pint on every commit.
 
 **Step 5: Stub the ServiceProvider**
 
