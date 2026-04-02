@@ -263,11 +263,12 @@ final class ContentExtractor
                         ),
                     );
                 }
-            } elseif (isset($node['content']) && is_array($node['content'])) {
-                // Block node — serialize its inline content array.
-                $serialized = $this->bardSerializer->serialize($node['content']);
+            } else {
+                foreach ($this->collectBardBlockSerializations($node) as $serialized) {
+                    if ($serialized->text === '') {
+                        continue;
+                    }
 
-                if ($serialized->text !== '') {
                     if ($serialized->markMap !== []) {
                         // Renumber custom-mark indices so they are globally sequential
                         // across the combined body text (avoids collisions when merging).
@@ -307,5 +308,46 @@ final class ContentExtractor
         }
 
         return $setUnits;
+    }
+
+    /**
+     * Collect serialized prose blocks from a bard node.
+     *
+     * Some nodes (e.g. paragraph, heading) contain inline text nodes directly.
+     * Others (e.g. blockquote, bullet_list, ordered_list, list_item) contain
+     * nested block nodes that eventually hold inline text. This helper recurses
+     * until it reaches a node whose `content` contains text nodes.
+     *
+     * @param  array<string, mixed>  $node
+     * @return BardSerializerResult[]
+     */
+    private function collectBardBlockSerializations(array $node): array
+    {
+        $content = $node['content'] ?? null;
+
+        if (! is_array($content) || $content === []) {
+            return [];
+        }
+
+        $hasDirectTextNodes = count(array_filter(
+            $content,
+            static fn (mixed $child): bool => is_array($child) && (($child['type'] ?? '') === 'text'),
+        )) > 0;
+
+        if ($hasDirectTextNodes) {
+            return [$this->bardSerializer->serialize($content)];
+        }
+
+        $results = [];
+
+        foreach ($content as $child) {
+            if (! is_array($child)) {
+                continue;
+            }
+
+            $results = array_merge($results, $this->collectBardBlockSerializations($child));
+        }
+
+        return $results;
     }
 }
