@@ -224,6 +224,31 @@ it('skips fields with translatable false inside replicator sets', function () {
     expect($units[0]->path)->toBe('blocks.0.label');
 });
 
+it('skips fields with localizable false inside replicator sets', function () {
+    $data = [
+        'blocks' => [
+            ['type' => 'text', 'body' => 'Translate me', 'internal_note' => 'Do not translate'],
+        ],
+    ];
+    $fields = [
+        'blocks' => [
+            'type' => 'replicator',
+            'localizable' => true,
+            'sets' => [
+                'text' => ['fields' => [
+                    'body' => ['type' => 'text'],
+                    'internal_note' => ['type' => 'text', 'localizable' => false],
+                ]],
+            ],
+        ],
+    ];
+
+    $units = $this->extractor->extract($data, $fields);
+
+    expect($units)->toHaveCount(1);
+    expect($units[0]->path)->toBe('blocks.0.body');
+});
+
 // ── Unknown/missing set type handling ─────────────────────────────────────────
 
 it('skips replicator items whose type is not defined in sets', function () {
