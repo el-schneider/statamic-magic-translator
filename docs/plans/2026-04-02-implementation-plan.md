@@ -1384,3 +1384,45 @@ Task 1 (scaffold)
 ```
 
 Tasks 3–8 can be parallelized (extraction and reassembly are independent). Tasks 10–11 are independent. Tasks 14–18 are mostly independent after 13.
+
+---
+
+## Final Acceptance Criteria
+
+These user stories must all pass in both v5 and v6 sandboxes before the addon is considered complete.
+
+**US-1: Single Entry Translation**
+As an editor, I can open an entry in the CP, click "Translate" in the sidebar, select target locales, and have the entry translated asynchronously. I see per-locale status indicators (spinner → ✓ → ⚠️) in the dialog while translations process.
+
+**US-2: Bulk Translation**
+As an editor, I can select multiple entries in a collection listing, run the "Translate" bulk action, choose target locales, and have all entries translated. I see per-locale progress counters in the dialog.
+
+**US-3: Overwrite Protection**
+As an editor, when I open the translation dialog, locales with existing translations are unchecked by default. I must explicitly enable "Overwrite existing translations" to re-translate them.
+
+**US-4: Translation Staleness**
+As an editor, I can see in the Sites panel which localizations are up-to-date, outdated, or missing, via injected badges showing timestamps or warnings.
+
+**US-5: Source Selection**
+As an editor, the translation dialog defaults to the origin entry as source, but I can select a different source locale from a dropdown.
+
+**US-6: Slug Generation**
+As an editor, I can choose to auto-generate slugs from the translated title via a checkbox in the dialog.
+
+**US-7: Complex Content Preservation**
+As a developer, when an entry with Bard fields (including custom marks/extensions, interlaced sets, nested replicators) is translated, all structural data is preserved — only text content is translated.
+
+**US-8: DeepL Backend**
+As a developer, I can configure DeepL as the translation service with per-language formality settings, and translations maintain full entry context.
+
+**US-9: Prism/LLM Backend**
+As a developer, I can configure any Prism-supported LLM provider, customize prompts via publishable Blade views, and set per-language prompt overrides.
+
+**US-10: Zero-Config Blueprint Setup**
+As a developer, I add collection handles to `content-translator.collections` config and the fieldtype auto-injects into all blueprints. I can exclude specific blueprints via `exclude_blueprints` dot notation.
+
+**US-11: Retry on Failure**
+As an editor, when a translation fails (rate limit, API error), I see the error inline in the dialog with a Retry button. The job also retries automatically with backoff.
+
+**US-12: v5/v6 Compatibility**
+As a developer, the addon works on both Statamic v5 and v6 without configuration changes.
