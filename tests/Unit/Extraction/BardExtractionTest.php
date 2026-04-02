@@ -99,6 +99,47 @@ it('handles heading nodes the same way as paragraphs', function () {
     expect($units[0]->format)->toBe(TranslationFormat::Html);
 });
 
+it('extracts prose from nested blockquote children', function () {
+    $data = [
+        'content' => [
+            ['type' => 'paragraph', 'content' => [['type' => 'text', 'text' => 'Intro']]],
+            ['type' => 'blockquote', 'content' => [
+                ['type' => 'paragraph', 'content' => [['type' => 'text', 'text' => 'Quote line 1']]],
+                ['type' => 'paragraph', 'content' => [['type' => 'text', 'text' => 'Quote line 2']]],
+            ]],
+            ['type' => 'paragraph', 'content' => [['type' => 'text', 'text' => 'Outro']]],
+        ],
+    ];
+    $fields = ['content' => ['type' => 'bard', 'localizable' => true]];
+
+    $units = $this->extractor->extract($data, $fields);
+
+    expect($units)->toHaveCount(1);
+    expect($units[0]->text)->toBe("Intro\n\nQuote line 1\n\nQuote line 2\n\nOutro");
+});
+
+it('extracts prose from list items in document order', function () {
+    $data = [
+        'content' => [
+            ['type' => 'bullet_list', 'content' => [
+                ['type' => 'list_item', 'content' => [
+                    ['type' => 'paragraph', 'content' => [['type' => 'text', 'text' => 'First item']]],
+                ]],
+                ['type' => 'list_item', 'content' => [
+                    ['type' => 'paragraph', 'content' => [['type' => 'text', 'text' => 'Second item']]],
+                ]],
+            ]],
+            ['type' => 'paragraph', 'content' => [['type' => 'text', 'text' => 'After list']]],
+        ],
+    ];
+    $fields = ['content' => ['type' => 'bard', 'localizable' => true]];
+
+    $units = $this->extractor->extract($data, $fields);
+
+    expect($units)->toHaveCount(1);
+    expect($units[0]->text)->toBe("First item\n\nSecond item\n\nAfter list");
+});
+
 it('skips block nodes with empty content arrays', function () {
     $data = [
         'content' => [
