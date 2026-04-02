@@ -1,0 +1,9 @@
+[
+    { "type": "text", "text": "Visit " },
+    {
+        "type": "text",
+        "marks": [{ "type": "link", "attrs": { "href": "https://example.com", "target": "_blank" } }],
+        "text": "click here"
+    },
+    { "type": "text", "text": " for more" }
+]

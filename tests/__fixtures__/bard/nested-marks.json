@@ -1,0 +1,5 @@
+[
+    { "type": "text", "text": "This is " },
+    { "type": "text", "marks": [{ "type": "bold" }, { "type": "italic" }], "text": "strong emphasis" },
+    { "type": "text", "text": " here" }
+]
