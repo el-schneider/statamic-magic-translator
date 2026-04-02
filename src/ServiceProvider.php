@@ -23,6 +23,7 @@ final class ServiceProvider extends AddonServiceProvider
 
         $this->registerConfiguration();
         $this->registerTranslations();
+        $this->registerViews();
     }
 
     public function supportsInertia(): bool
@@ -42,5 +43,14 @@ final class ServiceProvider extends AddonServiceProvider
     private function registerTranslations(): void
     {
         $this->loadTranslationsFrom(__DIR__.'/../resources/lang', 'content-translator');
+    }
+
+    private function registerViews(): void
+    {
+        $this->loadViewsFrom(__DIR__.'/../resources/views', 'content-translator');
+
+        $this->publishes([
+            __DIR__.'/../resources/views' => resource_path('views/vendor/content-translator'),
+        ], 'content-translator-views');
     }
 }

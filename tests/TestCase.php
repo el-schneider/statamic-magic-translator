@@ -6,6 +6,7 @@ namespace Tests;
 
 use ElSchneider\ContentTranslator\ServiceProvider;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Prism\Prism\PrismServiceProvider;
 use Statamic\Facades\Site;
 use Statamic\Testing\AddonTestCase;
 use Statamic\Testing\Concerns\PreventsSavingStacheItemsToDisk;
@@ -23,6 +24,13 @@ abstract class TestCase extends AddonTestCase
         parent::setUp();
 
         $this->setUpMultiSite();
+    }
+
+    protected function getPackageProviders($app): array
+    {
+        return array_merge(parent::getPackageProviders($app), [
+            PrismServiceProvider::class,
+        ]);
     }
 
     protected function resolveApplicationConfiguration($app): void

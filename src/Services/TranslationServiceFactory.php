@@ -14,8 +14,8 @@ final class TranslationServiceFactory
         $service = config('content-translator.service');
 
         return match ($service) {
-            'prism' => new PrismTranslationService,
-            'deepl' => new DeepLTranslationService,
+            'prism' => app(PrismTranslationService::class),
+            'deepl' => app(DeepLTranslationService::class),
             default => throw new InvalidArgumentException("Unknown translation service: [{$service}]"),
         };
     }
