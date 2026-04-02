@@ -31,13 +31,13 @@ final class BardSerializer
 {
     /** @var array<string, string> Maps known ProseMirror mark types to their HTML tags. */
     private const KNOWN_MARKS = [
-        'bold'        => 'b',
-        'italic'      => 'i',
-        'underline'   => 'u',
-        'strike'      => 's',
-        'code'        => 'code',
+        'bold' => 'b',
+        'italic' => 'i',
+        'underline' => 'u',
+        'strike' => 's',
+        'code' => 'code',
         'superscript' => 'sup',
-        'subscript'   => 'sub',
+        'subscript' => 'sub',
     ];
 
     /**
@@ -79,8 +79,16 @@ final class BardSerializer
                     $openTags .= "<{$tag}>";
                     $closeTags = "</{$tag}>".$closeTags;
                 } elseif ($markType === 'link') {
-                    $href = $mark['attrs']['href'] ?? '';
-                    $openTags .= "<a href=\"{$href}\">";
+                    $attrs = $mark['attrs'] ?? [];
+                    if (! is_array($attrs)) {
+                        $attrs = [];
+                    }
+
+                    if (! array_key_exists('href', $attrs)) {
+                        $attrs = ['href' => ''] + $attrs;
+                    }
+
+                    $openTags .= '<a'.$this->serializeAttributes($attrs).'>';
                     $closeTags = '</a>'.$closeTags;
                 } else {
                     // Unknown/custom mark — store in markMap and emit a placeholder.
@@ -95,5 +103,40 @@ final class BardSerializer
         }
 
         return new BardSerializerResult($text, $markMap);
+    }
+
+    /**
+     * @param  array<string, mixed>  $attrs
+     */
+    private function serializeAttributes(array $attrs): string
+    {
+        $serialized = '';
+
+        foreach ($attrs as $name => $value) {
+            if (! is_string($name) || $name === '') {
+                continue;
+            }
+
+            if ($value === null || $value === false) {
+                continue;
+            }
+
+            if ($value === true) {
+                $serialized .= ' '.htmlspecialchars($name, ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8');
+
+                continue;
+            }
+
+            if (! is_scalar($value)) {
+                continue;
+            }
+
+            $escapedName = htmlspecialchars($name, ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8');
+            $escapedValue = htmlspecialchars((string) $value, ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8');
+
+            $serialized .= " {$escapedName}=\"{$escapedValue}\"";
+        }
+
+        return $serialized;
     }
 }
