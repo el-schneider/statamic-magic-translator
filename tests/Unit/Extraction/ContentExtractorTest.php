@@ -155,7 +155,7 @@ it('skips tier 2 grid fields (to be handled in task 4)', function () {
     expect($units[0]->path)->toBe('title');
 });
 
-it('skips tier 3 bard fields (to be handled in task 7)', function () {
+it('extracts tier 3 bard fields alongside tier 1 fields', function () {
     $data = [
         'title' => 'My Post',
         'content' => [['type' => 'paragraph', 'content' => [['type' => 'text', 'text' => 'Hello']]]],
@@ -167,8 +167,11 @@ it('skips tier 3 bard fields (to be handled in task 7)', function () {
 
     $units = $this->extractor->extract($data, $fields);
 
-    expect($units)->toHaveCount(1);
+    expect($units)->toHaveCount(2);
     expect($units[0]->path)->toBe('title');
+    expect($units[1]->path)->toBe('content.body');
+    expect($units[1]->format)->toBe(TranslationFormat::Html);
+    expect($units[1]->text)->toBe('Hello');
 });
 
 // ── Skipping empty / null values ──────────────────────────────────────────────
