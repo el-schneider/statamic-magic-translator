@@ -1,0 +1,67 @@
+# AGENTS.md
+
+This file provides guidance to coding agents when working with code in this repository.
+
+## Project Overview
+
+**Content Translator** — Translate Statamic content
+
+Package: `el-schneider/statamic-content-translator`
+
+## Sandbox Environments
+
+This addon has companion Statamic sandboxes for testing. They may live as **siblings** or this addon may be **nested inside** a sandbox's `addons/` directory.
+
+### Sibling layout (typical)
+
+```
+../statamic-content-translator/              # ← you are here
+../statamic-content-translator-test/         # Statamic v5 sandbox
+../statamic-content-translator-test-v6/      # Statamic v6 sandbox
+```
+
+### Nested layout (alternative)
+
+```
+./                              # Statamic sandbox root
+└── addons/
+    └── el-schneider/
+        └── statamic-content-translator/     # ← you are here
+```
+
+**How to detect:** Check if `../../artisan` or `../../../artisan` exists — if so, you're nested inside a sandbox.
+
+### Sandbox URLs
+
+| Version | URL |
+|---------|-----|
+| v5 | `http://statamic-content-translator-test.test` |
+| v6 | `http://statamic-content-translator-test-v6.test` |
+
+**Credentials:** `agent@agent.md` / `agent`
+
+## Development Commands
+
+### Code Quality
+
+```bash
+./vendor/bin/pint --test
+./vendor/bin/pint
+```
+
+### Testing
+
+```bash
+./vendor/bin/pest
+./vendor/bin/pest --filter=SomeTest
+```
+
+### Running Artisan from the Addon Directory
+
+If sibling layout: `php ../statamic-content-translator-test/artisan {command}`
+If nested layout: `php ../../artisan {command}` (or `../../../artisan`)
+
+## Off-Limits Files
+
+- **`vendor/`** — Managed by Composer.
+- **`dist/`** — Built assets. Rebuild, don't hand-edit.
