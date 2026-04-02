@@ -19,7 +19,7 @@ final class ContentExtractor
     /**
      * Extract translatable units from entry data.
      *
-     * @param  array<string, mixed>  $data    Entry data keyed by field handle.
+     * @param  array<string, mixed>  $data  Entry data keyed by field handle.
      * @param  array<string, array<string, mixed>>  $fields  Field definitions keyed by handle.
      * @return TranslationUnit[]
      */
