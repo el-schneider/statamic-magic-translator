@@ -1,0 +1,2 @@
+npx prettier --write --cache "resources/**/*.{js,ts,vue}"
+./vendor/bin/pint
