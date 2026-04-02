@@ -16,8 +16,9 @@ declare(strict_types=1);
 pest()->extend(Tests\TestCase::class)
     ->in('Feature');
 
-pest()->extend(Tests\TestCase::class)
-    ->in('Unit');
+// Unit tests use PHPUnit\Framework\TestCase by default.
+// Pure value-object / algorithm tests don't need the full Statamic bootstrap.
+// Individual unit test files that require Statamic can call uses(Tests\TestCase::class) locally.
 
 /*
 |--------------------------------------------------------------------------
