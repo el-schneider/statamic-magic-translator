@@ -1,0 +1,439 @@
+<?php
+
+declare(strict_types=1);
+
+use ElSchneider\ContentTranslator\Jobs\TranslateEntryJob;
+use Illuminate\Support\Facades\Cache;
+use Illuminate\Support\Facades\Queue;
+use Tests\StatamicTestHelpers;
+
+uses(StatamicTestHelpers::class);
+
+// ── Helpers ───────────────────────────────────────────────────────────────────
+
+/**
+ * Return the absolute URL for a CP route path.
+ */
+function cpUrl(string $path): string
+{
+    $prefix = mb_ltrim(config('statamic.cp.route', 'cp'), '/');
+
+    return "/{$prefix}/{$path}";
+}
+
+/**
+ * Minimal trigger payload for a valid request.
+ */
+function triggerPayload(string $entryId, array $targetSites = ['fr']): array
+{
+    return [
+        'entry_id' => $entryId,
+        'target_sites' => $targetSites,
+    ];
+}
+
+// ── Authentication ─────────────────────────────────────────────────────────────
+
+it('requires authentication to trigger a translation', function () {
+    // No actingAs() call — unauthenticated JSON request.
+    $response = $this->postJson(cpUrl('content-translator/translate'), [
+        'entry_id' => 'some-id',
+        'target_sites' => ['fr'],
+    ]);
+
+    // Statamic's CP auth middleware returns 401 for JSON requests.
+    $response->assertStatus(401);
+});
+
+it('requires authentication to check job status', function () {
+    $response = $this->getJson(cpUrl('content-translator/status'), [
+        'jobs' => ['some-job-id'],
+    ]);
+
+    $response->assertStatus(401);
+});
+
+// ── Trigger: validation ────────────────────────────────────────────────────────
+
+it('returns 422 when entry_id is missing', function () {
+    $this->loginUser();
+
+    $response = $this->postJson(cpUrl('content-translator/translate'), [
+        'target_sites' => ['fr'],
+    ]);
+
+    $response->assertStatus(422)
+        ->assertJsonValidationErrors(['entry_id']);
+});
+
+it('returns 422 when target_sites is missing', function () {
+    $this->loginUser();
+
+    $response = $this->postJson(cpUrl('content-translator/translate'), [
+        'entry_id' => 'some-id',
+    ]);
+
+    $response->assertStatus(422)
+        ->assertJsonValidationErrors(['target_sites']);
+});
+
+it('returns 422 when target_sites is not an array', function () {
+    $this->loginUser();
+
+    $response = $this->postJson(cpUrl('content-translator/translate'), [
+        'entry_id' => 'some-id',
+        'target_sites' => 'fr',
+    ]);
+
+    $response->assertStatus(422)
+        ->assertJsonValidationErrors(['target_sites']);
+});
+
+it('returns 422 when options.generate_slug is not a boolean', function () {
+    $this->loginUser();
+
+    $this->createTestCollection('articles', ['en', 'fr']);
+    $this->createTestBlueprint('articles');
+    $entry = $this->createTestEntry('articles');
+
+    $response = $this->postJson(cpUrl('content-translator/translate'), [
+        'entry_id' => $entry->id(),
+        'target_sites' => ['fr'],
+        'options' => ['generate_slug' => 'not-a-bool'],
+    ]);
+
+    $response->assertStatus(422)
+        ->assertJsonValidationErrors(['options.generate_slug']);
+});
+
+// ── Trigger: entry existence ───────────────────────────────────────────────────
+
+it('returns 404 when the entry does not exist', function () {
+    $this->loginUser();
+
+    $response = $this->postJson(cpUrl('content-translator/translate'), [
+        'entry_id' => 'nonexistent-entry-id',
+        'target_sites' => ['fr'],
+    ]);
+
+    $response->assertStatus(404)
+        ->assertJson(['success' => false]);
+});
+
+// ── Trigger: job dispatch ─────────────────────────────────────────────────────
+
+it('dispatches a TranslateEntryJob for each target site', function () {
+    Queue::fake();
+
+    $this->loginUser();
+    $this->createTestCollection('articles', ['en', 'fr']);
+    $this->createTestBlueprint('articles');
+    $entry = $this->createTestEntry('articles');
+
+    $response = $this->postJson(cpUrl('content-translator/translate'), [
+        'entry_id' => $entry->id(),
+        'target_sites' => ['fr'],
+    ]);
+
+    $response->assertStatus(200)
+        ->assertJson(['success' => true]);
+
+    Queue::assertPushed(TranslateEntryJob::class, 1);
+});
+
+it('dispatches one job per target site', function () {
+    // Add a third site so we can dispatch to two targets.
+    Statamic\Facades\Site::setSites([
+        'en' => ['name' => 'English', 'url' => 'http://localhost/', 'locale' => 'en'],
+        'fr' => ['name' => 'French', 'url' => 'http://localhost/fr/', 'locale' => 'fr'],
+        'de' => ['name' => 'German', 'url' => 'http://localhost/de/', 'locale' => 'de'],
+    ]);
+
+    Queue::fake();
+
+    $this->loginUser();
+    $this->createTestCollection('articles', ['en', 'fr', 'de']);
+    $this->createTestBlueprint('articles');
+    $entry = $this->createTestEntry('articles');
+
+    $response = $this->postJson(cpUrl('content-translator/translate'), [
+        'entry_id' => $entry->id(),
+        'target_sites' => ['fr', 'de'],
+    ]);
+
+    $response->assertStatus(200)
+        ->assertJson(['success' => true]);
+
+    Queue::assertPushed(TranslateEntryJob::class, 2);
+});
+
+it('returns a job entry for every target site in the response', function () {
+    Queue::fake();
+
+    $this->loginUser();
+    $this->createTestCollection('articles', ['en', 'fr']);
+    $this->createTestBlueprint('articles');
+    $entry = $this->createTestEntry('articles');
+
+    $response = $this->postJson(cpUrl('content-translator/translate'), [
+        'entry_id' => $entry->id(),
+        'target_sites' => ['fr'],
+    ]);
+
+    $response->assertStatus(200);
+
+    $body = $response->json();
+
+    expect($body['success'])->toBeTrue();
+    expect($body['jobs'])->toHaveCount(1);
+    expect($body['jobs'][0])->toHaveKeys(['id', 'target_site', 'status']);
+    expect($body['jobs'][0]['target_site'])->toBe('fr');
+    expect($body['jobs'][0]['status'])->toBe('pending');
+    expect($body['jobs'][0]['id'])->toBeString()->not->toBeEmpty();
+});
+
+it('stores a pending cache entry for each dispatched job', function () {
+    Queue::fake();
+
+    $this->loginUser();
+    $this->createTestCollection('articles', ['en', 'fr']);
+    $this->createTestBlueprint('articles');
+    $entry = $this->createTestEntry('articles');
+
+    $response = $this->postJson(cpUrl('content-translator/translate'), [
+        'entry_id' => $entry->id(),
+        'target_sites' => ['fr'],
+    ]);
+
+    $response->assertStatus(200);
+
+    $jobId = $response->json('jobs.0.id');
+
+    $cached = Cache::get("content-translator:job:{$jobId}");
+
+    expect($cached)->not->toBeNull();
+    expect($cached['status'])->toBe('pending');
+    expect($cached['target_site'])->toBe('fr');
+});
+
+it('passes source_site and options through to the dispatched job', function () {
+    Queue::fake();
+
+    $this->loginUser();
+    $this->createTestCollection('articles', ['en', 'fr']);
+    $this->createTestBlueprint('articles');
+    $entry = $this->createTestEntry('articles');
+
+    $response = $this->postJson(cpUrl('content-translator/translate'), [
+        'entry_id' => $entry->id(),
+        'source_site' => 'en',
+        'target_sites' => ['fr'],
+        'options' => ['generate_slug' => true, 'overwrite' => false],
+    ]);
+
+    $response->assertStatus(200)->assertJson(['success' => true]);
+
+    // Job is pushed — specific constructor args are verified via integration
+    // in TranslateEntryJobTest; here we just confirm it was dispatched.
+    Queue::assertPushed(TranslateEntryJob::class);
+});
+
+// ── Status endpoint ────────────────────────────────────────────────────────────
+
+it('returns pending status for a freshly dispatched job', function () {
+    Queue::fake();
+
+    $this->loginUser();
+    $this->createTestCollection('articles', ['en', 'fr']);
+    $this->createTestBlueprint('articles');
+    $entry = $this->createTestEntry('articles');
+
+    $triggerResponse = $this->postJson(cpUrl('content-translator/translate'), [
+        'entry_id' => $entry->id(),
+        'target_sites' => ['fr'],
+    ]);
+
+    $jobId = $triggerResponse->json('jobs.0.id');
+
+    $statusResponse = $this->getJson(cpUrl('content-translator/status').'?'.http_build_query(['jobs' => [$jobId]]));
+
+    $statusResponse->assertStatus(200);
+
+    $jobs = $statusResponse->json('jobs');
+    expect($jobs)->toHaveCount(1);
+    expect($jobs[0]['id'])->toBe($jobId);
+    expect($jobs[0]['target_site'])->toBe('fr');
+    expect($jobs[0]['status'])->toBe('pending');
+});
+
+it('returns completed status for a finished job', function () {
+    $this->loginUser();
+
+    $jobId = 'test-completed-job-id';
+
+    Cache::put("content-translator:job:{$jobId}", [
+        'id' => $jobId,
+        'target_site' => 'fr',
+        'status' => 'completed',
+        'error' => null,
+    ], 600);
+
+    $response = $this->getJson(cpUrl('content-translator/status').'?'.http_build_query(['jobs' => [$jobId]]));
+
+    $response->assertStatus(200);
+
+    $jobs = $response->json('jobs');
+    expect($jobs[0]['status'])->toBe('completed');
+    expect($jobs[0]['target_site'])->toBe('fr');
+    expect($jobs[0])->not->toHaveKey('error');
+});
+
+it('returns failed status with error message for a failed job', function () {
+    $this->loginUser();
+
+    $jobId = 'test-failed-job-id';
+
+    Cache::put("content-translator:job:{$jobId}", [
+        'id' => $jobId,
+        'target_site' => 'fr',
+        'status' => 'failed',
+        'error' => 'Translation API unavailable.',
+    ], 600);
+
+    $response = $this->getJson(cpUrl('content-translator/status').'?'.http_build_query(['jobs' => [$jobId]]));
+
+    $response->assertStatus(200);
+
+    $jobs = $response->json('jobs');
+    expect($jobs[0]['status'])->toBe('failed');
+    expect($jobs[0]['error'])->toBe('Translation API unavailable.');
+});
+
+it('returns unknown status for an expired or invalid job id', function () {
+    $this->loginUser();
+
+    $response = $this->getJson(cpUrl('content-translator/status').'?'.http_build_query(['jobs' => ['expired-job-id']]));
+
+    $response->assertStatus(200);
+
+    $jobs = $response->json('jobs');
+    expect($jobs[0]['status'])->toBe('unknown');
+    expect($jobs[0]['id'])->toBe('expired-job-id');
+});
+
+it('returns statuses for multiple jobs in one request', function () {
+    $this->loginUser();
+
+    $completedId = 'job-completed';
+    $failedId = 'job-failed';
+    $unknownId = 'job-unknown';
+
+    Cache::put("content-translator:job:{$completedId}", [
+        'id' => $completedId,
+        'target_site' => 'fr',
+        'status' => 'completed',
+        'error' => null,
+    ], 600);
+
+    Cache::put("content-translator:job:{$failedId}", [
+        'id' => $failedId,
+        'target_site' => 'de',
+        'status' => 'failed',
+        'error' => 'Something went wrong.',
+    ], 600);
+
+    $queryString = http_build_query(['jobs' => [$completedId, $failedId, $unknownId]]);
+    $response = $this->getJson(cpUrl('content-translator/status').'?'.$queryString);
+
+    $response->assertStatus(200);
+
+    $jobs = collect($response->json('jobs'))->keyBy('id');
+
+    expect($jobs->get($completedId)['status'])->toBe('completed');
+    expect($jobs->get($failedId)['status'])->toBe('failed');
+    expect($jobs->get($failedId)['error'])->toBe('Something went wrong.');
+    expect($jobs->get($unknownId)['status'])->toBe('unknown');
+});
+
+it('returns 422 when status request is missing jobs parameter', function () {
+    $this->loginUser();
+
+    $response = $this->getJson(cpUrl('content-translator/status'));
+
+    $response->assertStatus(422)
+        ->assertJsonValidationErrors(['jobs']);
+});
+
+// ── Job cache integration ─────────────────────────────────────────────────────
+
+it('job updates cache to running then completed when executed synchronously', function () {
+    use_fake_translation_service_for_job_test();
+
+    $jobId = 'sync-job-test';
+
+    Cache::put("content-translator:job:{$jobId}", [
+        'id' => $jobId,
+        'target_site' => 'fr',
+        'status' => 'pending',
+        'error' => null,
+    ], 600);
+
+    $this->createTestCollection('articles', ['en', 'fr']);
+    $this->createTestBlueprint('articles');
+    $entry = $this->createTestEntry('articles');
+
+    $job = new TranslateEntryJob($entry->id(), 'fr', null, [], $jobId);
+    app()->call([$job, 'handle']);
+
+    $cached = Cache::get("content-translator:job:{$jobId}");
+    expect($cached['status'])->toBe('completed');
+});
+
+it('job updates cache to failed when translation throws', function () {
+    // Bind a translation service that always throws.
+    app()->instance(
+        ElSchneider\ContentTranslator\Contracts\TranslationService::class,
+        new class implements ElSchneider\ContentTranslator\Contracts\TranslationService
+        {
+            public function translate(array $units, string $sourceLocale = 'en', string $targetLocale = 'fr'): array
+            {
+                throw new RuntimeException('Simulated API error');
+            }
+        },
+    );
+
+    $jobId = 'fail-job-test';
+
+    Cache::put("content-translator:job:{$jobId}", [
+        'id' => $jobId,
+        'target_site' => 'fr',
+        'status' => 'pending',
+        'error' => null,
+    ], 600);
+
+    $this->createTestCollection('articles', ['en', 'fr']);
+    $this->createTestBlueprint('articles');
+    $entry = $this->createTestEntry('articles');
+
+    $job = new TranslateEntryJob($entry->id(), 'fr', null, [], $jobId);
+
+    expect(fn () => app()->call([$job, 'handle']))->toThrow(RuntimeException::class);
+
+    $cached = Cache::get("content-translator:job:{$jobId}");
+    expect($cached['status'])->toBe('failed');
+    expect($cached['error'])->toBe('Simulated API error');
+});
+
+// ── Helpers (file-scope) ──────────────────────────────────────────────────────
+
+function use_fake_translation_service_for_job_test(): void
+{
+    $mock = Mockery::mock(ElSchneider\ContentTranslator\Contracts\TranslationService::class);
+    $mock->shouldReceive('translate')->andReturnUsing(
+        fn (array $units) => array_map(
+            fn (ElSchneider\ContentTranslator\Data\TranslationUnit $u) => $u->withTranslation('FR: '.$u->text),
+            $units,
+        ),
+    );
+    app()->instance(ElSchneider\ContentTranslator\Contracts\TranslationService::class, $mock);
+}

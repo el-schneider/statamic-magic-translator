@@ -54,6 +54,22 @@ abstract class TestCase extends AddonTestCase
 
         $app['config']->set('statamic.editions.pro', true);
         $app['config']->set('statamic.system.multisite', true);
+
+        // Register the Statamic auth guard so actingAs($user, 'statamic') works
+        // in HTTP / feature tests and matches Statamic's production configuration.
+        $app['config']->set('auth.guards.statamic', [
+            'driver' => 'session',
+            'provider' => 'statamic',
+        ]);
+
+        $app['config']->set('auth.providers.statamic', [
+            'driver' => 'statamic',
+        ]);
+
+        // Tell Statamic's AuthGuard middleware to use the 'statamic' guard for CP
+        // routes so that $request->user() resolves through the same guard that
+        // actingAs($user, 'statamic') sets up.
+        $app['config']->set('statamic.users.guards.cp', 'statamic');
     }
 
     protected function setUpMultiSite(): void
