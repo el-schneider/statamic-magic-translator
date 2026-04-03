@@ -17,7 +17,7 @@ function makeAction(): TranslateEntryAction
     return app(TranslateEntryAction::class);
 }
 
-function makeNonSuperUser(string $id = 'regular-user', array $permissions = []): \Statamic\Auth\User
+function makeNonSuperUser(string $id = 'regular-user', array $permissions = []): Statamic\Auth\User
 {
     $role = Role::make('test-role-'.$id)->permissions($permissions);
     $role->save();
