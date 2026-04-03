@@ -26,6 +26,21 @@ abstract class TestCase extends AddonTestCase
         $this->setUpMultiSite();
     }
 
+    protected function tearDown(): void
+    {
+        // Delete any blueprint files created during the test so they don't
+        // bleed into subsequent test runs (blueprints are not in the stache
+        // so PreventsSavingStacheItemsToDisk doesn't cover them).
+        $blueprintDir = \Statamic\Facades\Blueprint::directory();
+
+        if ($blueprintDir && str_contains($blueprintDir, 'testbench')) {
+            app('files')->deleteDirectory($blueprintDir.'/collections');
+            app('files')->deleteDirectory($blueprintDir.'/taxonomies');
+        }
+
+        parent::tearDown();
+    }
+
     protected function getPackageProviders($app): array
     {
         return array_merge(parent::getPackageProviders($app), [

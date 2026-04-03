@@ -2,7 +2,7 @@
 
 declare(strict_types=1);
 
-namespace ElSchneider\StatamicContentTranslator\Events;
+namespace ElSchneider\ContentTranslator\Events;
 
 use Statamic\Entries\Entry;
 
