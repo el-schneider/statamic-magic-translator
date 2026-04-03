@@ -22,7 +22,7 @@ Don't use for trivial fixes, config changes, or single-line edits.
     {
       "agent": "worker",
       "task": "<concrete task description with file paths and plan references>",
-      "model": "anthropic/claude-opus-4-6",
+      "model": "opencode-go/glm-5",
       "skill": "agent-browser"
     },
     {
