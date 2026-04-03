@@ -10,6 +10,8 @@ use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Foundation\Bus\Dispatchable;
 use Illuminate\Queue\InteractsWithQueue;
 use Illuminate\Queue\SerializesModels;
+use InvalidArgumentException;
+use Statamic\Facades\Entry as EntryFacade;
 
 /**
  * Thin job wrapper around the TranslateEntry action.
@@ -57,14 +59,29 @@ final class TranslateEntryJob implements ShouldQueue
 
     /**
      * Execute the job via the TranslateEntry action.
+     *
+     * If the entry was deleted after dispatch but before execution, treat this
+     * as a no-op so the job doesn't fail/retry pointlessly.
      */
     public function handle(TranslateEntry $action): void
     {
-        $action->handle(
-            $this->entryId,
-            $this->targetSite,
-            $this->sourceSite,
-            $this->options,
-        );
+        if (EntryFacade::find($this->entryId) === null) {
+            return;
+        }
+
+        try {
+            $action->handle(
+                $this->entryId,
+                $this->targetSite,
+                $this->sourceSite,
+                $this->options,
+            );
+        } catch (InvalidArgumentException $e) {
+            if ($e->getMessage() === "Entry [{$this->entryId}] not found.") {
+                return;
+            }
+
+            throw $e;
+        }
     }
 }

@@ -316,3 +316,71 @@ it('TranslateEntryJob has correct retry configuration', function () {
     expect($job->tries)->toBe(3);
     expect($job->backoff)->toBe([30, 60, 120]);
 });
+
+it('TranslateEntryJob applies queue connection and name from config', function () {
+    config()->set('content-translator.queue.connection', 'redis');
+    config()->set('content-translator.queue.name', 'content-translator');
+
+    $job = new TranslateEntryJob('some-id', 'fr');
+
+    expect($job->connection)->toBe('redis');
+    expect($job->queue)->toBe('content-translator');
+});
+
+it('TranslateEntryJob is a no-op when the entry was deleted before execution', function () {
+    test()->createTestCollection('articles', ['en', 'fr']);
+    test()->createTestBlueprint('articles', 'default');
+
+    $entry = test()->createTestEntry(collection: 'articles', site: 'en');
+    $entryId = $entry->id();
+
+    $entry->delete();
+
+    $job = new TranslateEntryJob($entryId, 'fr');
+
+    expect(fn () => app()->call([$job, 'handle']))->not->toThrow(Exception::class);
+});
+
+it('builds nested blueprint field definitions so replicator set fields are translated', function () {
+    test()->createTestCollection('articles', ['en', 'fr']);
+    test()->createTestBlueprint('articles', 'default', [
+        'title' => [
+            'type' => 'text',
+            'localizable' => true,
+        ],
+        'blocks' => [
+            'type' => 'replicator',
+            'localizable' => true,
+            'sets' => [
+                'text_block' => [
+                    'display' => 'Text Block',
+                    'fields' => [
+                        ['handle' => 'body', 'field' => ['type' => 'text']],
+                        ['handle' => 'summary', 'field' => ['type' => 'textarea']],
+                    ],
+                ],
+            ],
+        ],
+    ]);
+
+    $entry = test()->createTestEntry(
+        collection: 'articles',
+        site: 'en',
+        data: [
+            'title' => 'Blueprint Test',
+            'blocks' => [
+                ['type' => 'text_block', 'body' => 'Nested body', 'summary' => 'Nested summary'],
+            ],
+        ],
+    );
+
+    app()->instance(TranslationService::class, makePrefixTranslationService('FR: '));
+
+    app(TranslateEntry::class)->handle($entry->id(), 'fr');
+
+    $fr = Entry::find($entry->id())->in('fr');
+
+    expect($fr->get('title'))->toBe('FR: Blueprint Test');
+    expect($fr->get('blocks')[0]['body'])->toBe('FR: Nested body');
+    expect($fr->get('blocks')[0]['summary'])->toBe('FR: Nested summary');
+});
