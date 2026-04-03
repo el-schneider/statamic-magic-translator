@@ -11,6 +11,7 @@
  * mutation. A fallback standalone status list is shown when injection has
  * never succeeded in the current session.
  */
+import { Button } from '@statamic/cms/ui'
 import { computed, onBeforeUnmount, onMounted, ref } from 'vue'
 import { injectBadges, removeBadges, wasPreviouslyInjected } from '../../core/injection'
 import type { FieldtypePreload } from '../../core/types'
@@ -124,9 +125,14 @@ function openDialog(): void {
 <template>
   <div class="content-translator-fieldtype">
     <!-- Translate button -->
-    <button type="button" class="btn btn-sm w-full" :disabled="!hasTargets" @click="openDialog">
-      {{ __('content-translator::messages.translate_button') }}
-    </button>
+    <Button
+      variant="default"
+      size="sm"
+      :text="__('content-translator::messages.translate_button')"
+      class="w-full"
+      :disabled="!hasTargets"
+      @click="openDialog"
+    />
 
     <!--
             Fallback locale status list — shown only when badge injection into

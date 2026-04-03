@@ -13,6 +13,7 @@
  *  4. Failed rows show an inline error + Retry button.
  *  5. Dialog self-closes (emits 'close') when all jobs complete, or user cancels.
  */
+import { Button, Checkbox, Icon, Label, Modal, ModalClose, Select, Separator } from '@statamic/cms/ui'
 import { computed, onBeforeUnmount, reactive, ref, watch } from 'vue'
 import { pollJobs } from '../../core/polling'
 import { triggerTranslation } from '../../core/api'
@@ -135,6 +136,22 @@ const allDone = computed(
 
 /** True when at least one locale has failed. */
 const hasFailed = computed(() => Object.values(localeState).some((s) => s.status === 'failed'))
+
+// ── Select options ────────────────────────────────────────────────────────────
+
+const sourceOptions = computed(() =>
+  props.sites.map((s) => ({ label: s.name, value: s.handle })),
+)
+
+// ── Checkbox helpers ──────────────────────────────────────────────────────────
+
+function toggleLocale(handle: string, checked: boolean): void {
+  if (checked) {
+    selectedLocales.value = [...selectedLocales.value, handle]
+  } else {
+    selectedLocales.value = selectedLocales.value.filter((h) => h !== handle)
+  }
+}
 
 // ── Actions ───────────────────────────────────────────────────────────────────
 
@@ -328,158 +345,127 @@ onBeforeUnmount(() => {
 </script>
 
 <template>
-  <div class="fixed inset-0 z-[200] flex items-center justify-center">
-    <!-- Backdrop -->
-    <div class="absolute inset-0 bg-black/50" @click="cancel" />
-
-    <!-- Dialog panel -->
-    <div class="relative bg-white dark:bg-dark-550 rounded-2xl shadow-2xl w-full max-w-md mx-4 overflow-hidden">
-      <!-- ── Header ──────────────────────────────────────────────── -->
-      <div class="flex items-center justify-between px-6 py-4 border-b dark:border-dark-900">
-        <h2 class="text-base font-semibold text-gray-900 dark:text-white">
-          {{ dialogTitle }}
-        </h2>
-        <button
-          type="button"
-          class="text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 text-xl leading-none w-6 h-6 flex items-center justify-center rounded"
-          @click="cancel"
-        >
-          &times;
-        </button>
+  <Modal :open="true" :title="dialogTitle" @dismissed="cancel">
+    <div class="space-y-4">
+      <!-- Source locale selector -->
+      <div>
+        <Label :text="t('source')" />
+        <Select
+          :options="sourceOptions"
+          :model-value="selectedSource"
+          :disabled="isTranslating"
+          @update:modelValue="selectedSource = $event"
+        />
       </div>
 
-      <!-- ── Body ───────────────────────────────────────────────── -->
-      <div class="p-6 space-y-5 max-h-[65vh] overflow-y-auto">
-        <!-- Source locale selector -->
-        <div>
-          <label class="block text-xs font-medium text-gray-600 dark:text-gray-400 mb-1 uppercase tracking-wide">
-            {{ t('source') }}
-          </label>
-          <select v-model="selectedSource" :disabled="isTranslating" class="input-text w-full text-sm">
-            <option v-for="site in sites" :key="site.handle" :value="site.handle">
-              {{ site.name }}
-            </option>
-          </select>
-        </div>
+      <!-- Target locale rows -->
+      <div class="space-y-0.5">
+        <div
+          v-for="site in targetSites"
+          :key="site.handle"
+          class="flex items-center justify-between py-1.5"
+        >
+          <Checkbox
+            :label="site.name"
+            :model-value="selectedLocales.includes(site.handle)"
+            :disabled="isLocaleDisabled(site)"
+            align="center"
+            @update:modelValue="toggleLocale(site.handle, $event)"
+          />
 
-        <!-- Target locale rows -->
-        <div class="space-y-0.5">
-          <div
-            v-for="site in targetSites"
-            :key="site.handle"
-            class="flex items-center gap-3 py-2.5 px-3 rounded-lg hover:bg-gray-50 dark:hover:bg-dark-400 transition-colors"
-          >
-            <!-- Checkbox -->
-            <input
-              :id="`ct-locale-${site.handle}`"
-              v-model="selectedLocales"
-              type="checkbox"
-              :value="site.handle"
-              :disabled="isLocaleDisabled(site)"
-              class="rounded"
-            />
-
-            <!-- Site name + existing status -->
-            <label :for="`ct-locale-${site.handle}`" class="flex-1 text-sm cursor-pointer select-none">
-              <span>{{ site.name }}</span>
-              <span v-if="(site as SiteMeta).is_stale" class="ml-2 text-xs text-amber-500">
-                ⚠ {{ t('badge_outdated') }}
-              </span>
-              <span v-else-if="(site as SiteMeta).last_translated_at" class="ml-2 text-xs text-gray-400">✓</span>
-            </label>
-
-            <!-- Job status indicator -->
-            <div v-if="localeState[site.handle]" class="flex items-center gap-1.5 shrink-0">
-              <!-- Spinning for pending / running -->
-              <svg
-                v-if="['pending', 'running'].includes(localeState[site.handle]!.status)"
-                class="w-4 h-4 animate-spin text-blue-500"
-                fill="none"
-                viewBox="0 0 24 24"
-              >
-                <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4" />
-                <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
-              </svg>
-
-              <!-- Completed -->
-              <span v-if="localeState[site.handle]!.status === 'completed'" class="text-green-600 font-bold">✓</span>
-
-              <!-- Failed -->
-              <template v-if="localeState[site.handle]!.status === 'failed'">
-                <span class="text-red-500">⚠</span>
-                <button
-                  type="button"
-                  class="text-xs text-blue-600 dark:text-blue-400 underline hover:no-underline"
-                  @click="retryLocale(site.handle)"
-                >
-                  {{ t('retry') }}
-                </button>
-              </template>
-
-              <!-- Bulk progress counter -->
-              <span v-if="isBulk && localeState[site.handle]!.totalCount > 1" class="text-xs text-gray-500">
-                {{ localeState[site.handle]!.completedCount }}/{{ localeState[site.handle]!.totalCount }}
-              </span>
-            </div>
+          <!-- Stale / translated badge -->
+          <div class="flex items-center gap-1.5 shrink-0 ml-2">
+            <span v-if="(site as SiteMeta).is_stale" class="text-xs text-amber-500">
+              ⚠ {{ t('badge_outdated') }}
+            </span>
+            <span v-else-if="(site as SiteMeta).last_translated_at" class="text-xs text-gray-400">✓</span>
           </div>
 
-          <p v-if="targetSites.length === 0" class="text-sm text-gray-500 px-3 py-2">
-            {{ t('no_target_sites') }}
-          </p>
+          <!-- Job status indicator -->
+          <div v-if="localeState[site.handle]" class="flex items-center gap-1.5 shrink-0 ml-2">
+            <!-- Spinning for pending / running -->
+            <Icon
+              v-if="['pending', 'running'].includes(localeState[site.handle]!.status)"
+              name="loading"
+              class="text-blue-500"
+            />
+
+            <!-- Completed -->
+            <span v-if="localeState[site.handle]!.status === 'completed'" class="text-green-600 font-bold">✓</span>
+
+            <!-- Failed -->
+            <template v-if="localeState[site.handle]!.status === 'failed'">
+              <span class="text-red-500">⚠</span>
+              <button
+                type="button"
+                class="text-xs text-blue-600 dark:text-blue-400 underline hover:no-underline"
+                @click="retryLocale(site.handle)"
+              >
+                {{ t('retry') }}
+              </button>
+            </template>
+
+            <!-- Bulk progress counter -->
+            <span v-if="isBulk && localeState[site.handle]!.totalCount > 1" class="text-xs text-gray-500">
+              {{ localeState[site.handle]!.completedCount }}/{{ localeState[site.handle]!.totalCount }}
+            </span>
+          </div>
         </div>
 
-        <!-- Error summary -->
-        <div
-          v-if="hasFailed"
-          class="bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-lg p-3 space-y-1"
-        >
-          <template v-for="(state, handle) in localeState" :key="handle">
-            <p v-if="state.status === 'failed'" class="text-xs text-red-700 dark:text-red-400">
-              <strong>{{ handle }}:</strong>
-              {{ state.error ?? t('translation_failed') }}
-            </p>
-          </template>
-        </div>
-
-        <!-- ── Options ─────────────────────────────────────────── -->
-        <div class="pt-3 border-t dark:border-dark-900 space-y-2.5">
-          <p class="text-xs font-medium text-gray-600 dark:text-gray-400 uppercase tracking-wide">
-            {{ t('options') }}
-          </p>
-
-          <label class="flex items-center gap-2 text-sm cursor-pointer">
-            <input v-model="generateSlug" type="checkbox" :disabled="isTranslating" class="rounded" />
-            {{ t('generate_slugs') }}
-          </label>
-
-          <label class="flex items-center gap-2 text-sm cursor-pointer">
-            <input v-model="overwrite" type="checkbox" :disabled="isTranslating" class="rounded" />
-            {{ t('overwrite_existing') }}
-          </label>
-        </div>
+        <p v-if="targetSites.length === 0" class="text-sm text-gray-500 py-2">
+          {{ t('no_target_sites') }}
+        </p>
       </div>
 
-      <!-- ── Footer ─────────────────────────────────────────────── -->
+      <!-- Error summary -->
       <div
-        class="flex items-center justify-end gap-3 px-6 py-4 border-t dark:border-dark-900 bg-gray-50 dark:bg-dark-600"
+        v-if="hasFailed"
+        class="bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-lg p-3 space-y-1"
       >
-        <button type="button" class="btn" @click="cancel">
-          {{ allDone ? t('close') : t('cancel') }}
-        </button>
-        <button
-          type="button"
-          class="btn-primary"
-          :disabled="isTranslating || selectedLocales.length === 0"
-          @click="translate"
-        >
-          <svg v-if="isTranslating && !allDone" class="w-4 h-4 mr-1.5 animate-spin" fill="none" viewBox="0 0 24 24">
-            <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4" />
-            <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
-          </svg>
-          <span v-if="isTranslating && !allDone">{{ t('translating') }}</span>
-          <span v-else>{{ t('translate_selected') }}</span>
-        </button>
+        <template v-for="(state, handle) in localeState" :key="handle">
+          <p v-if="state.status === 'failed'" class="text-xs text-red-700 dark:text-red-400">
+            <strong>{{ handle }}:</strong>
+            {{ state.error ?? t('translation_failed') }}
+          </p>
+        </template>
+      </div>
+
+      <!-- Options -->
+      <Separator />
+      <div class="space-y-2">
+        <p class="text-xs font-medium text-gray-600 dark:text-gray-400 uppercase tracking-wide">
+          {{ t('options') }}
+        </p>
+        <Checkbox
+          :label="t('generate_slugs')"
+          v-model="generateSlug"
+          :disabled="isTranslating"
+        />
+        <Checkbox
+          :label="t('overwrite_existing')"
+          v-model="overwrite"
+          :disabled="isTranslating"
+        />
       </div>
     </div>
-  </div>
+
+    <template #footer>
+      <div class="flex items-center justify-end gap-3 pt-3 pb-1">
+        <ModalClose>
+          <Button
+            variant="ghost"
+            :text="allDone ? t('close') : t('cancel')"
+            @click="cancel"
+          />
+        </ModalClose>
+        <Button
+          variant="primary"
+          :text="isTranslating && !allDone ? t('translating') : t('translate_selected')"
+          :loading="isTranslating && !allDone"
+          :disabled="isTranslating || selectedLocales.length === 0"
+          @click="translate"
+        />
+      </div>
+    </template>
+  </Modal>
 </template>
