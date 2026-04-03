@@ -6,18 +6,20 @@ namespace ElSchneider\ContentTranslator;
 
 use DeepL\Translator;
 use ElSchneider\ContentTranslator\Contracts\TranslationService;
+use ElSchneider\ContentTranslator\Extraction\BardSerializer;
+use ElSchneider\ContentTranslator\Extraction\ContentExtractor;
+use ElSchneider\ContentTranslator\Reassembly\BardParser;
+use ElSchneider\ContentTranslator\Reassembly\ContentReassembler;
 use ElSchneider\ContentTranslator\Services\TranslationServiceFactory;
+use Illuminate\Support\Facades\Event;
+use Statamic\Events\EntryBlueprintFound;
 use Statamic\Facades\Utility;
 use Statamic\Providers\AddonServiceProvider;
 
 final class ServiceProvider extends AddonServiceProvider
 {
-    protected $vite = [
-        'input' => [
-            'resources/js/v5/addon.ts',
-            'resources/js/v6/addon.ts',
-        ],
-        'publicDirectory' => 'resources/dist',
+    protected $routes = [
+        'cp' => __DIR__.'/../routes/cp.php',
     ];
 
     public function register(): void
@@ -33,9 +35,16 @@ final class ServiceProvider extends AddonServiceProvider
             return new Translator($apiKey);
         });
 
+        // Singletons — constructed once per container lifetime.
+        $this->app->singleton(TranslationServiceFactory::class);
+        $this->app->singleton(BardSerializer::class);
+        $this->app->singleton(BardParser::class);
+        $this->app->singleton(ContentExtractor::class);
+        $this->app->singleton(ContentReassembler::class);
+
         // Bind the TranslationService contract to the configured implementation.
         // Tests can swap this binding via app()->instance(TranslationService::class, $mock).
-        $this->app->bind(TranslationService::class, function ($app) {
+        $this->app->singleton(TranslationService::class, function ($app) {
             return $app->make(TranslationServiceFactory::class)->make();
         });
     }
@@ -47,11 +56,26 @@ final class ServiceProvider extends AddonServiceProvider
         $this->registerConfiguration();
         $this->registerTranslations();
         $this->registerViews();
+        $this->registerBlueprintInjection();
     }
 
     public function supportsInertia(): bool
     {
         return method_exists(Utility::class, 'inertia');
+    }
+
+    protected function bootVite(): static
+    {
+        $entryPoint = $this->supportsInertia()
+            ? 'resources/js/v6/addon.ts'
+            : 'resources/js/v5/addon.ts';
+
+        $this->registerVite([
+            'input' => [$entryPoint],
+            'publicDirectory' => 'resources/dist',
+        ]);
+
+        return $this;
     }
 
     private function registerConfiguration(): void
@@ -75,5 +99,44 @@ final class ServiceProvider extends AddonServiceProvider
         $this->publishes([
             __DIR__.'/../resources/views' => resource_path('views/vendor/content-translator'),
         ], 'content-translator-views');
+    }
+
+    private function registerBlueprintInjection(): void
+    {
+        Event::listen(EntryBlueprintFound::class, function (EntryBlueprintFound $event): void {
+            $entry = $event->entry;
+
+            // Only inject when resolving a blueprint for an actual entry (not a
+            // generic blueprint lookup without an entry context).
+            if ($entry === null) {
+                return;
+            }
+
+            $collectionHandle = $entry->collectionHandle();
+            $configuredCollections = config('content-translator.collections', []);
+
+            // Skip collections that are not configured.
+            if (! in_array($collectionHandle, (array) $configuredCollections, true)) {
+                return;
+            }
+
+            $blueprintHandle = $event->blueprint->handle();
+            $excludedBlueprints = config('content-translator.exclude_blueprints', []);
+
+            // Skip blueprints explicitly excluded in dot notation (collection.blueprint).
+            $blueprintKey = $collectionHandle.'.'.$blueprintHandle;
+
+            if (in_array($blueprintKey, (array) $excludedBlueprints, true)) {
+                return;
+            }
+
+            $event->blueprint->ensureField('content_translator', [
+                'type' => 'content_translator',
+                'visibility' => 'computed',
+                'localizable' => true,
+                'display' => 'Content Translator',
+                'listable' => 'hidden',
+            ], 'sidebar');
+        });
     }
 }
