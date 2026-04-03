@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace ElSchneider\ContentTranslator\Fieldtypes;
 
 use Illuminate\Support\Carbon;
+use Statamic\Facades\Blink;
 use Statamic\Facades\Site;
 use Statamic\Fields\Fieldtype;
 use Throwable;
@@ -111,6 +112,15 @@ final class ContentTranslatorFieldtype extends Fieldtype
                     'is_stale' => false,
                 ])->values()->all(),
             ];
+        }
+
+        // Fallback source when localized saves drop computed values.
+        if ($entry->hasOrigin()) {
+            $meta = $entry->get('content_translator');
+
+            if ($meta !== null) {
+                Blink::put("content-translator:meta:{$entry->id()}", $meta);
+            }
         }
 
         $currentSite = $entry->locale();
