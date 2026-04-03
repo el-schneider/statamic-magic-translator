@@ -10,6 +10,8 @@ use Statamic\Facades\Site;
 
 final class TranslateEntryAction extends Action
 {
+    protected $confirm = false;
+
     public static function title(): string
     {
         return __('content-translator::messages.translate_action');
