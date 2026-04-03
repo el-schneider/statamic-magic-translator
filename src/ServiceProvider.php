@@ -11,6 +11,7 @@ use ElSchneider\ContentTranslator\Extraction\ContentExtractor;
 use ElSchneider\ContentTranslator\Reassembly\BardParser;
 use ElSchneider\ContentTranslator\Reassembly\ContentReassembler;
 use ElSchneider\ContentTranslator\Services\TranslationServiceFactory;
+use ElSchneider\ContentTranslator\StatamicActions\TranslateEntryAction;
 use Illuminate\Support\Facades\Event;
 use Statamic\Events\EntryBlueprintFound;
 use Statamic\Facades\Utility;
@@ -18,6 +19,10 @@ use Statamic\Providers\AddonServiceProvider;
 
 final class ServiceProvider extends AddonServiceProvider
 {
+    protected $actions = [
+        TranslateEntryAction::class,
+    ];
+
     protected $routes = [
         'cp' => __DIR__.'/../routes/cp.php',
     ];
