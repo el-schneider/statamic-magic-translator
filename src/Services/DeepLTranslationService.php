@@ -112,12 +112,17 @@ final class DeepLTranslationService implements TranslationService
      */
     private function parseResponse(array $units, string $responseText): array
     {
-        preg_match_all('/<ct-unit id="(\d+)">(.*?)<\/ct-unit>/s', $responseText, $matches, PREG_SET_ORDER);
+        preg_match_all(
+            '/<ct-unit\b[^>]*\bid\s*=\s*([\'\"])(\d+)\1[^>]*>(.*?)<\/ct-unit\s*>/si',
+            $responseText,
+            $matches,
+            PREG_SET_ORDER
+        );
 
         $translatedByIndex = [];
 
         foreach ($matches as $match) {
-            $translatedByIndex[(int) $match[1]] = $match[2];
+            $translatedByIndex[(int) $match[2]] = $match[3];
         }
 
         $reindexed = array_values($units);
