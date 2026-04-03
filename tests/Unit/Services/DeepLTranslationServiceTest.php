@@ -199,7 +199,7 @@ it('throws when DeepL response strips ct-unit tags', function () {
     ];
 
     expect(fn () => deeplService($translator)->translate($units, 'en', 'fr'))
-        ->toThrow(\RuntimeException::class, 'Missing translation for unit index [0]');
+        ->toThrow(RuntimeException::class, 'Missing translation for unit index [0]');
 });
 
 // ─── XML tag handling ─────────────────────────────────────────────────────────
