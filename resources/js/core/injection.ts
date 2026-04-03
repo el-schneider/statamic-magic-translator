@@ -19,10 +19,17 @@ declare function __(key: string, replacements?: Record<string, string | number>)
 /** Data attribute stamped on every injected badge element. */
 const BADGE_ATTR = 'data-ct-badge'
 
+/** Data attribute stamped on every injected translate button element. */
+const BUTTON_ATTR = 'data-ct-translate-button'
+
 /** localStorage key used to remember a successful injection. */
 const STORAGE_KEY = 'ct-badge-injection-succeeded'
 
+/** localStorage key used to remember a successful button injection. */
+const BUTTON_STORAGE_KEY = 'ct-translate-button-injection-succeeded'
+
 const I18N_DEFAULTS: Record<string, string> = {
+  translate_button: 'Translate',
   badge_outdated: 'outdated',
   badge_manual: 'manual',
   time_just_now: 'just now',
@@ -175,6 +182,10 @@ function findSitesPanelV6(localeStatuses: SiteMeta[]): Element | null {
   return findBestPanelCandidate(candidates, 'v6', localeStatuses)
 }
 
+function findSitesPanel(localeStatuses: SiteMeta[], version: 'v5' | 'v6'): Element | null {
+  return version === 'v5' ? findSitesPanelV5(localeStatuses) : findSitesPanelV6(localeStatuses)
+}
+
 // ── Row finders ──────────────────────────────────────────────────────────────
 
 /**
@@ -269,6 +280,65 @@ function createBadge(site: SiteMeta): HTMLElement {
   return span
 }
 
+type TranslateButtonOptions = {
+  onClick: () => void
+  disabled?: boolean
+}
+
+function createTranslateButton(version: 'v5' | 'v6', options: TranslateButtonOptions): HTMLButtonElement {
+  const button = document.createElement('button')
+  button.setAttribute(BUTTON_ATTR, '1')
+  button.setAttribute('type', 'button')
+  button.textContent = t('translate_button')
+
+  if (version === 'v6') {
+    // Match Statamic v6 UI Button styles (`variant=default`, `size=sm`).
+    button.setAttribute(
+      'class',
+      [
+        'mt-2 w-full',
+        'relative inline-flex items-center justify-center whitespace-nowrap shrink-0 font-medium antialiased cursor-pointer no-underline',
+        'disabled:text-gray-400 dark:disabled:text-gray-600 disabled:[&_svg]:opacity-30 disabled:cursor-not-allowed',
+        '[&_svg]:shrink-0 [&_svg]:text-gray-925 [&_svg]:opacity-60 dark:[&_svg]:text-white',
+        'bg-linear-to-b from-white to-gray-50 hover:to-gray-100 hover:bg-gray-50 text-gray-900 border border-gray-300 with-contrast:border-gray-500 shadow-ui-sm',
+        'dark:from-gray-850 dark:to-gray-900 dark:hover:to-gray-850 dark:hover:bg-gray-900 dark:border-gray-700/80 dark:text-gray-300 dark:shadow-ui-md',
+        'px-3 h-8 text-[0.8125rem] leading-tight gap-2 rounded-lg [&_svg]:size-3',
+      ].join(' '),
+    )
+    button.setAttribute('data-ui-group-target', 'true')
+  } else {
+    button.setAttribute('class', 'btn btn-sm w-full mt-2')
+  }
+
+  if (options.disabled) {
+    button.disabled = true
+    button.setAttribute('aria-disabled', 'true')
+  }
+
+  button.addEventListener('click', () => {
+    if (!button.disabled) {
+      options.onClick()
+    }
+  })
+
+  return button
+}
+
+function findTranslateButtonContainer(panel: Element, version: 'v5' | 'v6'): Element {
+  const rows = findLocaleRows(panel, version)
+  const firstRow = rows[0]
+
+  if (firstRow?.parentElement) {
+    return firstRow.parentElement
+  }
+
+  if (version === 'v6') {
+    return panel.querySelector('[data-ui-card]') ?? panel
+  }
+
+  return panel
+}
+
 // ── Public API ───────────────────────────────────────────────────────────────
 
 /**
@@ -278,7 +348,7 @@ function createBadge(site: SiteMeta): HTMLElement {
  * `false` if the panel was not found in the current DOM.
  */
 export function injectBadges(localeStatuses: SiteMeta[], version: 'v5' | 'v6'): boolean {
-  const panel = version === 'v5' ? findSitesPanelV5(localeStatuses) : findSitesPanelV6(localeStatuses)
+  const panel = findSitesPanel(localeStatuses, version)
   if (!panel) return false
 
   // Remove any stale badges before re-injecting
@@ -333,6 +403,50 @@ export function injectBadges(localeStatuses: SiteMeta[], version: 'v5' | 'v6'): 
  */
 export function removeBadges(): void {
   document.querySelectorAll(`[${BADGE_ATTR}]`).forEach((el) => el.remove())
+}
+
+/**
+ * Inject a "Translate" button directly into the native Sites panel.
+ */
+export function injectTranslateButton(
+  localeStatuses: SiteMeta[],
+  version: 'v5' | 'v6',
+  options: TranslateButtonOptions,
+): boolean {
+  const panel = findSitesPanel(localeStatuses, version)
+  if (!panel) return false
+
+  removeTranslateButtons()
+
+  const container = findTranslateButtonContainer(panel, version)
+  const button = createTranslateButton(version, options)
+  container.appendChild(button)
+
+  try {
+    localStorage.setItem(BUTTON_STORAGE_KEY, '1')
+  } catch {
+    // localStorage might be unavailable
+  }
+
+  return true
+}
+
+/**
+ * Remove all previously injected translate buttons from the DOM.
+ */
+export function removeTranslateButtons(): void {
+  document.querySelectorAll(`[${BUTTON_ATTR}]`).forEach((el) => el.remove())
+}
+
+/**
+ * Returns true if translate-button injection previously succeeded in this session.
+ */
+export function wasTranslateButtonPreviouslyInjected(): boolean {
+  try {
+    return localStorage.getItem(BUTTON_STORAGE_KEY) === '1'
+  } catch {
+    return false
+  }
 }
 
 /**

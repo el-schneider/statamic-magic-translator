@@ -146,6 +146,7 @@ final class ServiceProvider extends AddonServiceProvider
                 'visibility' => 'computed',
                 'localizable' => true,
                 'display' => 'Content Translator',
+                'hide_display' => true,
                 'listable' => 'hidden',
             ], 'sidebar');
         });
