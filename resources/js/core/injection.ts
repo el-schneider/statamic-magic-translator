@@ -8,9 +8,9 @@
  * Falls back gracefully if the DOM can't be located — the fieldtype
  * component renders its own standalone status list in that case.
  *
- * Version-aware selectors:
- *  - v5: `label.publish-field-label` with text "Sites" → sibling `div` rows
- *  - v6: `[data-ui-heading]` with text "Sites" → ancestor `[data-ui-panel]` → `button` rows
+ * Important: panel detection intentionally does NOT rely on translated
+ * heading text like "Sites". Instead, we score structural candidates by
+ * how well their locale-row names match the known site names/handles.
  */
 import type { SiteMeta } from './types'
 
@@ -23,7 +23,6 @@ const BADGE_ATTR = 'data-ct-badge'
 const STORAGE_KEY = 'ct-badge-injection-succeeded'
 
 const I18N_DEFAULTS: Record<string, string> = {
-  sites_panel_label: 'Sites',
   badge_outdated: 'outdated',
   badge_manual: 'manual',
   time_just_now: 'just now',
@@ -50,59 +49,130 @@ function t(key: string, replacements: Record<string, string | number> = {}): str
   return text
 }
 
-// ── DOM helpers ─────────────────────────────────────────────────────────────
-
-/** Trimmed text content of an element. */
-function textOf(el: Element): string {
-  return (el.textContent ?? '').trim()
-}
-
-/**
- * Traverse up from `el` looking for an ancestor that matches `attr`.
- */
-function closestByAttr(el: Element | null, attr: string): Element | null {
-  let cursor = el
-  while (cursor) {
-    if (cursor.hasAttribute(attr)) return cursor
-    cursor = cursor.parentElement
-  }
-  return null
-}
-
 // ── Sites panel finders ──────────────────────────────────────────────────────
 
-/**
- * v5: look for `<label class="publish-field-label …">Sites</label>` and
- * return the enclosing card/container element that also holds the locale rows.
- */
-function findSitesPanelV5(): Element | null {
-  const labels = document.querySelectorAll('label.publish-field-label')
-  const sitesLabel = t('sites_panel_label')
+function normalizeSiteToken(value: string): string {
+  return value.trim().toLocaleLowerCase()
+}
 
-  for (const label of labels) {
-    const text = textOf(label)
-    if (text === sitesLabel) {
-      // The parent div contains both the label and the locale row divs
-      return label.parentElement
+function getSiteTokens(site: SiteMeta): Set<string> {
+  const tokens = new Set<string>()
+
+  for (const value of [site.name, site.handle]) {
+    if (!value) continue
+
+    tokens.add(normalizeSiteToken(value))
+
+    // Site names can be translation keys in some setups.
+    try {
+      tokens.add(normalizeSiteToken(__(value)))
+    } catch {
+      // ignore
     }
   }
+
+  return tokens
+}
+
+function buildSiteTokenSet(localeStatuses: SiteMeta[]): Set<string> {
+  const tokens = new Set<string>()
+
+  for (const site of localeStatuses) {
+    for (const token of getSiteTokens(site)) {
+      tokens.add(token)
+    }
+  }
+
+  return tokens
+}
+
+function findSiteStatusForRowName(rowName: string, localeStatuses: SiteMeta[]): SiteMeta | null {
+  const rowToken = normalizeSiteToken(rowName)
+
+  for (const site of localeStatuses) {
+    if (getSiteTokens(site).has(rowToken)) {
+      return site
+    }
+  }
+
   return null
 }
 
-/**
- * v6: look for `[data-ui-heading]` whose text is "Sites" and return the
- * enclosing `[data-ui-panel]` element.
- */
-function findSitesPanelV6(): Element | null {
-  const headings = document.querySelectorAll('[data-ui-heading]')
-  const sitesLabel = t('sites_panel_label')
+function scorePanelCandidate(panel: Element, version: 'v5' | 'v6', localeStatuses: SiteMeta[]): number {
+  const rows = findLocaleRows(panel, version)
+  if (rows.length === 0) return -1
 
-  for (const heading of headings) {
-    if (textOf(heading) === sitesLabel) {
-      return closestByAttr(heading, 'data-ui-panel')
+  const tokens = buildSiteTokenSet(localeStatuses)
+  const matched = new Set<string>()
+
+  for (const row of rows) {
+    const rowName = getSiteNameFromRow(row)
+    if (!rowName) continue
+
+    const token = normalizeSiteToken(rowName)
+    if (tokens.has(token)) {
+      matched.add(token)
     }
   }
-  return null
+
+  const matchCount = matched.size
+  if (matchCount === 0) return -1
+
+  const expected = localeStatuses.length
+  const countPenalty = Math.abs(rows.length - expected)
+  return matchCount * 100 - countPenalty
+}
+
+function findBestPanelCandidate(
+  candidates: Element[],
+  version: 'v5' | 'v6',
+  localeStatuses: SiteMeta[],
+): Element | null {
+  let best: Element | null = null
+  let bestScore = -1
+
+  for (const candidate of candidates) {
+    const score = scorePanelCandidate(candidate, version, localeStatuses)
+    if (score > bestScore) {
+      best = candidate
+      bestScore = score
+    }
+  }
+
+  return best
+}
+
+/**
+ * v5: gather structural panel candidates around rows that look like locale
+ * rows and choose the best match by site-name/handle similarity.
+ */
+function findSitesPanelV5(localeStatuses: SiteMeta[]): Element | null {
+  const rows = Array.from(document.querySelectorAll('div.text-sm')).filter((el) => el.querySelector('.little-dot'))
+  if (rows.length === 0) return null
+
+  const candidates = new Set<Element>()
+
+  for (const row of rows) {
+    let cursor: Element | null = row.parentElement
+    let depth = 0
+
+    while (cursor && depth < 4) {
+      candidates.add(cursor)
+      cursor = cursor.parentElement
+      depth++
+    }
+  }
+
+  return findBestPanelCandidate(Array.from(candidates), 'v5', localeStatuses)
+}
+
+/**
+ * v6: evaluate all `[data-ui-panel]` elements and choose the one whose locale
+ * rows best match known site names/handles.
+ */
+function findSitesPanelV6(localeStatuses: SiteMeta[]): Element | null {
+  const candidates = Array.from(document.querySelectorAll('[data-ui-panel]'))
+  return findBestPanelCandidate(candidates, 'v6', localeStatuses)
 }
 
 // ── Row finders ──────────────────────────────────────────────────────────────
@@ -208,7 +278,7 @@ function createBadge(site: SiteMeta): HTMLElement {
  * `false` if the panel was not found in the current DOM.
  */
 export function injectBadges(localeStatuses: SiteMeta[], version: 'v5' | 'v6'): boolean {
-  const panel = version === 'v5' ? findSitesPanelV5() : findSitesPanelV6()
+  const panel = version === 'v5' ? findSitesPanelV5(localeStatuses) : findSitesPanelV6(localeStatuses)
   if (!panel) return false
 
   // Remove any stale badges before re-injecting
@@ -223,8 +293,8 @@ export function injectBadges(localeStatuses: SiteMeta[], version: 'v5' | 'v6'): 
     const siteName = getSiteNameFromRow(row)
     if (!siteName) continue
 
-    // Match the row to a locale status by display name or handle
-    const siteStatus = localeStatuses.find((s) => s.name === siteName || s.handle === siteName)
+    // Match the row to a locale status by name/handle (translation-safe).
+    const siteStatus = findSiteStatusForRowName(siteName, localeStatuses)
     if (!siteStatus) continue
 
     const badge = createBadge(siteStatus)
