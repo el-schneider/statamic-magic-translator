@@ -13,7 +13,14 @@
  */
 import { Button } from '@statamic/cms/ui'
 import { computed, onBeforeUnmount, onMounted, ref } from 'vue'
-import { injectBadges, removeBadges, wasPreviouslyInjected } from '../../core/injection'
+import {
+  injectBadges,
+  injectTranslateButton,
+  removeBadges,
+  removeTranslateButtons,
+  wasPreviouslyInjected,
+  wasTranslateButtonPreviouslyInjected,
+} from '../../core/injection'
 import type { FieldtypePreload } from '../../core/types'
 
 declare function __(key: string, replacements?: Record<string, string | number>): string
@@ -62,12 +69,33 @@ const hasTargets = computed(() => targetSites.value.length > 0)
  * Stored as a ref so the template can conditionally render the fallback status.
  */
 const badgeInjected = ref(wasPreviouslyInjected())
+const buttonInjected = ref(wasTranslateButtonPreviouslyInjected())
 
 let observer: MutationObserver | null = null
 let injecting = false
+const rootEl = ref<HTMLElement | null>(null)
+
+function hideFieldLabelChrome(): void {
+  const root = rootEl.value
+  if (!root) return
+
+  const wrappers = [root.closest('[data-ui-input-group]'), root.closest('.publish-field')].filter(
+    (el): el is Element => el !== null,
+  )
+
+  for (const wrapper of wrappers) {
+    wrapper.querySelectorAll('[data-ui-field-header], [data-ui-field-text], .publish-field-label').forEach((el) => {
+      ;(el as HTMLElement).style.display = 'none'
+    })
+  }
+}
 
 function hasInjectedBadgesInDom(): boolean {
   return document.querySelector('[data-ct-badge]') !== null
+}
+
+function hasInjectedTranslateButtonInDom(): boolean {
+  return document.querySelector('[data-ct-translate-button]') !== null
 }
 
 function tryInject(): void {
@@ -75,21 +103,28 @@ function tryInject(): void {
 
   injecting = true
   try {
-    const succeeded = injectBadges(sites.value, 'v6')
-    badgeInjected.value = succeeded
+    badgeInjected.value = injectBadges(sites.value, 'v6')
+    buttonInjected.value = injectTranslateButton(sites.value, 'v6', {
+      onClick: openDialog,
+      disabled: !hasTargets.value,
+    })
   } finally {
     injecting = false
   }
 }
 
 onMounted(() => {
+  hideFieldLabelChrome()
+
   // Attempt immediately (the Sites panel may already be in the DOM)
   tryInject()
 
   // Keep observing for re-injection when Statamic re-renders the panel.
   observer = new MutationObserver(() => {
     if (injecting) return
-    if (badgeInjected.value && hasInjectedBadgesInDom()) return
+    if (badgeInjected.value && hasInjectedBadgesInDom() && buttonInjected.value && hasInjectedTranslateButtonInDom()) {
+      return
+    }
     tryInject()
   })
   observer.observe(document.body, { childList: true, subtree: true })
@@ -98,6 +133,7 @@ onMounted(() => {
 onBeforeUnmount(() => {
   observer?.disconnect()
   removeBadges()
+  removeTranslateButtons()
 })
 
 // ── Dialog ────────────────────────────────────────────────────────────────────
@@ -123,9 +159,10 @@ function openDialog(): void {
 </script>
 
 <template>
-  <div class="content-translator-fieldtype">
+  <div ref="rootEl" class="content-translator-fieldtype">
     <!-- Translate button -->
     <Button
+      v-if="!buttonInjected"
       variant="default"
       size="sm"
       :text="__('content-translator::messages.translate_button')"

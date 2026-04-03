@@ -12,7 +12,14 @@
  */
 import type { Axios } from 'axios'
 import { triggerTranslation } from '../core/api'
-import { injectBadges, removeBadges, wasPreviouslyInjected } from '../core/injection'
+import {
+  injectBadges,
+  injectTranslateButton,
+  removeBadges,
+  removeTranslateButtons,
+  wasPreviouslyInjected,
+  wasTranslateButtonPreviouslyInjected,
+} from '../core/injection'
 import { pollJobs } from '../core/polling'
 import type { FieldtypePreload, LocaleJobState, SiteDescriptor, SiteMeta, TranslationJob } from '../core/types'
 
@@ -630,6 +637,7 @@ const TranslationDialog = {
 
 interface FieldtypeData {
   badgeInjected: boolean
+  buttonInjected: boolean
   observer: MutationObserver | null
   injecting: boolean
 }
@@ -651,6 +659,7 @@ const TranslatorFieldtype = {
   data(): FieldtypeData {
     return {
       badgeInjected: wasPreviouslyInjected(),
+      buttonInjected: wasTranslateButtonPreviouslyInjected(),
       observer: null,
       injecting: false,
     }
@@ -686,16 +695,27 @@ const TranslatorFieldtype = {
   mounted() {
     const self = this as unknown as {
       tryInjectBadges: () => void
+      hideFieldLabelChrome: () => void
       badgeInjected: boolean
+      buttonInjected: boolean
       observer: MutationObserver | null
       injecting: boolean
       hasInjectedBadgesInDom: () => boolean
+      hasInjectedTranslateButtonInDom: () => boolean
     }
+    self.hideFieldLabelChrome()
     self.tryInjectBadges()
 
     self.observer = new MutationObserver(() => {
       if (self.injecting) return
-      if (self.badgeInjected && self.hasInjectedBadgesInDom()) return
+      if (
+        self.badgeInjected &&
+        self.hasInjectedBadgesInDom() &&
+        self.buttonInjected &&
+        self.hasInjectedTranslateButtonInDom()
+      ) {
+        return
+      }
       self.tryInjectBadges()
     })
     self.observer.observe(document.body, { childList: true, subtree: true })
@@ -705,6 +725,7 @@ const TranslatorFieldtype = {
     const self = this as unknown as { observer: MutationObserver | null }
     self.observer?.disconnect()
     removeBadges()
+    removeTranslateButtons()
   },
 
   methods: {
@@ -712,23 +733,47 @@ const TranslatorFieldtype = {
       return __('content-translator::messages.' + key, replacements)
     },
 
+    hideFieldLabelChrome() {
+      const self = this as unknown as { $el: Element }
+
+      const wrappers = [self.$el.closest('[data-ui-input-group]'), self.$el.closest('.publish-field')].filter(
+        (el): el is Element => el !== null,
+      )
+
+      for (const wrapper of wrappers) {
+        wrapper.querySelectorAll('[data-ui-field-header], [data-ui-field-text], .publish-field-label').forEach((el) => {
+          ;(el as HTMLElement).style.display = 'none'
+        })
+      }
+    },
+
     hasInjectedBadgesInDom(): boolean {
       return document.querySelector('[data-ct-badge]') !== null
+    },
+
+    hasInjectedTranslateButtonInDom(): boolean {
+      return document.querySelector('[data-ct-translate-button]') !== null
     },
 
     tryInjectBadges() {
       const self = this as unknown as {
         sites: SiteMeta[]
         badgeInjected: boolean
+        buttonInjected: boolean
         observer: MutationObserver | null
         injecting: boolean
+        hasTargets: boolean
+        openDialog: () => void
       }
       if (self.injecting || !self.sites.length) return
 
       self.injecting = true
       try {
-        const ok = injectBadges(self.sites, 'v5')
-        self.badgeInjected = ok
+        self.badgeInjected = injectBadges(self.sites, 'v5')
+        self.buttonInjected = injectTranslateButton(self.sites, 'v5', {
+          onClick: () => self.openDialog(),
+          disabled: !self.hasTargets,
+        })
       } finally {
         self.injecting = false
       }
@@ -764,6 +809,7 @@ const TranslatorFieldtype = {
   template: /* html */ `
         <div class="content-translator-fieldtype">
             <button
+                v-if="!buttonInjected"
                 type="button"
                 class="btn btn-sm w-full"
                 :disabled="!hasTargets"
