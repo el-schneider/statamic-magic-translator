@@ -416,7 +416,7 @@ const TranslationDialog = {
             <div class="absolute inset-0" style="background:rgba(0,0,0,0.5)" @click="cancel"></div>
 
             <!-- Dialog panel -->
-            <div class="relative bg-white dark:bg-dark-550 rounded-lg shadow-2xl w-full max-w-md mx-4 overflow-hidden">
+            <div class="relative bg-white dark:bg-dark-550 rounded-lg shadow-2xl w-full max-w-lg mx-4 overflow-hidden">
 
                 <!-- Header -->
                 <div class="flex items-center justify-between px-6 py-4 border-b dark:border-dark-900">
@@ -433,28 +433,67 @@ const TranslationDialog = {
                 <!-- Body -->
                 <div class="p-6 space-y-5 max-h-[65vh] overflow-y-auto">
 
-                    <!-- Source locale selector -->
-                    <div>
-                        <label class="block text-xs font-medium text-gray-600 dark:text-gray-400 mb-1 uppercase tracking-wide">
-                            {{ t('source') }}
-                        </label>
-                        <select
-                            v-model="selectedSource"
-                            :disabled="isTranslating"
-                            class="input-text w-full text-sm"
-                        >
-                            <option v-for="site in sites" :key="site.handle" :value="site.handle">
-                                {{ site.name }}
-                            </option>
-                        </select>
+                    <div class="flex gap-4">
+                        <!-- Source locale selector -->
+                        <div class="w-1/2 space-y-2">
+                            <label class="publish-field-label font-medium text-gray-800 dark:text-dark-150">
+                                {{ t('source') }}
+                            </label>
+                            <div class="select-input-container">
+                                <select
+                                    v-model="selectedSource"
+                                    :disabled="isTranslating"
+                                    class="select-input"
+                                >
+                                    <option v-for="site in sites" :key="site.handle" :value="site.handle">
+                                        {{ site.name }}
+                                    </option>
+                                </select>
+                                <div class="select-input-toggle">
+                                    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20">
+                                        <path d="M9.293 12.95l.707.707L15.657 8l-1.414-1.414L10 10.828 5.757 6.586 4.343 8z"/>
+                                    </svg>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Options (top-right) -->
+                        <div class="w-1/2 bg-gray-50 dark:bg-dark-600 rounded border border-gray-300 dark:border-dark-800 p-4 space-y-3">
+                            <label class="publish-field-label font-medium text-gray-800 dark:text-dark-150">
+                                {{ t('options') }}
+                            </label>
+                            <div class="space-y-2">
+                                <label class="flex items-center gap-2 text-sm cursor-pointer" :class="{ 'opacity-60': isTranslating }">
+                                    <input v-model="generateSlug" type="checkbox" :disabled="isTranslating" class="rounded text-blue"/>
+                                    {{ t('generate_slugs') }}
+                                </label>
+                                <label class="flex items-center gap-2 text-sm cursor-pointer" :class="{ 'opacity-60': isTranslating }">
+                                    <input v-model="overwrite" type="checkbox" :disabled="isTranslating" class="rounded text-blue"/>
+                                    {{ t('overwrite_existing') }}
+                                </label>
+                            </div>
+                        </div>
                     </div>
 
                     <!-- Target locale rows -->
-                    <div class="space-y-0.5">
+                    <div class="space-y-2">
+                        <label class="publish-field-label font-medium text-gray-800 dark:text-dark-150">
+                            {{ t('sites_panel_label') }}
+                        </label>
+
+                        <div class="border border-gray-300 dark:border-dark-800 rounded overflow-hidden">
                         <div
-                            v-for="site in targetSites"
+                            v-for="(site, index) in targetSites"
                             :key="site.handle"
-                            class="flex items-center gap-3 py-2.5 px-3 rounded hover:bg-gray-50 dark:hover:bg-dark-400"
+                            class="text-sm flex items-center gap-3 px-4 py-2.5 border-b border-gray-200 dark:border-dark-800"
+                            :class="[
+                                index === targetSites.length - 1 ? 'border-b-0' : '',
+                                isLocaleDisabled(site)
+                                    ? 'bg-gray-300 dark:bg-dark-600 text-gray-700 dark:text-dark-150 cursor-not-allowed'
+                                    : selectedLocales.includes(site.handle)
+                                        ? 'bg-gray-200 dark:bg-dark-300'
+                                        : 'bg-white dark:bg-dark-550 hover:bg-gray-100 dark:hover:bg-dark-500'
+                            ]"
                         >
                             <input
                                 :id="'ct-locale-' + site.handle"
@@ -462,49 +501,84 @@ const TranslationDialog = {
                                 type="checkbox"
                                 :value="site.handle"
                                 :disabled="isLocaleDisabled(site)"
-                                class="rounded"
+                                class="rounded text-blue"
+                                :class="{ 'opacity-50': isLocaleDisabled(site) }"
                             />
+
                             <label
                                 :for="'ct-locale-' + site.handle"
-                                class="flex-1 text-sm cursor-pointer select-none"
+                                class="flex-1 text-sm cursor-pointer select-none flex items-center gap-2"
+                                :class="{ 'font-medium': selectedLocales.includes(site.handle) }"
                             >
+                                <span
+                                    class="little-dot shrink-0"
+                                    :class="{
+                                        'bg-orange': site.is_stale,
+                                        'bg-green-600': hasExistingTranslation(site) && !site.is_stale,
+                                        'bg-red-500': !hasExistingTranslation(site)
+                                    }"
+                                ></span>
+
                                 {{ site.name }}
-                                <span v-if="site.is_stale" class="ml-2 text-xs text-orange">⚠ {{ t('badge_outdated') }}</span>
-                                <span v-else-if="site.last_translated_at" class="ml-2 text-xs text-gray-400">✓</span>
+
+                                <span
+                                    v-if="site.is_stale && !localeState[site.handle]"
+                                    class="badge-sm bg-orange dark:bg-orange-dark"
+                                >
+                                    {{ t('badge_outdated') }}
+                                </span>
+
+                                <span
+                                    v-else-if="site.last_translated_at && !localeState[site.handle]"
+                                    class="badge-sm bg-blue dark:bg-dark-blue-175"
+                                >
+                                    {{ t('badge_translated') }}
+                                </span>
                             </label>
 
                             <!-- Job status indicator -->
-                            <div v-if="localeState[site.handle]" class="flex items-center gap-1.5 shrink-0">
+                            <div v-if="localeState[site.handle]" class="flex items-center gap-2 shrink-0">
                                 <svg
                                     v-if="localeState[site.handle].status === 'pending' || localeState[site.handle].status === 'running'"
-                                    class="w-4 h-4 animate-spin text-blue-500"
+                                    class="w-4 h-4 animate-spin text-blue"
                                     fill="none"
                                     viewBox="0 0 24 24"
                                 >
                                     <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"/>
                                     <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"/>
                                 </svg>
-                                <span v-if="localeState[site.handle].status === 'completed'" class="text-green-600 font-bold">✓</span>
+
+                                <span
+                                    v-if="localeState[site.handle].status === 'completed'"
+                                    class="badge-sm bg-green-600"
+                                >
+                                    {{ t('status_completed') }}
+                                </span>
+
                                 <template v-if="localeState[site.handle].status === 'failed'">
-                                    <span class="text-red-500">⚠</span>
+                                    <span class="badge-sm bg-red-500">
+                                        {{ t('status_failed') }}
+                                    </span>
                                     <button
                                         type="button"
-                                        class="text-xs text-blue underline hover:no-underline"
+                                        class="text-2xs text-blue underline hover:no-underline"
                                         @click="retryLocale(site.handle)"
                                     >{{ t('retry') }}</button>
                                 </template>
+
                                 <span
                                     v-if="isBulk && localeState[site.handle].totalCount > 1"
-                                    class="text-xs text-gray-500"
+                                    class="text-2xs text-gray-500"
                                 >
                                     {{ localeState[site.handle].completedCount }}/{{ localeState[site.handle].totalCount }}
                                 </span>
                             </div>
                         </div>
 
-                        <p v-if="targetSites.length === 0" class="text-sm text-gray-500 px-3 py-2">
+                        <p v-if="targetSites.length === 0" class="text-sm text-gray-500 px-4 py-4 text-center">
                             {{ t('no_target_sites') }}
                         </p>
+                    </div>
                     </div>
 
                     <!-- Error summary -->
@@ -519,18 +593,6 @@ const TranslationDialog = {
                         </template>
                     </div>
 
-                    <!-- Options -->
-                    <div class="pt-3 border-t dark:border-dark-900 space-y-2.5">
-                        <p class="text-xs font-medium text-gray-600 dark:text-gray-400 uppercase tracking-wide">{{ t('options') }}</p>
-                        <label class="flex items-center gap-2 text-sm cursor-pointer">
-                            <input v-model="generateSlug" type="checkbox" :disabled="isTranslating" class="rounded"/>
-                            {{ t('generate_slugs') }}
-                        </label>
-                        <label class="flex items-center gap-2 text-sm cursor-pointer">
-                            <input v-model="overwrite" type="checkbox" :disabled="isTranslating" class="rounded"/>
-                            {{ t('overwrite_existing') }}
-                        </label>
-                    </div>
                 </div>
 
                 <!-- Footer -->
