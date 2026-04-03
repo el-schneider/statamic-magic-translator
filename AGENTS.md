@@ -61,6 +61,16 @@ This addon has companion Statamic sandboxes for testing. They may live as **sibl
 If sibling layout: `php ../statamic-content-translator-test/artisan {command}`
 If nested layout: `php ../../artisan {command}` (or `../../../artisan`)
 
+### Async / Queue Testing
+
+Translations dispatched to the queue need a running worker. Before testing async behavior, ensure a queue listener is running in the background for the target sandbox:
+
+```bash
+php ../statamic-content-translator-test/artisan queue:listen --tries=1 --timeout=0 &
+```
+
+Check first: `pgrep -f 'queue:listen'` — only start one if none is running.
+
 ## Off-Limits Files
 
 - **`vendor/`** — Managed by Composer.
