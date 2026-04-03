@@ -14,13 +14,7 @@ import type { Axios } from 'axios'
 import { triggerTranslation } from '../core/api'
 import { injectBadges, removeBadges, wasPreviouslyInjected } from '../core/injection'
 import { pollJobs } from '../core/polling'
-import type {
-  FieldtypePreload,
-  LocaleJobState,
-  SiteDescriptor,
-  SiteMeta,
-  TranslationJob,
-} from '../core/types'
+import type { FieldtypePreload, LocaleJobState, SiteDescriptor, SiteMeta, TranslationJob } from '../core/types'
 
 declare global {
   const Statamic: {
@@ -54,7 +48,7 @@ declare global {
 }
 
 function t(key: string, replacements: Record<string, string | number> = {}): string {
-  return __("content-translator::messages." + key, replacements)
+  return __('content-translator::messages.' + key, replacements)
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -170,9 +164,7 @@ const TranslationDialog = {
       if (self.isTranslating || enabled) return
 
       const blocked = new Set(
-        self.targetSites
-          .filter((site) => Boolean((site as SiteMeta).exists))
-          .map((site) => site.handle),
+        self.targetSites.filter((site) => Boolean((site as SiteMeta).exists)).map((site) => site.handle),
       )
 
       self.selectedLocales = self.selectedLocales.filter((handle) => !blocked.has(handle))
@@ -186,7 +178,7 @@ const TranslationDialog = {
 
   methods: {
     t(key: string, replacements: Record<string, string | number> = {}): string {
-      return __("content-translator::messages." + key, replacements)
+      return __('content-translator::messages.' + key, replacements)
     },
 
     hasExistingTranslation(site: SiteMeta | SiteDescriptor): boolean {
@@ -419,9 +411,9 @@ const TranslationDialog = {
   // Statamic v5. Tailwind classes and dark-mode variants are available
   // since the Statamic CP stylesheet is already loaded.
   template: /* html */ `
-        <div class="fixed inset-0 z-[200] flex items-center justify-center">
+        <div class="fixed inset-0 z-200 flex items-center justify-center">
             <!-- Backdrop -->
-            <div class="absolute inset-0 bg-black/50" @click="cancel"></div>
+            <div class="absolute inset-0" style="background:rgba(0,0,0,0.5)" @click="cancel"></div>
 
             <!-- Dialog panel -->
             <div class="relative bg-white dark:bg-dark-550 rounded-lg shadow-2xl w-full max-w-md mx-4 overflow-hidden">
@@ -655,7 +647,7 @@ const TranslatorFieldtype = {
 
   methods: {
     t(key: string, replacements: Record<string, string | number> = {}): string {
-      return __("content-translator::messages." + key, replacements)
+      return __('content-translator::messages.' + key, replacements)
     },
 
     hasInjectedBadgesInDom(): boolean {
