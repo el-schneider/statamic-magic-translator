@@ -232,7 +232,7 @@ export function injectBadges(localeStatuses: SiteMeta[], version: 'v5' | 'v6'): 
     if (version === 'v6') {
       // In v6, inject into the badges flex container at the end of the row
       const badgesContainer =
-        row.querySelector('.flex.items-center.gap-1\\.5') ?? row.querySelector('.flex.items-center:last-child')
+        row.querySelector('[class~="gap-1.5"].flex.items-center') ?? row.querySelector('.flex.items-center:last-child')
       if (badgesContainer) {
         badgesContainer.insertBefore(badge, badgesContainer.firstChild)
       } else {

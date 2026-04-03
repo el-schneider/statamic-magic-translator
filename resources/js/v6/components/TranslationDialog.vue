@@ -21,7 +21,7 @@ import type { LocaleJobState, SiteMeta, SiteDescriptor, TranslationJob } from '.
 declare function __(key: string, replacements?: Record<string, string | number>): string
 
 const t = (key: string, replacements: Record<string, string | number> = {}): string =>
-  __("content-translator::messages." + key, replacements)
+  __('content-translator::messages.' + key, replacements)
 
 // ── Props ─────────────────────────────────────────────────────────────────────
 
@@ -63,9 +63,7 @@ const allEntryIds = computed<string[]>(() => {
 
 /** Dialog heading. */
 const dialogTitle = computed(() =>
-  isBulk.value
-    ? t('dialog_title_bulk', { count: allEntryIds.value.length })
-    : t('dialog_title_single'),
+  isBulk.value ? t('dialog_title_bulk', { count: allEntryIds.value.length }) : t('dialog_title_single'),
 )
 
 // ── State ─────────────────────────────────────────────────────────────────────
@@ -224,10 +222,7 @@ async function translate(): Promise<void> {
               ...localeState[handle]!,
               status: 'failed',
               error: result.error ?? t('error_trigger_failed'),
-              completedCount: Math.min(
-                localeState[handle]!.completedCount + 1,
-                localeState[handle]!.totalCount,
-              ),
+              completedCount: Math.min(localeState[handle]!.completedCount + 1, localeState[handle]!.totalCount),
             }
           }
         }

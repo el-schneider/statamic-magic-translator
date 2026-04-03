@@ -14,7 +14,6 @@ use ElSchneider\ContentTranslator\Services\TranslationServiceFactory;
 use ElSchneider\ContentTranslator\StatamicActions\TranslateEntryAction;
 use Illuminate\Support\Facades\Event;
 use Statamic\Events\EntryBlueprintFound;
-use Statamic\Facades\Utility;
 use Statamic\Providers\AddonServiceProvider;
 
 final class ServiceProvider extends AddonServiceProvider
@@ -66,7 +65,11 @@ final class ServiceProvider extends AddonServiceProvider
 
     public function supportsInertia(): bool
     {
-        return method_exists(Utility::class, 'inertia');
+        // Statamic v6 ships with Inertia.js; v5 does not.
+        // We check for the Inertia class as a reliable v5/v6 discriminator
+        // because method_exists() on a Facade class only returns true for
+        // methods statically defined on the Facade itself, not the underlying class.
+        return class_exists(\Inertia\Inertia::class);
     }
 
     protected function bootVite(): static
