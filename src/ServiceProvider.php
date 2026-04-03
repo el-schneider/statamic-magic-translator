@@ -14,6 +14,8 @@ use ElSchneider\ContentTranslator\Services\TranslationServiceFactory;
 use ElSchneider\ContentTranslator\StatamicActions\TranslateEntryAction;
 use Illuminate\Support\Facades\Event;
 use Statamic\Events\EntryBlueprintFound;
+use Statamic\Events\EntrySaving;
+use Statamic\Facades\Blink;
 use Statamic\Providers\AddonServiceProvider;
 
 final class ServiceProvider extends AddonServiceProvider
@@ -61,6 +63,7 @@ final class ServiceProvider extends AddonServiceProvider
         $this->registerTranslations();
         $this->registerViews();
         $this->registerBlueprintInjection();
+        $this->registerEntrySavingListener();
     }
 
     public function supportsInertia(): bool
@@ -145,6 +148,41 @@ final class ServiceProvider extends AddonServiceProvider
                 'display' => 'Content Translator',
                 'listable' => 'hidden',
             ], 'sidebar');
+        });
+    }
+
+    /**
+     * Preserve `content_translator` metadata on localized saves.
+     */
+    private function registerEntrySavingListener(): void
+    {
+        Event::listen(EntrySaving::class, function (EntrySaving $event): void {
+            $entry = $event->entry;
+
+            if (! $entry->hasOrigin()) {
+                return;
+            }
+
+            $collectionHandle = $entry->collectionHandle();
+            $configuredCollections = config('content-translator.collections', []);
+
+            if (! in_array($collectionHandle, (array) $configuredCollections, true)) {
+                return;
+            }
+
+            if ($entry->get('content_translator') !== null) {
+                return;
+            }
+
+            $storedMeta = $entry->getOriginal('content_translator');
+
+            if ($storedMeta === null) {
+                $storedMeta = Blink::get("content-translator:meta:{$entry->id()}");
+            }
+
+            if ($storedMeta !== null) {
+                $entry->set('content_translator', $storedMeta);
+            }
         });
     }
 }
