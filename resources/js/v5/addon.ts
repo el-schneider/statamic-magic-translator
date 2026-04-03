@@ -11,45 +11,50 @@
  * delegates to `Vue.component()` under the hood.
  */
 import type { Axios } from 'axios'
+import { triggerTranslation } from '../core/api'
 import { injectBadges, removeBadges, wasPreviouslyInjected } from '../core/injection'
 import { pollJobs } from '../core/polling'
-import { triggerTranslation } from '../core/api'
 import type {
-    LocaleJobState,
-    SiteDescriptor,
-    SiteMeta,
-    FieldtypePreload,
+  FieldtypePreload,
+  LocaleJobState,
+  SiteDescriptor,
+  SiteMeta,
+  TranslationJob,
 } from '../core/types'
 
 declare global {
-    const Statamic: {
-        $axios: Axios
-        $toast: {
-            success: (msg: string) => void
-            error: (msg: string) => void
-            info: (msg: string) => void
-        }
-        $components: {
-            register: (name: string, component: unknown) => void
-            append: (
-                name: string,
-                options: { props: Record<string, unknown> },
-            ) => {
-                on: (event: string, handler: (...args: unknown[]) => void) => void
-                destroy: () => void
-            }
-        }
-        $callbacks: {
-            add: (name: string, callback: (...args: unknown[]) => void) => void
-        }
-        booting: (callback: () => void) => void
+  const Statamic: {
+    $axios: Axios
+    $toast: {
+      success: (msg: string) => void
+      error: (msg: string) => void
+      info: (msg: string) => void
     }
+    $components: {
+      register: (name: string, component: unknown) => void
+      append: (
+        name: string,
+        options: { props: Record<string, unknown> },
+      ) => {
+        on: (event: string, handler: (...args: unknown[]) => void) => void
+        destroy: () => void
+      }
+    }
+    $callbacks: {
+      add: (name: string, callback: (...args: unknown[]) => void) => void
+    }
+    booting: (callback: () => void) => void
+  }
 
-    /** Vue 2 constructor provided globally by Statamic v5. */
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const Vue: any
+  /** Vue 2 constructor provided globally by Statamic v5. */
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const Vue: any
 
-    function __(key: string, replacements?: Record<string, string | number>): string
+  function __(key: string, replacements?: Record<string, string | number>): string
+}
+
+function t(key: string, replacements: Record<string, string | number> = {}): string {
+  return __("content-translator::messages." + key, replacements)
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -57,296 +62,363 @@ declare global {
 // ─────────────────────────────────────────────────────────────────────────────
 
 interface DialogData {
-    selectedSource: string
-    selectedLocales: string[]
-    generateSlug: boolean
-    overwrite: boolean
-    localeState: Record<string, LocaleJobState>
-    isTranslating: boolean
-    stopPollingFn: (() => void) | null
+  selectedSource: string
+  selectedLocales: string[]
+  generateSlug: boolean
+  overwrite: boolean
+  localeState: Record<string, LocaleJobState>
+  isTranslating: boolean
+  stopPollingFn: (() => void) | null
 }
 
 const TranslationDialog = {
-    name: 'ContentTranslatorDialog',
+  name: 'ContentTranslatorDialog',
 
-    props: {
-        /** Single entry ID (single-entry mode). */
-        entryId: { type: String, default: null },
-        /** Array of entry IDs (bulk mode). */
-        entryIds: { type: Array as () => string[], default: () => [] },
-        /** Default source site handle. */
-        sourceSite: { type: String, required: true },
-        /** Available sites (SiteMeta | SiteDescriptor). */
-        sites: { type: Array as () => Array<SiteMeta | SiteDescriptor>, required: true },
+  props: {
+    /** Single entry ID (single-entry mode). */
+    entryId: { type: String, default: null },
+    /** Array of entry IDs (bulk mode). */
+    entryIds: { type: Array as () => string[], default: () => [] },
+    /** Default source site handle. */
+    sourceSite: { type: String, required: true },
+    /** Available sites (SiteMeta | SiteDescriptor). */
+    sites: { type: Array as () => Array<SiteMeta | SiteDescriptor>, required: true },
+  },
+
+  data(): DialogData {
+    return {
+      selectedSource: (this as unknown as { sourceSite: string }).sourceSite,
+      selectedLocales: [],
+      generateSlug: false,
+      overwrite: false,
+      localeState: {},
+      isTranslating: false,
+      stopPollingFn: null,
+    }
+  },
+
+  computed: {
+    isBulk(): boolean {
+      return (this as unknown as { entryIds: string[] }).entryIds.length > 1
     },
 
-    data(): DialogData {
-        return {
-            selectedSource: (this as unknown as { sourceSite: string }).sourceSite,
-            selectedLocales: [],
-            generateSlug: false,
-            overwrite: false,
-            localeState: {},
-            isTranslating: false,
-            stopPollingFn: null,
+    allEntryIds(): string[] {
+      const self = this as unknown as { entryIds: string[]; entryId: string | null }
+      if (self.entryIds.length > 0) return self.entryIds
+      if (self.entryId) return [self.entryId]
+      return []
+    },
+
+    dialogTitle(): string {
+      const self = this as unknown as { isBulk: boolean; allEntryIds: string[] }
+      if (self.isBulk) {
+        return t('dialog_title_bulk', { count: self.allEntryIds.length })
+      }
+      return t('dialog_title_single')
+    },
+
+    targetSites(): Array<SiteMeta | SiteDescriptor> {
+      const self = this as unknown as {
+        sites: Array<SiteMeta | SiteDescriptor>
+        selectedSource: string
+      }
+      return self.sites.filter((s) => s.handle !== self.selectedSource)
+    },
+
+    allDone(): boolean {
+      const self = this as unknown as {
+        isTranslating: boolean
+        selectedLocales: string[]
+        localeState: Record<string, LocaleJobState>
+      }
+      return (
+        self.isTranslating &&
+        self.selectedLocales.every((handle) => {
+          const state = self.localeState[handle]
+          return Boolean(state) && state.completedCount >= state.totalCount
+        })
+      )
+    },
+
+    hasFailed(): boolean {
+      const self = this as unknown as { localeState: Record<string, LocaleJobState> }
+      return Object.values(self.localeState).some((s) => s.status === 'failed')
+    },
+  },
+
+  created() {
+    ;(this as unknown as { syncSelectedLocales: () => void }).syncSelectedLocales()
+  },
+
+  watch: {
+    selectedSource() {
+      const self = this as unknown as {
+        isTranslating: boolean
+        syncSelectedLocales: () => void
+      }
+      if (self.isTranslating) return
+      self.syncSelectedLocales()
+    },
+
+    overwrite(enabled: boolean) {
+      const self = this as unknown as {
+        isTranslating: boolean
+        selectedLocales: string[]
+        targetSites: Array<SiteMeta | SiteDescriptor>
+      }
+
+      if (self.isTranslating || enabled) return
+
+      const blocked = new Set(
+        self.targetSites
+          .filter((site) => Boolean((site as SiteMeta).exists))
+          .map((site) => site.handle),
+      )
+
+      self.selectedLocales = self.selectedLocales.filter((handle) => !blocked.has(handle))
+    },
+  },
+
+  beforeDestroy() {
+    const self = this as unknown as { stopPollingFn: (() => void) | null }
+    if (self.stopPollingFn) self.stopPollingFn()
+  },
+
+  methods: {
+    t(key: string, replacements: Record<string, string | number> = {}): string {
+      return __("content-translator::messages." + key, replacements)
+    },
+
+    hasExistingTranslation(site: SiteMeta | SiteDescriptor): boolean {
+      return Boolean((site as SiteMeta).exists)
+    },
+
+    isLocaleDisabled(site: SiteMeta | SiteDescriptor): boolean {
+      const self = this as unknown as {
+        isTranslating: boolean
+        overwrite: boolean
+        hasExistingTranslation: (site: SiteMeta | SiteDescriptor) => boolean
+      }
+
+      return self.isTranslating || (self.hasExistingTranslation(site) && !self.overwrite)
+    },
+
+    syncSelectedLocales() {
+      const self = this as unknown as {
+        targetSites: Array<SiteMeta | SiteDescriptor>
+        overwrite: boolean
+        selectedLocales: string[]
+      }
+
+      self.selectedLocales = self.targetSites
+        .filter((site) => !(site as SiteMeta).exists || self.overwrite)
+        .map((site) => site.handle)
+    },
+
+    cancel() {
+      const self = this as unknown as {
+        stopPollingFn: (() => void) | null
+        $emit: (event: string) => void
+      }
+      if (self.stopPollingFn) self.stopPollingFn()
+      self.$emit('close')
+    },
+
+    applyJobSnapshot(jobs: TranslationJob[]) {
+      const self = this as unknown as {
+        localeState: Record<string, LocaleJobState>
+        $set: (obj: object, key: string, val: unknown) => void
+      }
+
+      for (const [handle, state] of Object.entries(self.localeState)) {
+        const relatedJobs = jobs.filter((job) => state.jobIds.includes(job.id))
+        if (relatedJobs.length === 0) continue
+
+        const completedCount = relatedJobs.filter((job) => job.status === 'completed').length
+        const failedJobs = relatedJobs.filter((job) => job.status === 'failed')
+        const terminalCount = completedCount + failedJobs.length
+        const hasRunning = relatedJobs.some((job) => job.status === 'running')
+        const hasPending = relatedJobs.some((job) => job.status === 'pending')
+
+        let nextStatus: LocaleJobState['status'] = 'pending'
+        if (failedJobs.length > 0) {
+          nextStatus = 'failed'
+        } else if (terminalCount === relatedJobs.length) {
+          nextStatus = 'completed'
+        } else if (hasRunning) {
+          nextStatus = 'running'
+        } else if (hasPending) {
+          nextStatus = 'pending'
         }
+
+        self.$set(self.localeState, handle, {
+          ...state,
+          status: nextStatus,
+          error: failedJobs[0]?.error ?? null,
+          completedCount: terminalCount,
+        })
+      }
     },
 
-    computed: {
-        isBulk(): boolean {
-            return (this as unknown as { entryIds: string[] }).entryIds.length > 1
-        },
+    async translate() {
+      const self = this as unknown as {
+        selectedLocales: string[]
+        isTranslating: boolean
+        allEntryIds: string[]
+        selectedSource: string
+        generateSlug: boolean
+        overwrite: boolean
+        localeState: Record<string, LocaleJobState>
+        stopPollingFn: (() => void) | null
+        $set: (obj: object, key: string, val: unknown) => void
+        isBulk: boolean
+      }
 
-        allEntryIds(): string[] {
-            const self = this as unknown as { entryIds: string[]; entryId: string | null }
-            if (self.entryIds.length > 0) return self.entryIds
-            if (self.entryId) return [self.entryId]
-            return []
-        },
+      if (!self.selectedLocales.length || self.isTranslating) return
+      self.isTranslating = true
 
-        dialogTitle(): string {
-            const self = this as unknown as { isBulk: boolean; allEntryIds: string[] }
-            if (self.isBulk) return `Translate ${String(self.allEntryIds.length)} entries`
-            return 'Translate'
-        },
+      const totalEntries = self.allEntryIds.length
 
-        targetSites(): Array<SiteMeta | SiteDescriptor> {
-            const self = this as unknown as {
-                sites: Array<SiteMeta | SiteDescriptor>
-                selectedSource: string
-            }
-            return self.sites.filter((s) => s.handle !== self.selectedSource)
-        },
+      // Initialise per-locale state
+      for (const handle of self.selectedLocales) {
+        self.$set(self.localeState, handle, {
+          status: 'pending',
+          error: null,
+          completedCount: 0,
+          totalCount: totalEntries,
+          jobIds: [],
+        } as LocaleJobState)
+      }
 
-        allDone(): boolean {
-            const self = this as unknown as {
-                isTranslating: boolean
-                selectedLocales: string[]
-                localeState: Record<string, LocaleJobState>
-            }
-            return (
-                self.isTranslating &&
-                self.selectedLocales.every((handle) => {
-                    const state = self.localeState[handle]
-                    return state?.status === 'completed' || state?.status === 'failed'
-                })
-            )
-        },
+      const allJobIds: string[] = []
 
-        hasFailed(): boolean {
-            const self = this as unknown as { localeState: Record<string, LocaleJobState> }
-            return Object.values(self.localeState).some((s) => s.status === 'failed')
-        },
-    },
+      try {
+        for (const entryId of self.allEntryIds) {
+          const result = await triggerTranslation({
+            entryId,
+            sourceSite: self.selectedSource,
+            targetSites: self.selectedLocales,
+            options: {
+              generateSlug: self.generateSlug,
+              overwrite: self.overwrite,
+            },
+          })
 
-    created() {
-        // Pre-select locales that don't have an existing translation
-        const self = this as unknown as {
-            targetSites: Array<SiteMeta | SiteDescriptor>
-            selectedLocales: string[]
-            sourceSite: string
-        }
-        self.selectedLocales = self.targetSites
-            .filter((s) => !(s as SiteMeta).exists)
-            .map((s) => s.handle)
-    },
-
-    beforeDestroy() {
-        const self = this as unknown as { stopPollingFn: (() => void) | null }
-        if (self.stopPollingFn) self.stopPollingFn()
-    },
-
-    methods: {
-        cancel() {
-            const self = this as unknown as {
-                stopPollingFn: (() => void) | null
-                $emit: (event: string) => void
-            }
-            if (self.stopPollingFn) self.stopPollingFn()
-            self.$emit('close')
-        },
-
-        async translate() {
-            const self = this as unknown as {
-                selectedLocales: string[]
-                isTranslating: boolean
-                allEntryIds: string[]
-                selectedSource: string
-                generateSlug: boolean
-                overwrite: boolean
-                localeState: Record<string, LocaleJobState>
-                stopPollingFn: (() => void) | null
-                $set: (obj: object, key: string, val: unknown) => void
-                isBulk: boolean
-            }
-
-            if (!self.selectedLocales.length || self.isTranslating) return
-            self.isTranslating = true
-
-            const totalEntries = self.allEntryIds.length
-
-            // Initialise per-locale state
+          if (!result.success) {
             for (const handle of self.selectedLocales) {
+              if (self.localeState[handle]) {
                 self.$set(self.localeState, handle, {
-                    status: 'pending',
-                    error: null,
-                    completedCount: 0,
-                    totalCount: totalEntries,
-                    jobIds: [],
-                } as LocaleJobState)
+                  ...self.localeState[handle],
+                  status: 'failed',
+                  error: result.error ?? t('error_trigger_failed'),
+                  completedCount: Math.min(
+                    self.localeState[handle].completedCount + 1,
+                    self.localeState[handle].totalCount,
+                  ),
+                })
+              }
             }
+            continue
+          }
 
-            const allJobIds: string[] = []
-
-            try {
-                for (const entryId of self.allEntryIds) {
-                    const result = await triggerTranslation({
-                        entryId,
-                        sourceSite: self.selectedSource,
-                        targetSites: self.selectedLocales,
-                        options: {
-                            generateSlug: self.generateSlug,
-                            overwrite: self.overwrite,
-                        },
-                    })
-
-                    if (!result.success) {
-                        for (const handle of self.selectedLocales) {
-                            if (self.localeState[handle]) {
-                                self.$set(self.localeState, handle, {
-                                    ...self.localeState[handle],
-                                    status: 'failed',
-                                    error: result.error ?? 'Trigger failed',
-                                })
-                            }
-                        }
-                        continue
-                    }
-
-                    for (const job of result.jobs) {
-                        allJobIds.push(job.id)
-                        const handle = job.target_site
-                        const existing = self.localeState[handle]
-                        if (existing) {
-                            self.$set(self.localeState, handle, {
-                                ...existing,
-                                jobIds: [...existing.jobIds, job.id],
-                                status: 'pending',
-                            })
-                        }
-                    }
-                }
-            } catch (err) {
-                console.error('[content-translator] dispatch error:', err)
-                for (const handle of self.selectedLocales) {
-                    if (self.localeState[handle]) {
-                        self.$set(self.localeState, handle, {
-                            ...self.localeState[handle],
-                            status: 'failed',
-                            error: 'An unexpected error occurred.',
-                        })
-                    }
-                }
-                self.isTranslating = false
-                return
-            }
-
-            if (allJobIds.length === 0) {
-                self.isTranslating = false
-                return
-            }
-
-            // Start polling
-            self.stopPollingFn = pollJobs(allJobIds, (jobs) => {
-                for (const job of jobs) {
-                    const handle = job.targetSite
-                    const state = self.localeState[handle]
-                    if (!state) continue
-
-                    const isTerminal =
-                        job.status === 'completed' || job.status === 'failed'
-                    self.$set(self.localeState, handle, {
-                        ...state,
-                        status: isTerminal
-                            ? job.status
-                            : job.status,
-                        error: job.error ?? null,
-                        completedCount: isTerminal
-                            ? state.completedCount + 1
-                            : state.completedCount,
-                    })
-                }
-            })
-        },
-
-        async retryLocale(handle: string) {
-            const self = this as unknown as {
-                localeState: Record<string, LocaleJobState>
-                allEntryIds: string[]
-                selectedSource: string
-                generateSlug: boolean
-                stopPollingFn: (() => void) | null
-                $set: (obj: object, key: string, val: unknown) => void
-            }
-
-            if (!self.localeState[handle]) return
-
-            self.$set(self.localeState, handle, {
-                ...self.localeState[handle],
+          for (const job of result.jobs) {
+            allJobIds.push(job.id)
+            const handle = job.target_site
+            const existing = self.localeState[handle]
+            if (existing) {
+              self.$set(self.localeState, handle, {
+                ...existing,
+                jobIds: [...existing.jobIds, job.id],
                 status: 'pending',
-                error: null,
-                completedCount: 0,
-                jobIds: [],
-            })
-
-            const newJobIds: string[] = []
-
-            for (const entryId of self.allEntryIds) {
-                try {
-                    const result = await triggerTranslation({
-                        entryId,
-                        sourceSite: self.selectedSource,
-                        targetSites: [handle],
-                        options: { generateSlug: self.generateSlug, overwrite: true },
-                    })
-                    if (result.success) {
-                        for (const job of result.jobs) newJobIds.push(job.id)
-                    }
-                } catch (err) {
-                    console.error('[content-translator] retry error:', err)
-                }
+              })
             }
-
-            if (newJobIds.length === 0) return
-
-            self.stopPollingFn?.()
-            const existingIds = Object.values(self.localeState).flatMap((s) => s.jobIds)
-            const merged = [...new Set([...existingIds, ...newJobIds])]
-
-            self.stopPollingFn = pollJobs(merged, (jobs) => {
-                for (const job of jobs) {
-                    const h = job.targetSite
-                    const state = self.localeState[h]
-                    if (!state) continue
-                    const isTerminal =
-                        job.status === 'completed' || job.status === 'failed'
-                    self.$set(self.localeState, h, {
-                        ...state,
-                        status: job.status,
-                        error: job.error ?? null,
-                        completedCount: isTerminal
-                            ? state.completedCount + 1
-                            : state.completedCount,
-                    })
-                }
+          }
+        }
+      } catch (err) {
+        console.error('[content-translator] dispatch error:', err)
+        for (const handle of self.selectedLocales) {
+          if (self.localeState[handle]) {
+            self.$set(self.localeState, handle, {
+              ...self.localeState[handle],
+              status: 'failed',
+              error: t('error_unexpected'),
             })
-        },
+          }
+        }
+        self.isTranslating = false
+        return
+      }
+
+      if (allJobIds.length === 0) {
+        self.isTranslating = false
+        return
+      }
+
+      // Start polling
+      self.stopPollingFn = pollJobs(allJobIds, (jobs) => {
+        ;(self as unknown as { applyJobSnapshot: (jobs: TranslationJob[]) => void }).applyJobSnapshot(jobs)
+      })
     },
 
-    // Template is compiled at runtime by the Vue 2 compiler bundled with
-    // Statamic v5. Tailwind classes and dark-mode variants are available
-    // since the Statamic CP stylesheet is already loaded.
-    template: /* html */ `
+    async retryLocale(handle: string) {
+      const self = this as unknown as {
+        localeState: Record<string, LocaleJobState>
+        allEntryIds: string[]
+        selectedSource: string
+        generateSlug: boolean
+        stopPollingFn: (() => void) | null
+        $set: (obj: object, key: string, val: unknown) => void
+      }
+
+      if (!self.localeState[handle]) return
+
+      self.$set(self.localeState, handle, {
+        ...self.localeState[handle],
+        status: 'pending',
+        error: null,
+        completedCount: 0,
+        jobIds: [],
+      })
+
+      const newJobIds: string[] = []
+
+      for (const entryId of self.allEntryIds) {
+        try {
+          const result = await triggerTranslation({
+            entryId,
+            sourceSite: self.selectedSource,
+            targetSites: [handle],
+            options: { generateSlug: self.generateSlug, overwrite: true },
+          })
+          if (result.success) {
+            for (const job of result.jobs) newJobIds.push(job.id)
+          }
+        } catch (err) {
+          console.error('[content-translator] retry error:', err)
+        }
+      }
+
+      if (newJobIds.length === 0) return
+
+      self.$set(self.localeState, handle, {
+        ...self.localeState[handle],
+        jobIds: newJobIds,
+      })
+
+      self.stopPollingFn?.()
+      const existingIds = Object.values(self.localeState).flatMap((s) => s.jobIds)
+      const merged = [...new Set([...existingIds, ...newJobIds])]
+
+      self.stopPollingFn = pollJobs(merged, (jobs) => {
+        ;(self as unknown as { applyJobSnapshot: (jobs: TranslationJob[]) => void }).applyJobSnapshot(jobs)
+      })
+    },
+  },
+
+  // Template is compiled at runtime by the Vue 2 compiler bundled with
+  // Statamic v5. Tailwind classes and dark-mode variants are available
+  // since the Statamic CP stylesheet is already loaded.
+  template: /* html */ `
         <div class="fixed inset-0 z-[200] flex items-center justify-center">
             <!-- Backdrop -->
             <div class="absolute inset-0 bg-black/50" @click="cancel"></div>
@@ -372,7 +444,7 @@ const TranslationDialog = {
                     <!-- Source locale selector -->
                     <div>
                         <label class="block text-xs font-medium text-gray-600 dark:text-gray-400 mb-1 uppercase tracking-wide">
-                            Source
+                            {{ t('source') }}
                         </label>
                         <select
                             v-model="selectedSource"
@@ -397,7 +469,7 @@ const TranslationDialog = {
                                 v-model="selectedLocales"
                                 type="checkbox"
                                 :value="site.handle"
-                                :disabled="isTranslating"
+                                :disabled="isLocaleDisabled(site)"
                                 class="rounded"
                             />
                             <label
@@ -405,7 +477,7 @@ const TranslationDialog = {
                                 class="flex-1 text-sm cursor-pointer select-none"
                             >
                                 {{ site.name }}
-                                <span v-if="site.is_stale" class="ml-2 text-xs text-orange">⚠ outdated</span>
+                                <span v-if="site.is_stale" class="ml-2 text-xs text-orange">⚠ {{ t('badge_outdated') }}</span>
                                 <span v-else-if="site.last_translated_at" class="ml-2 text-xs text-gray-400">✓</span>
                             </label>
 
@@ -427,7 +499,7 @@ const TranslationDialog = {
                                         type="button"
                                         class="text-xs text-blue underline hover:no-underline"
                                         @click="retryLocale(site.handle)"
-                                    >Retry</button>
+                                    >{{ t('retry') }}</button>
                                 </template>
                                 <span
                                     v-if="isBulk && localeState[site.handle].totalCount > 1"
@@ -439,7 +511,7 @@ const TranslationDialog = {
                         </div>
 
                         <p v-if="targetSites.length === 0" class="text-sm text-gray-500 px-3 py-2">
-                            No target sites available.
+                            {{ t('no_target_sites') }}
                         </p>
                     </div>
 
@@ -450,21 +522,21 @@ const TranslationDialog = {
                     >
                         <template v-for="(state, handle) in localeState">
                             <p v-if="state.status === 'failed'" :key="handle" class="text-xs text-red-700 dark:text-red-400">
-                                <strong>{{ handle }}:</strong> {{ state.error || 'Translation failed.' }}
+                                <strong>{{ handle }}:</strong> {{ state.error || t('translation_failed') }}
                             </p>
                         </template>
                     </div>
 
                     <!-- Options -->
                     <div class="pt-3 border-t dark:border-dark-900 space-y-2.5">
-                        <p class="text-xs font-medium text-gray-600 dark:text-gray-400 uppercase tracking-wide">Options</p>
+                        <p class="text-xs font-medium text-gray-600 dark:text-gray-400 uppercase tracking-wide">{{ t('options') }}</p>
                         <label class="flex items-center gap-2 text-sm cursor-pointer">
                             <input v-model="generateSlug" type="checkbox" :disabled="isTranslating" class="rounded"/>
-                            Generate slugs from translated title
+                            {{ t('generate_slugs') }}
                         </label>
                         <label class="flex items-center gap-2 text-sm cursor-pointer">
                             <input v-model="overwrite" type="checkbox" :disabled="isTranslating" class="rounded"/>
-                            Overwrite existing translations
+                            {{ t('overwrite_existing') }}
                         </label>
                     </div>
                 </div>
@@ -472,7 +544,7 @@ const TranslationDialog = {
                 <!-- Footer -->
                 <div class="flex items-center justify-end gap-3 px-6 py-4 border-t dark:border-dark-900 bg-gray-50 dark:bg-dark-600">
                     <button type="button" class="btn" @click="cancel">
-                        {{ allDone ? 'Close' : 'Cancel' }}
+                        {{ allDone ? t('close') : t('cancel') }}
                     </button>
                     <button
                         type="button"
@@ -489,8 +561,8 @@ const TranslationDialog = {
                             <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"/>
                             <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"/>
                         </svg>
-                        <span v-if="isTranslating && !allDone">Translating…</span>
-                        <span v-else>Translate selected</span>
+                        <span v-if="isTranslating && !allDone">{{ t('translating') }}</span>
+                        <span v-else>{{ t('translate_selected') }}</span>
                     </button>
                 </div>
             </div>
@@ -503,120 +575,139 @@ const TranslationDialog = {
 // ─────────────────────────────────────────────────────────────────────────────
 
 interface FieldtypeData {
-    badgeInjected: boolean
-    observer: MutationObserver | null
+  badgeInjected: boolean
+  observer: MutationObserver | null
+  injecting: boolean
 }
 
 const TranslatorFieldtype = {
-    name: 'ContentTranslatorFieldtype',
+  name: 'ContentTranslatorFieldtype',
 
-    // Statamic injects `storeName` into all fieldtype components so they can
-    // read data from the Vuex publish store if needed.
-    inject: ['storeName'],
+  // Statamic injects `storeName` into all fieldtype components so they can
+  // read data from the Vuex publish store if needed.
+  inject: ['storeName'],
 
-    props: {
-        handle: String,
-        value: null,
-        meta: { type: Object as () => FieldtypePreload, required: true },
-        config: Object,
+  props: {
+    handle: String,
+    value: null,
+    meta: { type: Object as () => FieldtypePreload, required: true },
+    config: Object,
+  },
+
+  data(): FieldtypeData {
+    return {
+      badgeInjected: wasPreviouslyInjected(),
+      observer: null,
+      injecting: false,
+    }
+  },
+
+  computed: {
+    sites(): SiteMeta[] {
+      return (this as unknown as { meta: FieldtypePreload }).meta?.sites ?? []
     },
 
-    data(): FieldtypeData {
-        return {
-            badgeInjected: wasPreviouslyInjected(),
-            observer: null,
-        }
+    currentSite(): string | null {
+      return (this as unknown as { meta: FieldtypePreload }).meta?.current_site ?? null
     },
 
-    computed: {
-        sites(): SiteMeta[] {
-            return (this as unknown as { meta: FieldtypePreload }).meta?.sites ?? []
-        },
-
-        currentSite(): string | null {
-            return (this as unknown as { meta: FieldtypePreload }).meta?.current_site ?? null
-        },
-
-        entryId(): string | null {
-            return (this as unknown as { meta: FieldtypePreload }).meta?.entry_id ?? null
-        },
-
-        targetSites(): SiteMeta[] {
-            const self = this as unknown as { sites: SiteMeta[]; currentSite: string | null }
-            return self.sites.filter((s) => s.handle !== self.currentSite)
-        },
-
-        hasTargets(): boolean {
-            return (this as unknown as { targetSites: SiteMeta[] }).targetSites.length > 0
-        },
+    originSite(): string | null {
+      return (this as unknown as { meta: FieldtypePreload }).meta?.origin_site ?? null
     },
 
-    mounted() {
-        const self = this as unknown as {
-            tryInjectBadges: () => void
-            badgeInjected: boolean
-            observer: MutationObserver | null
-        }
-        self.tryInjectBadges()
-
-        if (!self.badgeInjected) {
-            self.observer = new MutationObserver(() => {
-                if (!self.badgeInjected) self.tryInjectBadges()
-            })
-            self.observer.observe(document.body, { childList: true, subtree: true })
-        }
+    entryId(): string | null {
+      return (this as unknown as { meta: FieldtypePreload }).meta?.entry_id ?? null
     },
 
-    beforeDestroy() {
-        const self = this as unknown as { observer: MutationObserver | null }
-        self.observer?.disconnect()
-        removeBadges()
+    targetSites(): SiteMeta[] {
+      const self = this as unknown as { sites: SiteMeta[]; currentSite: string | null }
+      return self.sites.filter((s) => s.handle !== self.currentSite)
     },
 
-    methods: {
-        tryInjectBadges() {
-            const self = this as unknown as {
-                sites: SiteMeta[]
-                badgeInjected: boolean
-                observer: MutationObserver | null
-            }
-            if (!self.sites.length) return
+    hasTargets(): boolean {
+      return (this as unknown as { targetSites: SiteMeta[] }).targetSites.length > 0
+    },
+  },
 
-            const ok = injectBadges(self.sites, 'v5')
-            if (ok) {
-                self.badgeInjected = true
-                self.observer?.disconnect()
-                self.observer = null
-            }
+  mounted() {
+    const self = this as unknown as {
+      tryInjectBadges: () => void
+      badgeInjected: boolean
+      observer: MutationObserver | null
+      injecting: boolean
+      hasInjectedBadgesInDom: () => boolean
+    }
+    self.tryInjectBadges()
+
+    self.observer = new MutationObserver(() => {
+      if (self.injecting) return
+      if (self.badgeInjected && self.hasInjectedBadgesInDom()) return
+      self.tryInjectBadges()
+    })
+    self.observer.observe(document.body, { childList: true, subtree: true })
+  },
+
+  beforeDestroy() {
+    const self = this as unknown as { observer: MutationObserver | null }
+    self.observer?.disconnect()
+    removeBadges()
+  },
+
+  methods: {
+    t(key: string, replacements: Record<string, string | number> = {}): string {
+      return __("content-translator::messages." + key, replacements)
+    },
+
+    hasInjectedBadgesInDom(): boolean {
+      return document.querySelector('[data-ct-badge]') !== null
+    },
+
+    tryInjectBadges() {
+      const self = this as unknown as {
+        sites: SiteMeta[]
+        badgeInjected: boolean
+        observer: MutationObserver | null
+        injecting: boolean
+      }
+      if (self.injecting || !self.sites.length) return
+
+      self.injecting = true
+      try {
+        const ok = injectBadges(self.sites, 'v5')
+        self.badgeInjected = ok
+      } finally {
+        self.injecting = false
+      }
+    },
+
+    openDialog() {
+      const self = this as unknown as {
+        entryId: string | null
+        currentSite: string | null
+        originSite: string | null
+        sites: SiteMeta[]
+      }
+
+      if (!self.entryId) {
+        console.warn('[content-translator] Cannot open dialog: entry_id not available.')
+        return
+      }
+
+      const dialog = Statamic.$components.append('content-translator-dialog', {
+        props: {
+          entryId: self.entryId,
+          sourceSite: self.originSite ?? self.currentSite ?? self.sites[0]?.handle ?? '',
+          sites: self.sites,
         },
+      })
 
-        openDialog() {
-            const self = this as unknown as {
-                entryId: string | null
-                currentSite: string | null
-                sites: SiteMeta[]
-            }
-
-            if (!self.entryId) {
-                console.warn('[content-translator] Cannot open dialog: entry_id not available.')
-                return
-            }
-
-            const dialog = Statamic.$components.append('content-translator-dialog', {
-                props: {
-                    entryId: self.entryId,
-                    sourceSite: self.currentSite ?? self.sites[0]?.handle ?? '',
-                    sites: self.sites,
-                },
-            })
-
-            dialog.on('close', () => {
-                dialog.destroy()
-            })
-        },
+      dialog.on('close', () => {
+        dialog.destroy()
+      })
     },
+  },
 
-    template: /* html */ `
+  template: /* html */ `
         <div class="content-translator-fieldtype">
             <button
                 type="button"
@@ -624,7 +715,7 @@ const TranslatorFieldtype = {
                 :disabled="!hasTargets"
                 @click="openDialog"
             >
-                Translate
+                {{ t('translate_button') }}
             </button>
 
             <!-- Fallback status list when badge injection has not succeeded yet -->
@@ -653,33 +744,30 @@ const TranslatorFieldtype = {
 // ─────────────────────────────────────────────────────────────────────────────
 
 Statamic.booting(() => {
-    // Register the fieldtype (auto-injected into blueprints by ServiceProvider)
-    Statamic.$components.register('content_translator-fieldtype', TranslatorFieldtype)
+  // Register the fieldtype (auto-injected into blueprints by ServiceProvider)
+  Statamic.$components.register('content_translator-fieldtype', TranslatorFieldtype)
 
-    // Register the dialog component (opened via $components.append)
-    Statamic.$components.register('content-translator-dialog', TranslationDialog)
+  // Register the dialog component (opened via $components.append)
+  Statamic.$components.register('content-translator-dialog', TranslationDialog)
 
-    // Wire up the bulk-action callback
-    // PHP TranslateEntryAction::run() calls: Statamic.$callbacks.call('openTranslationDialog', entryIds, sites)
-    Statamic.$callbacks.add(
-        'openTranslationDialog',
-        (entryIds: unknown, sites: unknown) => {
-            const ids = Array.isArray(entryIds) ? (entryIds as string[]) : []
-            const siteList = Array.isArray(sites) ? (sites as SiteDescriptor[]) : []
+  // Wire up the bulk-action callback
+  // PHP TranslateEntryAction::run() calls: Statamic.$callbacks.call('openTranslationDialog', entryIds, sites)
+  Statamic.$callbacks.add('openTranslationDialog', (entryIds: unknown, sites: unknown) => {
+    const ids = Array.isArray(entryIds) ? (entryIds as string[]) : []
+    const siteList = Array.isArray(sites) ? (sites as SiteDescriptor[]) : []
 
-            if (ids.length === 0) return
+    if (ids.length === 0) return
 
-            const dialog = Statamic.$components.append('content-translator-dialog', {
-                props: {
-                    entryIds: ids,
-                    sourceSite: siteList[0]?.handle ?? '',
-                    sites: siteList,
-                },
-            })
+    const dialog = Statamic.$components.append('content-translator-dialog', {
+      props: {
+        entryIds: ids,
+        sourceSite: siteList[0]?.handle ?? '',
+        sites: siteList,
+      },
+    })
 
-            dialog.on('close', () => {
-                dialog.destroy()
-            })
-        },
-    )
+    dialog.on('close', () => {
+      dialog.destroy()
+    })
+  })
 })

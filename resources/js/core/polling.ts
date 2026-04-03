@@ -9,10 +9,10 @@ import { checkStatus, mapApiJob } from './api'
 import type { TranslationJob } from './types'
 
 export interface PollOptions {
-    /** Initial polling interval in milliseconds (default: 1000). */
-    interval?: number
-    /** Maximum number of polling attempts before giving up (default: 60). */
-    maxAttempts?: number
+  /** Initial polling interval in milliseconds (default: 1000). */
+  interval?: number
+  /** Maximum number of polling attempts before giving up (default: 60). */
+  maxAttempts?: number
 }
 
 /**
@@ -23,45 +23,45 @@ export interface PollOptions {
  * the dialog is closed).
  */
 export function pollJobs(
-    jobIds: string[],
-    onUpdate: (jobs: TranslationJob[]) => void,
-    options: PollOptions = {},
+  jobIds: string[],
+  onUpdate: (jobs: TranslationJob[]) => void,
+  options: PollOptions = {},
 ): () => void {
-    const { interval = 1000, maxAttempts = 60 } = options
-    let attempts = 0
-    let stopped = false
-    let timeoutId: ReturnType<typeof setTimeout> | null = null
+  const { interval = 1000, maxAttempts = 60 } = options
+  let attempts = 0
+  let stopped = false
+  let timeoutId: ReturnType<typeof setTimeout> | null = null
 
-    const poll = async (): Promise<void> => {
-        if (stopped) return
-        attempts++
+  const poll = async (): Promise<void> => {
+    if (stopped) return
+    attempts++
 
-        try {
-            const result = await checkStatus(jobIds)
-            const jobs = result.jobs.map(mapApiJob)
-            onUpdate(jobs)
+    try {
+      const result = await checkStatus(jobIds)
+      if (stopped) return
 
-            const allTerminal = jobs.every(
-                (j) => j.status === 'completed' || j.status === 'failed',
-            )
+      const jobs = result.jobs.map(mapApiJob)
+      onUpdate(jobs)
 
-            if (allTerminal || attempts >= maxAttempts) return
-        } catch (err) {
-            console.error('[content-translator] polling error:', err)
-        }
+      const allTerminal = jobs.every((j) => j.status === 'completed' || j.status === 'failed')
 
-        // Adaptive backoff: double the interval after the first 10 fast attempts
-        const delay = attempts > 10 ? Math.min(interval * 2, 3000) : interval
-        timeoutId = setTimeout(() => void poll(), delay)
+      if (allTerminal || attempts >= maxAttempts) return
+    } catch (err) {
+      console.error('[content-translator] polling error:', err)
     }
 
-    void poll()
+    // Adaptive backoff: double the interval after the first 10 fast attempts
+    const delay = attempts > 10 ? Math.min(interval * 2, 3000) : interval
+    timeoutId = setTimeout(() => void poll(), delay)
+  }
 
-    return (): void => {
-        stopped = true
-        if (timeoutId !== null) {
-            clearTimeout(timeoutId)
-            timeoutId = null
-        }
+  void poll()
+
+  return (): void => {
+    stopped = true
+    if (timeoutId !== null) {
+      clearTimeout(timeoutId)
+      timeoutId = null
     }
+  }
 }
