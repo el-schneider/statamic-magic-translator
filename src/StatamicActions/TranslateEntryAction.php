@@ -17,8 +17,17 @@ final class TranslateEntryAction extends Action
 
     public function run($items, $values): array
     {
+        $sites = Site::all()->map(fn ($site) => [
+            'handle' => $site->handle(),
+            'name' => $site->name(),
+        ])->values()->all();
+
         return [
-            'callback' => ['openTranslationDialog', $items->map->id()->values()->all()],
+            'callback' => [
+                'openTranslationDialog',
+                $items->map->id()->values()->all(),
+                $sites,
+            ],
         ];
     }
 
