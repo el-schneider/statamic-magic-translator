@@ -98,6 +98,7 @@ final class ContentTranslatorFieldtype extends Fieldtype
         // Blueprint editor preview — no live entry available.
         if ($entry === null) {
             return [
+                'entry_id' => null,
                 'current_site' => null,
                 'is_origin' => false,
                 'sites' => Site::all()->map(fn ($site) => [
@@ -160,6 +161,7 @@ final class ContentTranslatorFieldtype extends Fieldtype
         })->values()->all();
 
         return [
+            'entry_id' => $entry->id(),
             'current_site' => $currentSite,
             'is_origin' => $isOrigin,
             'sites' => $sitesData,
