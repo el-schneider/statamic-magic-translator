@@ -90,8 +90,8 @@ return [
     */
 
     'prism' => [
-        'provider' => env('CONTENT_TRANSLATOR_PROVIDER', 'anthropic'),
-        'model' => env('CONTENT_TRANSLATOR_MODEL', 'claude-sonnet-4-20250514'),
+        'provider' => env('CONTENT_TRANSLATOR_PROVIDER', 'openai'),
+        'model' => env('CONTENT_TRANSLATOR_MODEL', 'gpt-5-mini'),
         'prompts' => [
             'system' => 'content-translator::prompts.system',
             'user' => 'content-translator::prompts.user',
