@@ -5,11 +5,13 @@ declare(strict_types=1);
 use ElSchneider\ContentTranslator\Data\TranslationFormat;
 use ElSchneider\ContentTranslator\Data\TranslationUnit;
 use ElSchneider\ContentTranslator\Services\PrismTranslationService;
+use InvalidArgumentException;
 use Prism\Prism\Enums\FinishReason;
 use Prism\Prism\Facades\Prism;
 use Prism\Prism\Structured\Response as StructuredResponse;
 use Prism\Prism\ValueObjects\Meta;
 use Prism\Prism\ValueObjects\Usage;
+use RuntimeException;
 
 uses(Tests\TestCase::class);
 
@@ -129,6 +131,35 @@ it('uses configured provider and model', function () {
     $fake->assertRequest(function (array $requests) {
         expect($requests[0]->model())->toBe('gpt-4o');
         expect($requests[0]->provider())->toBe('openai');
+    });
+});
+
+it('uses openai-compatible object schema with translations key', function () {
+    config([
+        'content-translator.prism.provider' => 'openai',
+        'content-translator.prism.model' => 'gpt-4o',
+    ]);
+
+    $fake = Prism::fake([
+        makeStructuredResponse([
+            'translations' => [
+                ['id' => 'title', 'text' => 'Bonjour'],
+            ],
+        ]),
+    ]);
+
+    $units = [new TranslationUnit('title', 'Hello', TranslationFormat::Plain)];
+
+    $service = app(PrismTranslationService::class);
+    $result = $service->translate($units, 'en', 'fr');
+
+    expect($result[0]->translatedText)->toBe('Bonjour');
+
+    $fake->assertRequest(function (array $requests) {
+        $schema = $requests[0]->schema()->toArray();
+        expect($schema['type'])->toBe('object');
+        expect($schema['properties'])->toHaveKey('translations');
+        expect($requests[0]->prompt())->toContain('"translations"');
     });
 });
 
@@ -268,3 +299,30 @@ it('does not chunk when max_units_per_request is null', function () {
     $fake->assertCallCount(1);
     expect($result)->toHaveCount(3);
 });
+
+it('throws when prism response misses a unit translation', function () {
+    Prism::fake([
+        makeStructuredResponse([
+            ['id' => 'title', 'text' => 'Bonjour'],
+        ]),
+    ]);
+
+    $units = [
+        new TranslationUnit('title', 'Hello', TranslationFormat::Plain),
+        new TranslationUnit('body', 'Body', TranslationFormat::Plain),
+    ];
+
+    $service = app(PrismTranslationService::class);
+
+    $service->translate($units, 'en', 'fr');
+})->throws(RuntimeException::class, 'Missing translation for unit id [body].');
+
+it('throws for invalid max_units_per_request config', function () {
+    config(['content-translator.max_units_per_request' => 0]);
+
+    $service = app(PrismTranslationService::class);
+
+    $service->translate([
+        new TranslationUnit('title', 'Hello', TranslationFormat::Plain),
+    ], 'en', 'fr');
+})->throws(InvalidArgumentException::class);

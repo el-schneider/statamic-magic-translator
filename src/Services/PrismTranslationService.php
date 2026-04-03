@@ -6,10 +6,13 @@ namespace ElSchneider\ContentTranslator\Services;
 
 use ElSchneider\ContentTranslator\Contracts\TranslationService;
 use ElSchneider\ContentTranslator\Data\TranslationUnit;
+use InvalidArgumentException;
+use Prism\Prism\Contracts\Schema as PrismSchema;
 use Prism\Prism\Facades\Prism;
 use Prism\Prism\Schema\ArraySchema;
 use Prism\Prism\Schema\ObjectSchema;
 use Prism\Prism\Schema\StringSchema;
+use RuntimeException;
 
 final class PrismTranslationService implements TranslationService
 {
@@ -29,7 +32,7 @@ final class PrismTranslationService implements TranslationService
             return [];
         }
 
-        $maxUnits = config('content-translator.max_units_per_request');
+        $maxUnits = $this->resolveChunkSize(config('content-translator.max_units_per_request'));
 
         if ($maxUnits !== null && count($units) > $maxUnits) {
             return $this->translateInChunks($units, $sourceLocale, $targetLocale, $maxUnits);
@@ -64,6 +67,9 @@ final class PrismTranslationService implements TranslationService
      */
     private function sendRequest(array $units, string $sourceLocale, string $targetLocale): array
     {
+        $provider = (string) config('content-translator.prism.provider');
+        $model = (string) config('content-translator.prism.model');
+
         $systemPrompt = $this->promptResolver->resolve('system', $sourceLocale, $targetLocale, $units);
         $userPromptIntro = $this->promptResolver->resolve('user', $sourceLocale, $targetLocale, $units);
 
@@ -72,64 +78,150 @@ final class PrismTranslationService implements TranslationService
             $units
         );
 
-        $userPrompt = $userPromptIntro."\n\n".json_encode($payload, JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE);
+        $userPrompt = $this->buildUserPrompt($userPromptIntro, $payload, $provider);
 
         $response = Prism::structured()
-            ->using(
-                config('content-translator.prism.provider'),
-                config('content-translator.prism.model'),
-            )
+            ->using($provider, $model)
             ->withSystemPrompt($systemPrompt)
             ->withPrompt($userPrompt)
-            ->withSchema($this->buildSchema())
+            ->withSchema($this->buildSchema($provider))
             ->asStructured();
 
-        return $this->mapResponse($units, $response->structured ?? []);
+        return $this->mapResponse($units, $response->structured);
     }
 
     /**
-     * Build the structured output schema: array of {id: string, text: string}.
+     * Build the structured output schema.
+     *
+     * Most providers accept an array root (`[{id, text}]`). OpenAI requires
+     * an object root, so we wrap the array under a `translations` key.
      */
-    private function buildSchema(): ArraySchema
+    private function buildSchema(string $provider): PrismSchema
     {
+        $unitSchema = $this->buildUnitSchema();
+
+        // OpenAI structured mode requires an object schema as the root type.
+        if ($provider === 'openai') {
+            return new ObjectSchema(
+                name: 'translations_payload',
+                description: 'Translation payload grouped under the translations key',
+                properties: [
+                    new ArraySchema(
+                        name: 'translations',
+                        description: 'Array of translated content units',
+                        items: $unitSchema,
+                    ),
+                ],
+                requiredFields: ['translations'],
+            );
+        }
+
         return new ArraySchema(
             name: 'translations',
             description: 'Array of translated content units',
-            items: new ObjectSchema(
-                name: 'unit',
-                description: 'A translated content unit',
-                properties: [
-                    new StringSchema('id', 'The unit path identifier (unchanged)'),
-                    new StringSchema('text', 'The translated text content'),
-                ],
-                requiredFields: ['id', 'text'],
-            ),
+            items: $unitSchema,
         );
+    }
+
+    private function buildUnitSchema(): ObjectSchema
+    {
+        return new ObjectSchema(
+            name: 'unit',
+            description: 'A translated content unit',
+            properties: [
+                new StringSchema('id', 'The unit path identifier (unchanged)'),
+                new StringSchema('text', 'The translated text content'),
+            ],
+            requiredFields: ['id', 'text'],
+        );
+    }
+
+    /**
+     * @param  array<int, array{id: string, text: string}>  $payload
+     */
+    private function buildUserPrompt(string $intro, array $payload, string $provider): string
+    {
+        $responsePayload = $provider === 'openai'
+            ? ['translations' => $payload]
+            : $payload;
+
+        if ($provider === 'openai') {
+            $intro .= "\nFor this provider, return a JSON object with a `translations` array.";
+        }
+
+        $json = json_encode($responsePayload, JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE);
+
+        if ($json === false) {
+            throw new RuntimeException('Failed to encode translation payload as JSON.');
+        }
+
+        return $intro."\n\n".$json;
     }
 
     /**
      * Map the structured response back to TranslationUnit objects.
      *
      * @param  TranslationUnit[]  $units
-     * @param  array<int, array{id: string, text: string}>  $structured
+     * @param  mixed  $structured
      * @return TranslationUnit[]
      */
-    private function mapResponse(array $units, array $structured): array
+    private function mapResponse(array $units, mixed $structured): array
     {
+        $translations = $this->extractTranslations($structured);
+
         // Index translations by id for fast lookup
         $translationsById = [];
-        foreach ($structured as $item) {
+        foreach ($translations as $item) {
             if (isset($item['id'], $item['text'])) {
                 $translationsById[$item['id']] = $item['text'];
             }
         }
 
         return array_map(function (TranslationUnit $unit) use ($translationsById) {
-            if (isset($translationsById[$unit->path])) {
-                return $unit->withTranslation($translationsById[$unit->path]);
+            if (! array_key_exists($unit->path, $translationsById)) {
+                throw new RuntimeException(sprintf('Missing translation for unit id [%s].', $unit->path));
             }
 
-            return $unit;
+            return $unit->withTranslation((string) $translationsById[$unit->path]);
         }, $units);
+    }
+
+    /**
+     * @param  mixed  $structured
+     * @return array<int, array{id: string, text: string}>
+     */
+    private function extractTranslations(mixed $structured): array
+    {
+        if (is_array($structured) && array_is_list($structured)) {
+            return $structured;
+        }
+
+        if (
+            is_array($structured)
+            && isset($structured['translations'])
+            && is_array($structured['translations'])
+            && array_is_list($structured['translations'])
+        ) {
+            return $structured['translations'];
+        }
+
+        throw new RuntimeException('Invalid structured response payload from Prism.');
+    }
+
+    private function resolveChunkSize(mixed $configured): ?int
+    {
+        if ($configured === null || $configured === '') {
+            return null;
+        }
+
+        if (is_string($configured) && ctype_digit($configured)) {
+            $configured = (int) $configured;
+        }
+
+        if (! is_int($configured) || $configured <= 0) {
+            throw new InvalidArgumentException('content-translator.max_units_per_request must be a positive integer or null.');
+        }
+
+        return $configured;
     }
 }
