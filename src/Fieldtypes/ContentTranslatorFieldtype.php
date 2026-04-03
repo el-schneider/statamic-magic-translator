@@ -81,6 +81,7 @@ final class ContentTranslatorFieldtype extends Fieldtype
      *
      * @return array{
      *     current_site: string|null,
+     *     origin_site: string|null,
      *     is_origin: bool,
      *     sites: array<int, array{
      *         handle: string,
@@ -100,6 +101,7 @@ final class ContentTranslatorFieldtype extends Fieldtype
             return [
                 'entry_id' => null,
                 'current_site' => null,
+                'origin_site' => null,
                 'is_origin' => false,
                 'sites' => Site::all()->map(fn ($site) => [
                     'handle' => $site->handle(),
@@ -116,6 +118,7 @@ final class ContentTranslatorFieldtype extends Fieldtype
 
         // Always use the root entry for localization traversal and staleness.
         $rootEntry = $isOrigin ? $entry : $entry->root();
+        $originSite = $rootEntry?->locale();
 
         // Determine the origin's last-modified time for staleness comparisons.
         $originUpdatedAt = null;
@@ -163,6 +166,7 @@ final class ContentTranslatorFieldtype extends Fieldtype
         return [
             'entry_id' => $entry->id(),
             'current_site' => $currentSite,
+            'origin_site' => $originSite,
             'is_origin' => $isOrigin,
             'sites' => $sitesData,
         ];
