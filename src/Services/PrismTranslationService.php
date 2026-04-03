@@ -162,7 +162,6 @@ final class PrismTranslationService implements TranslationService
      * Map the structured response back to TranslationUnit objects.
      *
      * @param  TranslationUnit[]  $units
-     * @param  mixed  $structured
      * @return TranslationUnit[]
      */
     private function mapResponse(array $units, mixed $structured): array
@@ -187,7 +186,6 @@ final class PrismTranslationService implements TranslationService
     }
 
     /**
-     * @param  mixed  $structured
      * @return array<int, array{id: string, text: string}>
      */
     private function extractTranslations(mixed $structured): array

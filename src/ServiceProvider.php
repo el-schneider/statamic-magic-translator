@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace ElSchneider\ContentTranslator;
 
+use DeepL\Translator;
 use Statamic\Facades\Utility;
 use Statamic\Providers\AddonServiceProvider;
 
@@ -16,6 +17,20 @@ final class ServiceProvider extends AddonServiceProvider
         ],
         'publicDirectory' => 'resources/dist',
     ];
+
+    public function register(): void
+    {
+        parent::register();
+
+        $this->app->bind(Translator::class, function () {
+            // Use configured API key; fall back to a non-empty placeholder so
+            // the Translator can be constructed even without a key (e.g. in tests
+            // that only check service resolution, not actual API calls).
+            $apiKey = config('content-translator.deepl.api_key') ?: 'placeholder';
+
+            return new Translator($apiKey);
+        });
+    }
 
     public function boot(): void
     {
