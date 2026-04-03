@@ -83,8 +83,24 @@ final class ContentExtractor
                     $this->extractTier2($fieldConfig, $value, $fullPath),
                 );
             } elseif ($tier === FieldTier::Tier3) {
-                // Skip absent, null, or non-array values.
-                if (! is_array($value) || $value === []) {
+                if ($value === null || $value === '' || $value === []) {
+                    continue;
+                }
+
+                // Bard fields may store raw markdown (string) instead of
+                // ProseMirror JSON — e.g. default entries from starter kits
+                // that haven't been edited in the Bard editor yet.
+                if (is_string($value)) {
+                    $units[] = new TranslationUnit(
+                        path: $fullPath,
+                        text: $value,
+                        format: TranslationFormat::Markdown,
+                    );
+
+                    continue;
+                }
+
+                if (! is_array($value)) {
                     continue;
                 }
 

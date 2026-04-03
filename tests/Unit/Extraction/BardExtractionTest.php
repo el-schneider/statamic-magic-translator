@@ -29,6 +29,28 @@ it('returns empty array for null bard value', function () {
     expect($units)->toBeEmpty();
 });
 
+it('extracts raw markdown string from bard field as markdown format', function () {
+    $markdown = "## Welcome\n\nSome **bold** text and a [link](https://example.com).";
+    $data = ['content' => $markdown];
+    $fields = ['content' => ['type' => 'bard', 'localizable' => true]];
+
+    $units = $this->extractor->extract($data, $fields);
+
+    expect($units)->toHaveCount(1);
+    expect($units[0]->path)->toBe('content');
+    expect($units[0]->text)->toBe($markdown);
+    expect($units[0]->format)->toBe(TranslationFormat::Markdown);
+});
+
+it('skips empty string bard value', function () {
+    $data = ['content' => ''];
+    $fields = ['content' => ['type' => 'bard', 'localizable' => true]];
+
+    $units = $this->extractor->extract($data, $fields);
+
+    expect($units)->toBeEmpty();
+});
+
 it('skips bard field when not localizable', function () {
     $data = ['content' => [['type' => 'paragraph', 'content' => [['type' => 'text', 'text' => 'Hello']]]]];
     $fields = ['content' => ['type' => 'bard', 'localizable' => false]];
