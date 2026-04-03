@@ -40,9 +40,9 @@ final class TranslateEntryJob implements ShouldQueue
     private const CACHE_PREFIX = 'content-translator:job:';
 
     /**
-     * Cache TTL in seconds (10 minutes) — matches TranslationController.
+     * Cache TTL in seconds (60 minutes) — matches TranslationController.
      */
-    private const CACHE_TTL = 600;
+    private const CACHE_TTL = 3600;
 
     /**
      * Maximum number of attempts before the job is marked as failed.
@@ -146,10 +146,25 @@ final class TranslateEntryJob implements ShouldQueue
 
         $cacheKey = self::CACHE_PREFIX.$this->jobId;
 
-        /** @var array<string, mixed> $existing */
         $existing = Cache::get($cacheKey, []);
 
-        $data = array_merge($existing, ['status' => $status]);
+        if (! is_array($existing)) {
+            $existing = [];
+        }
+
+        $data = array_merge(
+            [
+                'id' => $this->jobId,
+                'target_site' => $this->targetSite,
+            ],
+            $existing,
+            ['status' => $status],
+        );
+
+        // A successful retry should clear stale errors from prior attempts.
+        if ($status !== 'failed') {
+            unset($data['error']);
+        }
 
         if ($error !== null) {
             $data['error'] = $error;

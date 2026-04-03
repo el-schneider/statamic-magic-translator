@@ -53,6 +53,52 @@ it('requires authentication to check job status', function () {
     $response->assertStatus(401);
 });
 
+it('forbids users who cannot edit the specific entry', function () {
+    $this->createTestCollection('articles', ['en', 'fr']);
+    $this->createTestBlueprint('articles', 'default', [
+        'title' => ['type' => 'text', 'localizable' => true],
+        'author' => ['type' => 'users', 'localizable' => false],
+    ]);
+
+    $author = Statamic\Facades\User::make()
+        ->id('author-user')
+        ->email('author@example.com')
+        ->set('name', 'Author User')
+        ->set('super', false)
+        ->password('password');
+    $author->save();
+
+    $editor = Statamic\Facades\User::make()
+        ->id('editor-user')
+        ->email('editor@example.com')
+        ->set('name', 'Editor User')
+        ->set('super', false)
+        ->password('password');
+
+    $role = Statamic\Facades\Role::make('editor')->permissions([
+        'access cp',
+        'edit articles entries',
+    ]);
+    $role->save();
+
+    $editor->assignRole('editor');
+    $editor->save();
+
+    $this->loginUser($editor);
+
+    $entry = $this->createTestEntry('articles', [
+        'author' => [$author->id()],
+    ]);
+
+    $response = $this->postJson(cpUrl('content-translator/translate'), [
+        'entry_id' => $entry->id(),
+        'target_sites' => ['fr'],
+    ]);
+
+    $response->assertStatus(403)
+        ->assertJson(['success' => false, 'error' => 'Forbidden.']);
+});
+
 // ── Trigger: validation ────────────────────────────────────────────────────────
 
 it('returns 422 when entry_id is missing', function () {
@@ -321,6 +367,27 @@ it('returns unknown status for an expired or invalid job id', function () {
     expect($jobs[0]['id'])->toBe('expired-job-id');
 });
 
+it('handles malformed cache payloads without failing', function () {
+    $this->loginUser();
+
+    $jobId = 'malformed-payload-job-id';
+
+    // Simulate a stale/incomplete payload, e.g. after pending status expired
+    // before the worker started and repopulated only the status field.
+    Cache::put("content-translator:job:{$jobId}", [
+        'status' => 'running',
+    ], 600);
+
+    $response = $this->getJson(cpUrl('content-translator/status').'?'.http_build_query(['jobs' => [$jobId]]));
+
+    $response->assertStatus(200);
+
+    $job = $response->json('jobs.0');
+    expect($job['id'])->toBe($jobId);
+    expect($job['target_site'])->toBeNull();
+    expect($job['status'])->toBe('running');
+});
+
 it('returns statuses for multiple jobs in one request', function () {
     $this->loginUser();
 
@@ -387,6 +454,30 @@ it('job updates cache to running then completed when executed synchronously', fu
 
     $cached = Cache::get("content-translator:job:{$jobId}");
     expect($cached['status'])->toBe('completed');
+});
+
+it('clears stale cache errors when a retried job later succeeds', function () {
+    use_fake_translation_service_for_job_test();
+
+    $jobId = 'retry-success-job-id';
+
+    Cache::put("content-translator:job:{$jobId}", [
+        'id' => $jobId,
+        'target_site' => 'fr',
+        'status' => 'failed',
+        'error' => 'Previous transient error',
+    ], 600);
+
+    $this->createTestCollection('articles', ['en', 'fr']);
+    $this->createTestBlueprint('articles');
+    $entry = $this->createTestEntry('articles');
+
+    $job = new TranslateEntryJob($entry->id(), 'fr', null, [], $jobId);
+    app()->call([$job, 'handle']);
+
+    $cached = Cache::get("content-translator:job:{$jobId}");
+    expect($cached['status'])->toBe('completed');
+    expect($cached['error'] ?? null)->toBeNull();
 });
 
 it('job updates cache to failed when translation throws', function () {
