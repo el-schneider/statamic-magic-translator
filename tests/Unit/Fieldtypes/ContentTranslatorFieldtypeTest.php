@@ -145,6 +145,27 @@ it('preload reports last_translated_at from the localization metadata', function
     expect($frSite['last_translated_at'])->toBe($translatedAt);
 });
 
+it('preload handles malformed last_translated_at metadata without crashing', function () {
+    $this->createTestCollection('articles', ['en', 'fr']);
+    $this->createTestBlueprint('articles');
+    $entry = $this->createTestEntry(collection: 'articles', site: 'en');
+
+    $frLocalization = $entry->makeLocalization('fr');
+    $frLocalization->set('content_translator', ['last_translated_at' => 'not-a-date']);
+    $frLocalization->save();
+
+    $fieldtype = new ContentTranslatorFieldtype;
+    $field = (new Field('content_translator', ['type' => 'content_translator']))
+        ->setParent($entry);
+    $fieldtype->setField($field);
+
+    $result = $fieldtype->preload();
+
+    $frSite = collect($result['sites'])->firstWhere('handle', 'fr');
+    expect($frSite['last_translated_at'])->toBeNull();
+    expect($frSite['is_stale'])->toBeFalse();
+});
+
 it('preload marks a localization as stale when origin was modified after last translation', function () {
     $this->createTestCollection('articles', ['en', 'fr']);
     $this->createTestBlueprint('articles');

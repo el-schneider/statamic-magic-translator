@@ -7,6 +7,7 @@ namespace ElSchneider\ContentTranslator\Fieldtypes;
 use Illuminate\Support\Carbon;
 use Statamic\Facades\Site;
 use Statamic\Fields\Fieldtype;
+use Throwable;
 
 /**
  * ContentTranslatorFieldtype
@@ -132,14 +133,19 @@ final class ContentTranslatorFieldtype extends Fieldtype
             if ($localization !== null) {
                 $meta = $localization->get('content_translator');
 
-                if (is_array($meta) && isset($meta['last_translated_at'])) {
+                if (is_array($meta) && is_string($meta['last_translated_at'] ?? null) && $meta['last_translated_at'] !== '') {
                     $lastTranslatedAt = $meta['last_translated_at'];
 
                     // A localization is stale when the origin was modified
                     // after the translation was last run.
                     if ($originUpdatedAt !== null) {
-                        $translatedAt = Carbon::parse($lastTranslatedAt);
-                        $isStale = $originUpdatedAt->greaterThan($translatedAt);
+                        try {
+                            $translatedAt = Carbon::parse($lastTranslatedAt);
+                            $isStale = $originUpdatedAt->greaterThan($translatedAt);
+                        } catch (Throwable) {
+                            $lastTranslatedAt = null;
+                            $isStale = false;
+                        }
                     }
                 }
             }
