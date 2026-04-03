@@ -12,6 +12,9 @@
         "pint:fix": "./vendor/bin/pint",
         "prepare": "husky"
     },
+    "dependencies": {
+        "@statamic/cms": "file:./vendor/statamic/cms/resources/dist-package"
+    },
     "devDependencies": {
         "@vitejs/plugin-vue": "^5.2.1",
         "husky": "^9.0.0",
