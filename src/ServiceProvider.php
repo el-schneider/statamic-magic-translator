@@ -5,6 +5,8 @@ declare(strict_types=1);
 namespace ElSchneider\ContentTranslator;
 
 use DeepL\Translator;
+use ElSchneider\ContentTranslator\Contracts\TranslationService;
+use ElSchneider\ContentTranslator\Services\TranslationServiceFactory;
 use Statamic\Facades\Utility;
 use Statamic\Providers\AddonServiceProvider;
 
@@ -29,6 +31,12 @@ final class ServiceProvider extends AddonServiceProvider
             $apiKey = config('content-translator.deepl.api_key') ?: 'placeholder';
 
             return new Translator($apiKey);
+        });
+
+        // Bind the TranslationService contract to the configured implementation.
+        // Tests can swap this binding via app()->instance(TranslationService::class, $mock).
+        $this->app->bind(TranslationService::class, function ($app) {
+            return $app->make(TranslationServiceFactory::class)->make();
         });
     }
 
