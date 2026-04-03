@@ -139,9 +139,7 @@ const hasFailed = computed(() => Object.values(localeState).some((s) => s.status
 
 // ── Select options ────────────────────────────────────────────────────────────
 
-const sourceOptions = computed(() =>
-  props.sites.map((s) => ({ label: s.name, value: s.handle })),
-)
+const sourceOptions = computed(() => props.sites.map((s) => ({ label: s.name, value: s.handle })))
 
 // ── Checkbox helpers ──────────────────────────────────────────────────────────
 
@@ -360,11 +358,7 @@ onBeforeUnmount(() => {
 
       <!-- Target locale rows -->
       <div class="space-y-0.5">
-        <div
-          v-for="site in targetSites"
-          :key="site.handle"
-          class="flex items-center justify-between py-1.5"
-        >
+        <div v-for="site in targetSites" :key="site.handle" class="flex items-center justify-between py-1.5">
           <Checkbox
             :label="site.name"
             :model-value="selectedLocales.includes(site.handle)"
@@ -375,9 +369,7 @@ onBeforeUnmount(() => {
 
           <!-- Stale / translated badge -->
           <div class="flex items-center gap-1.5 shrink-0 ml-2">
-            <span v-if="(site as SiteMeta).is_stale" class="text-xs text-amber-500">
-              ⚠ {{ t('badge_outdated') }}
-            </span>
+            <span v-if="(site as SiteMeta).is_stale" class="text-xs text-amber-500"> ⚠ {{ t('badge_outdated') }} </span>
             <span v-else-if="(site as SiteMeta).last_translated_at" class="text-xs text-gray-400">✓</span>
           </div>
 
@@ -436,27 +428,15 @@ onBeforeUnmount(() => {
         <p class="text-xs font-medium text-gray-600 dark:text-gray-400 uppercase tracking-wide">
           {{ t('options') }}
         </p>
-        <Checkbox
-          :label="t('generate_slugs')"
-          v-model="generateSlug"
-          :disabled="isTranslating"
-        />
-        <Checkbox
-          :label="t('overwrite_existing')"
-          v-model="overwrite"
-          :disabled="isTranslating"
-        />
+        <Checkbox :label="t('generate_slugs')" v-model="generateSlug" :disabled="isTranslating" />
+        <Checkbox :label="t('overwrite_existing')" v-model="overwrite" :disabled="isTranslating" />
       </div>
     </div>
 
     <template #footer>
       <div class="flex items-center justify-end gap-3 pt-3 pb-1">
         <ModalClose>
-          <Button
-            variant="ghost"
-            :text="allDone ? t('close') : t('cancel')"
-            @click="cancel"
-          />
+          <Button variant="ghost" :text="allDone ? t('close') : t('cancel')" @click="cancel" />
         </ModalClose>
         <Button
           variant="primary"
