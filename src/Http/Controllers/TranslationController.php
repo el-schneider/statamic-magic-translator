@@ -22,9 +22,9 @@ use Statamic\Facades\Entry;
 final class TranslationController extends Controller
 {
     /**
-     * Cache TTL in seconds (10 minutes).
+     * Cache TTL in seconds (60 minutes).
      */
-    private const CACHE_TTL = 600;
+    private const CACHE_TTL = 3600;
 
     /**
      * Cache key prefix for job status entries.
@@ -70,10 +70,7 @@ final class TranslationController extends Controller
             ], 401);
         }
 
-        $canEdit = $user->isSuper()
-            || $user->hasPermission("edit {$entry->collectionHandle()} entries");
-
-        if (! $canEdit) {
+        if (! $user->can('edit', $entry)) {
             return response()->json([
                 'success' => false,
                 'error' => 'Forbidden.',
@@ -142,8 +139,8 @@ final class TranslationController extends Controller
         $jobs = array_map(function (string $jobId): array {
             $data = Cache::get(self::CACHE_PREFIX.$jobId);
 
-            if ($data === null) {
-                // Cache expired or unknown ID — return a sentinel status.
+            if (! is_array($data) || ! isset($data['status'])) {
+                // Cache expired, unknown ID, or malformed payload.
                 return [
                     'id' => $jobId,
                     'target_site' => null,
@@ -152,12 +149,12 @@ final class TranslationController extends Controller
             }
 
             $result = [
-                'id' => $data['id'],
-                'target_site' => $data['target_site'],
-                'status' => $data['status'],
+                'id' => is_string($data['id'] ?? null) ? $data['id'] : $jobId,
+                'target_site' => is_string($data['target_site'] ?? null) ? $data['target_site'] : null,
+                'status' => is_string($data['status']) ? $data['status'] : 'unknown',
             ];
 
-            if (! empty($data['error'])) {
+            if (is_string($data['error'] ?? null) && $data['error'] !== '') {
                 $result['error'] = $data['error'];
             }
 
