@@ -158,6 +158,50 @@ it('handles multi-line translated content within ct-unit tags', function () {
     expect($result[0]->translatedText)->toBe("Ligne un\nLigne deux");
 });
 
+it('maps units by ct-unit id even when DeepL reorders tags', function () {
+    $translator = mockTranslator(
+        '<ct-unit id="1">Le monde</ct-unit><ct-unit id="0">Bonjour</ct-unit>'
+    );
+
+    $units = [
+        new TranslationUnit('title', 'Hello', TranslationFormat::Plain),
+        new TranslationUnit('body', 'World', TranslationFormat::Plain),
+    ];
+
+    $result = deeplService($translator)->translate($units, 'en', 'fr');
+
+    expect($result[0]->translatedText)->toBe('Bonjour');
+    expect($result[1]->translatedText)->toBe('Le monde');
+});
+
+it('parses ct-unit tags with flexible attribute order and whitespace', function () {
+    $translator = mockTranslator(
+        "<ct-unit data-kind=\"x\" id='0' >Bonjour</ct-unit >\n<ct-unit id=\"1\" class=\"y\">Le monde</ct-unit>"
+    );
+
+    $units = [
+        new TranslationUnit('title', 'Hello', TranslationFormat::Plain),
+        new TranslationUnit('body', 'World', TranslationFormat::Plain),
+    ];
+
+    $result = deeplService($translator)->translate($units, 'en', 'fr');
+
+    expect($result[0]->translatedText)->toBe('Bonjour');
+    expect($result[1]->translatedText)->toBe('Le monde');
+});
+
+it('throws when DeepL response strips ct-unit tags', function () {
+    $translator = mockTranslator('Bonjour Le monde');
+
+    $units = [
+        new TranslationUnit('title', 'Hello', TranslationFormat::Plain),
+        new TranslationUnit('body', 'World', TranslationFormat::Plain),
+    ];
+
+    expect(fn () => deeplService($translator)->translate($units, 'en', 'fr'))
+        ->toThrow(\RuntimeException::class, 'Missing translation for unit index [0]');
+});
+
 // ─── XML tag handling ─────────────────────────────────────────────────────────
 
 it('passes tag_handling xml option to the translator', function () {
