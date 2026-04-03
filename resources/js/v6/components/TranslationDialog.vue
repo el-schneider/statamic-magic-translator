@@ -13,7 +13,7 @@
  *  4. Failed rows show an inline error + Retry button.
  *  5. Dialog self-closes (emits 'close') when all jobs complete, or user cancels.
  */
-import { Button, Checkbox, Icon, Label, Modal, ModalClose, Select, Separator } from '@statamic/cms/ui'
+import { Badge, Button, Card, Checkbox, Icon, Label, Modal, ModalClose, Select, Separator } from '@statamic/cms/ui'
 import { computed, onBeforeUnmount, reactive, ref, watch } from 'vue'
 import { pollJobs } from '../../core/polling'
 import { triggerTranslation } from '../../core/api'
@@ -344,69 +344,117 @@ onBeforeUnmount(() => {
 
 <template>
   <Modal :open="true" :title="dialogTitle" @dismissed="cancel">
-    <div class="space-y-4">
-      <!-- Source locale selector -->
-      <div>
-        <Label :text="t('source')" />
-        <Select
-          :options="sourceOptions"
-          :model-value="selectedSource"
-          :disabled="isTranslating"
-          @update:modelValue="selectedSource = $event"
-        />
+    <div class="space-y-5">
+      <!-- Source + options (2 columns) -->
+      <div class="flex gap-4">
+        <div class="w-1/2 space-y-1.5">
+          <Label :text="t('source')" />
+          <Select
+            :options="sourceOptions"
+            :model-value="selectedSource"
+            :disabled="isTranslating"
+            @update:modelValue="selectedSource = $event"
+          />
+        </div>
+
+        <div class="w-1/2 border border-gray-300 dark:border-dark-800 rounded p-4 space-y-2">
+          <Label :text="t('options')" />
+          <Checkbox :label="t('generate_slugs')" v-model="generateSlug" :disabled="isTranslating" />
+          <Checkbox :label="t('overwrite_existing')" v-model="overwrite" :disabled="isTranslating" />
+        </div>
       </div>
 
       <!-- Target locale rows -->
-      <div class="space-y-0.5">
-        <div v-for="site in targetSites" :key="site.handle" class="flex items-center justify-between py-1.5">
-          <Checkbox
-            :label="site.name"
-            :model-value="selectedLocales.includes(site.handle)"
-            :disabled="isLocaleDisabled(site)"
-            align="center"
-            @update:modelValue="toggleLocale(site.handle, $event)"
-          />
+      <div class="space-y-2">
+        <Label :text="t('sites_panel_label')" />
 
-          <!-- Stale / translated badge -->
-          <div class="flex items-center gap-1.5 shrink-0 ml-2">
-            <span v-if="(site as SiteMeta).is_stale" class="text-xs text-amber-500"> ⚠ {{ t('badge_outdated') }} </span>
-            <span v-else-if="(site as SiteMeta).last_translated_at" class="text-xs text-gray-400">✓</span>
+        <Card class="p-3! space-y-1">
+          <div
+            v-for="site in targetSites"
+            :key="site.handle"
+            class="w-full px-4 py-2 text-sm rounded-lg transition-colors"
+            :class="[
+              isLocaleDisabled(site)
+                ? 'bg-gray-100 dark:bg-gray-800 opacity-60 cursor-not-allowed'
+                : selectedLocales.includes(site.handle)
+                  ? 'bg-blue-100 dark:bg-gray-700'
+                  : 'hover:bg-gray-100 dark:hover:bg-gray-800',
+            ]"
+          >
+            <div class="flex items-center justify-between gap-x-2">
+              <div class="flex flex-1 min-w-0 items-center">
+                <Checkbox
+                  :model-value="selectedLocales.includes(site.handle)"
+                  :disabled="isLocaleDisabled(site)"
+                  align="center"
+                  @update:modelValue="toggleLocale(site.handle, $event)"
+                >
+                  <div class="flex items-center min-w-0">
+                    <span
+                      class="little-dot me-2"
+                      :class="{
+                        'bg-orange': (site as SiteMeta).is_stale,
+                        'bg-green-600': hasExistingTranslation(site) && !(site as SiteMeta).is_stale,
+                        'bg-red-500': !hasExistingTranslation(site),
+                      }"
+                    />
+                    <span class="truncate">{{ site.name }}</span>
+                  </div>
+                </Checkbox>
+              </div>
+
+              <div class="flex items-center gap-1.5 shrink-0">
+                <Badge
+                  v-if="(site as SiteMeta).is_stale && !localeState[site.handle]"
+                  size="sm"
+                  color="orange"
+                  :text="t('badge_outdated')"
+                />
+                <Badge
+                  v-else-if="(site as SiteMeta).last_translated_at && !localeState[site.handle]"
+                  size="sm"
+                  color="blue"
+                  :text="t('badge_translated')"
+                />
+
+                <!-- Job status indicator -->
+                <div v-if="localeState[site.handle]" class="flex items-center gap-2 shrink-0">
+                  <Icon
+                    v-if="['pending', 'running'].includes(localeState[site.handle]!.status)"
+                    name="loading"
+                    class="text-blue"
+                  />
+
+                  <Badge
+                    v-if="localeState[site.handle]!.status === 'completed'"
+                    size="sm"
+                    color="green"
+                    :text="t('status_completed')"
+                  />
+
+                  <template v-if="localeState[site.handle]!.status === 'failed'">
+                    <Badge size="sm" color="red" :text="t('status_failed')" />
+                    <button
+                      type="button"
+                      class="text-2xs text-blue underline hover:no-underline"
+                      @click="retryLocale(site.handle)"
+                    >
+                      {{ t('retry') }}
+                    </button>
+                  </template>
+
+                  <span v-if="isBulk && localeState[site.handle]!.totalCount > 1" class="text-2xs text-gray-500">
+                    {{ localeState[site.handle]!.completedCount }}/{{ localeState[site.handle]!.totalCount }}
+                  </span>
+                </div>
+              </div>
+            </div>
           </div>
 
-          <!-- Job status indicator -->
-          <div v-if="localeState[site.handle]" class="flex items-center gap-1.5 shrink-0 ml-2">
-            <!-- Spinning for pending / running -->
-            <Icon
-              v-if="['pending', 'running'].includes(localeState[site.handle]!.status)"
-              name="loading"
-              class="text-blue-500"
-            />
-
-            <!-- Completed -->
-            <span v-if="localeState[site.handle]!.status === 'completed'" class="text-green-600 font-bold">✓</span>
-
-            <!-- Failed -->
-            <template v-if="localeState[site.handle]!.status === 'failed'">
-              <span class="text-red-500">⚠</span>
-              <button
-                type="button"
-                class="text-xs text-blue-600 dark:text-blue-400 underline hover:no-underline"
-                @click="retryLocale(site.handle)"
-              >
-                {{ t('retry') }}
-              </button>
-            </template>
-
-            <!-- Bulk progress counter -->
-            <span v-if="isBulk && localeState[site.handle]!.totalCount > 1" class="text-xs text-gray-500">
-              {{ localeState[site.handle]!.completedCount }}/{{ localeState[site.handle]!.totalCount }}
-            </span>
-          </div>
-        </div>
-
-        <p v-if="targetSites.length === 0" class="text-sm text-gray-500 py-2">
-          {{ t('no_target_sites') }}
-        </p>
+          <p v-if="targetSites.length === 0" class="text-sm text-gray-500 px-4 py-4 text-center">
+            {{ t('no_target_sites') }}
+          </p>
+        </Card>
       </div>
 
       <!-- Error summary -->
@@ -422,15 +470,7 @@ onBeforeUnmount(() => {
         </template>
       </div>
 
-      <!-- Options -->
       <Separator />
-      <div class="space-y-2">
-        <p class="text-xs font-medium text-gray-600 dark:text-gray-400 uppercase tracking-wide">
-          {{ t('options') }}
-        </p>
-        <Checkbox :label="t('generate_slugs')" v-model="generateSlug" :disabled="isTranslating" />
-        <Checkbox :label="t('overwrite_existing')" v-model="overwrite" :disabled="isTranslating" />
-      </div>
     </div>
 
     <template #footer>
