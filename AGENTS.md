@@ -1,4 +1,4 @@
-# AGENTS.md
+**Golden Rule: maintain AGENTS.md as you work.** Every pitfall you document saves future agents and humans from repeating the same mistake. Every stale entry left behind erodes trust in the file. Keep entries minimal and terse — only what can't be discovered by reading the code. When you hit a new gotcha, add it. When a root cause gets fixed, delete the line.
 
 This file provides guidance to coding agents when working with code in this repository.
 
@@ -33,10 +33,10 @@ This addon has companion Statamic sandboxes for testing. They may live as **sibl
 
 ### Sandbox URLs
 
-| Version | URL |
-|---------|-----|
-| v5 | `http://statamic-content-translator-test.test` |
-| v6 | `http://statamic-content-translator-test-v6.test` |
+| Version | URL                                               |
+| ------- | ------------------------------------------------- |
+| v5      | `http://statamic-content-translator-test.test`    |
+| v6      | `http://statamic-content-translator-test-v6.test` |
 
 **Credentials:** `agent@agent.md` / `agent`
 
