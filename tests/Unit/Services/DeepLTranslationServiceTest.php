@@ -227,7 +227,7 @@ it('passes tag_handling xml option to the translator', function () {
 // ─── Formality ────────────────────────────────────────────────────────────────
 
 it('passes formality from config to the translator', function () {
-    config(['content-translator.deepl.formality' => 'more']);
+    config(['statamic.content-translator.deepl.formality' => 'more']);
 
     $capturedOptions = null;
 
@@ -249,7 +249,7 @@ it('passes formality from config to the translator', function () {
 });
 
 it('uses default formality when config is set to default', function () {
-    config(['content-translator.deepl.formality' => 'default']);
+    config(['statamic.content-translator.deepl.formality' => 'default']);
 
     $capturedOptions = null;
 
@@ -273,8 +273,8 @@ it('uses default formality when config is set to default', function () {
 
 it('applies per-language formality override for the target locale', function () {
     config([
-        'content-translator.deepl.formality' => 'default',
-        'content-translator.deepl.overrides' => [
+        'statamic.content-translator.deepl.formality' => 'default',
+        'statamic.content-translator.deepl.overrides' => [
             'de' => ['formality' => 'prefer_more'],
         ],
     ]);
@@ -299,8 +299,8 @@ it('applies per-language formality override for the target locale', function () 
 
 it('uses global formality when no per-language override is set', function () {
     config([
-        'content-translator.deepl.formality' => 'less',
-        'content-translator.deepl.overrides' => [
+        'statamic.content-translator.deepl.formality' => 'less',
+        'statamic.content-translator.deepl.overrides' => [
             'de' => ['formality' => 'more'],
         ],
     ]);
@@ -326,8 +326,8 @@ it('uses global formality when no per-language override is set', function () {
 
 it('matches override by base language code ignoring regional variant', function () {
     config([
-        'content-translator.deepl.formality' => 'default',
-        'content-translator.deepl.overrides' => [
+        'statamic.content-translator.deepl.formality' => 'default',
+        'statamic.content-translator.deepl.overrides' => [
             'de' => ['formality' => 'more'],
         ],
     ]);
@@ -462,7 +462,7 @@ it('handles statamic underscore locale format (en_US)', function () {
 // ─── Chunking ─────────────────────────────────────────────────────────────────
 
 it('sends one request when max_units_per_request is null', function () {
-    config(['content-translator.max_units_per_request' => null]);
+    config(['statamic.content-translator.max_units_per_request' => null]);
 
     $translator = Mockery::mock(Translator::class);
     $translator->shouldReceive('translateText')
@@ -486,7 +486,7 @@ it('sends one request when max_units_per_request is null', function () {
 });
 
 it('chunks requests when max_units_per_request is set', function () {
-    config(['content-translator.max_units_per_request' => 2]);
+    config(['statamic.content-translator.max_units_per_request' => 2]);
 
     $callCount = 0;
 
@@ -520,7 +520,7 @@ it('chunks requests when max_units_per_request is set', function () {
 });
 
 it('chunks correctly when unit count is not evenly divisible by chunk size', function () {
-    config(['content-translator.max_units_per_request' => 2]);
+    config(['statamic.content-translator.max_units_per_request' => 2]);
 
     $callCount = 0;
 
@@ -550,7 +550,7 @@ it('chunks correctly when unit count is not evenly divisible by chunk size', fun
 });
 
 it('ids restart from 0 in each chunk', function () {
-    config(['content-translator.max_units_per_request' => 2]);
+    config(['statamic.content-translator.max_units_per_request' => 2]);
 
     $capturedTexts = [];
 

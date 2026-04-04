@@ -318,8 +318,8 @@ it('TranslateEntryJob has correct retry configuration', function () {
 });
 
 it('TranslateEntryJob applies queue connection and name from config', function () {
-    config()->set('content-translator.queue.connection', 'redis');
-    config()->set('content-translator.queue.name', 'content-translator');
+    config()->set('statamic.content-translator.queue.connection', 'redis');
+    config()->set('statamic.content-translator.queue.name', 'content-translator');
 
     $job = new TranslateEntryJob('some-id', 'fr');
 

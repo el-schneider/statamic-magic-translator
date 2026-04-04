@@ -9,7 +9,7 @@ use ElSchneider\ContentTranslator\Services\PromptResolver;
 uses(Tests\TestCase::class);
 
 it('resolves default system prompt view name', function () {
-    config(['content-translator.prism.prompts.system' => 'content-translator::prompts.system']);
+    config(['statamic.content-translator.prism.prompts.system' => 'content-translator::prompts.system']);
 
     $resolver = app(PromptResolver::class);
 
@@ -18,8 +18,8 @@ it('resolves default system prompt view name', function () {
 
 it('resolves language-specific override when it exists', function () {
     config([
-        'content-translator.prism.prompts.system' => 'content-translator::prompts.system',
-        'content-translator.prism.prompts.overrides' => [
+        'statamic.content-translator.prism.prompts.system' => 'content-translator::prompts.system',
+        'statamic.content-translator.prism.prompts.overrides' => [
             'ja' => ['system' => 'content-translator::prompts.system-ja'],
         ],
     ]);
@@ -31,8 +31,8 @@ it('resolves language-specific override when it exists', function () {
 
 it('falls back to default when no override exists for locale', function () {
     config([
-        'content-translator.prism.prompts.system' => 'content-translator::prompts.system',
-        'content-translator.prism.prompts.overrides' => [
+        'statamic.content-translator.prism.prompts.system' => 'content-translator::prompts.system',
+        'statamic.content-translator.prism.prompts.overrides' => [
             'ja' => ['system' => 'content-translator::prompts.system-ja'],
         ],
     ]);
@@ -45,9 +45,9 @@ it('falls back to default when no override exists for locale', function () {
 
 it('falls back to default when override exists for locale but not for prompt type', function () {
     config([
-        'content-translator.prism.prompts.system' => 'content-translator::prompts.system',
-        'content-translator.prism.prompts.user' => 'content-translator::prompts.user',
-        'content-translator.prism.prompts.overrides' => [
+        'statamic.content-translator.prism.prompts.system' => 'content-translator::prompts.system',
+        'statamic.content-translator.prism.prompts.user' => 'content-translator::prompts.user',
+        'statamic.content-translator.prism.prompts.overrides' => [
             'ja' => ['system' => 'content-translator::prompts.system-ja'],
         ],
     ]);

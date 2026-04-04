@@ -15,9 +15,9 @@ uses(Tests\TestCase::class);
 
 beforeEach(function () {
     config([
-        'content-translator.prism.provider' => 'anthropic',
-        'content-translator.prism.model' => 'claude-sonnet-4-20250514',
-        'content-translator.max_units_per_request' => null,
+        'statamic.content-translator.prism.provider' => 'anthropic',
+        'statamic.content-translator.prism.model' => 'claude-sonnet-4-20250514',
+        'statamic.content-translator.max_units_per_request' => null,
     ]);
 });
 
@@ -111,8 +111,8 @@ it('preserves original unit properties when setting translated text', function (
 
 it('uses configured provider and model', function () {
     config([
-        'content-translator.prism.provider' => 'openai',
-        'content-translator.prism.model' => 'gpt-4o',
+        'statamic.content-translator.prism.provider' => 'openai',
+        'statamic.content-translator.prism.model' => 'gpt-4o',
     ]);
 
     $fake = Prism::fake([
@@ -134,8 +134,8 @@ it('uses configured provider and model', function () {
 
 it('uses openai-compatible object schema with translations key', function () {
     config([
-        'content-translator.prism.provider' => 'openai',
-        'content-translator.prism.model' => 'gpt-4o',
+        'statamic.content-translator.prism.provider' => 'openai',
+        'statamic.content-translator.prism.model' => 'gpt-4o',
     ]);
 
     $fake = Prism::fake([
@@ -228,7 +228,7 @@ it('uses structured output schema with array of id/text objects', function () {
 });
 
 it('chunks requests when max_units_per_request is set', function () {
-    config(['content-translator.max_units_per_request' => 2]);
+    config(['statamic.content-translator.max_units_per_request' => 2]);
 
     $fake = Prism::fake([
         makeStructuredResponse([
@@ -256,7 +256,7 @@ it('chunks requests when max_units_per_request is set', function () {
 });
 
 it('handles single unit without chunking', function () {
-    config(['content-translator.max_units_per_request' => 10]);
+    config(['statamic.content-translator.max_units_per_request' => 10]);
 
     $fake = Prism::fake([
         makeStructuredResponse([
@@ -275,7 +275,7 @@ it('handles single unit without chunking', function () {
 });
 
 it('does not chunk when max_units_per_request is null', function () {
-    config(['content-translator.max_units_per_request' => null]);
+    config(['statamic.content-translator.max_units_per_request' => null]);
 
     $fake = Prism::fake([
         makeStructuredResponse([
@@ -316,7 +316,7 @@ it('throws when prism response misses a unit translation', function () {
 })->throws(RuntimeException::class, 'Missing translation for unit id [body].');
 
 it('throws for invalid max_units_per_request config', function () {
-    config(['content-translator.max_units_per_request' => 0]);
+    config(['statamic.content-translator.max_units_per_request' => 0]);
 
     $service = app(PrismTranslationService::class);
 

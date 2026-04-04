@@ -20,6 +20,8 @@ use Statamic\Providers\AddonServiceProvider;
 
 final class ServiceProvider extends AddonServiceProvider
 {
+    protected $translations = false;
+
     protected $actions = [
         TranslateEntryAction::class,
     ];
@@ -36,7 +38,7 @@ final class ServiceProvider extends AddonServiceProvider
             // Use configured API key; fall back to a non-empty placeholder so
             // the Translator can be constructed even without a key (e.g. in tests
             // that only check service resolution, not actual API calls).
-            $apiKey = config('content-translator.deepl.api_key') ?: 'placeholder';
+            $apiKey = config('statamic.content-translator.deepl.api_key') ?: 'placeholder';
 
             return new Translator($apiKey);
         });
@@ -91,11 +93,11 @@ final class ServiceProvider extends AddonServiceProvider
 
     private function registerConfiguration(): void
     {
-        $this->mergeConfigFrom(__DIR__.'/../config/content-translator.php', 'content-translator');
+        $this->mergeConfigFrom(__DIR__.'/../config/content-translator.php', 'statamic.content-translator');
 
         $this->publishes([
-            __DIR__.'/../config/content-translator.php' => config_path('content-translator.php'),
-        ], 'content-translator-config');
+            __DIR__.'/../config/content-translator.php' => config_path('statamic/content-translator.php'),
+        ], 'statamic-content-translator-config');
     }
 
     private function registerTranslations(): void
@@ -109,7 +111,7 @@ final class ServiceProvider extends AddonServiceProvider
 
         $this->publishes([
             __DIR__.'/../resources/views' => resource_path('views/vendor/content-translator'),
-        ], 'content-translator-views');
+        ], 'statamic-content-translator-views');
     }
 
     private function registerBlueprintInjection(): void
@@ -124,7 +126,7 @@ final class ServiceProvider extends AddonServiceProvider
             }
 
             $collectionHandle = $entry->collectionHandle();
-            $configuredCollections = config('content-translator.collections', []);
+            $configuredCollections = config('statamic.content-translator.collections', []);
 
             // Skip collections that are not configured.
             if (! in_array($collectionHandle, (array) $configuredCollections, true)) {
@@ -132,7 +134,7 @@ final class ServiceProvider extends AddonServiceProvider
             }
 
             $blueprintHandle = $event->blueprint->handle();
-            $excludedBlueprints = config('content-translator.exclude_blueprints', []);
+            $excludedBlueprints = config('statamic.content-translator.exclude_blueprints', []);
 
             // Skip blueprints explicitly excluded in dot notation (collection.blueprint).
             $blueprintKey = $collectionHandle.'.'.$blueprintHandle;
@@ -165,7 +167,7 @@ final class ServiceProvider extends AddonServiceProvider
             }
 
             $collectionHandle = $entry->collectionHandle();
-            $configuredCollections = config('content-translator.collections', []);
+            $configuredCollections = config('statamic.content-translator.collections', []);
 
             if (! in_array($collectionHandle, (array) $configuredCollections, true)) {
                 return;
