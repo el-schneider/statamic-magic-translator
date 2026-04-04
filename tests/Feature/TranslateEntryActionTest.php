@@ -38,7 +38,7 @@ function makeNonSuperUser(string $id = 'regular-user', array $permissions = []):
 // ── visibleTo ─────────────────────────────────────────────────────────────────
 
 it('is visible for an entry in a configured collection with multiple sites', function () {
-    config(['content-translator.collections' => ['articles']]);
+    config(['statamic.content-translator.collections' => ['articles']]);
 
     test()->createTestCollection('articles', ['en', 'fr']);
     $entry = test()->createTestEntry(collection: 'articles', site: 'en');
@@ -47,7 +47,7 @@ it('is visible for an entry in a configured collection with multiple sites', fun
 });
 
 it('is not visible for an entry in an unconfigured collection', function () {
-    config(['content-translator.collections' => ['news']]);
+    config(['statamic.content-translator.collections' => ['news']]);
 
     test()->createTestCollection('articles', ['en', 'fr']);
     $entry = test()->createTestEntry(collection: 'articles', site: 'en');
@@ -56,7 +56,7 @@ it('is not visible for an entry in an unconfigured collection', function () {
 });
 
 it('is not visible when collections config is empty', function () {
-    config(['content-translator.collections' => []]);
+    config(['statamic.content-translator.collections' => []]);
 
     test()->createTestCollection('articles', ['en', 'fr']);
     $entry = test()->createTestEntry(collection: 'articles', site: 'en');
@@ -65,7 +65,7 @@ it('is not visible when collections config is empty', function () {
 });
 
 it('is not visible for a single-site setup', function () {
-    config(['content-translator.collections' => ['articles']]);
+    config(['statamic.content-translator.collections' => ['articles']]);
 
     // Reduce to a single site only.
     Site::setSites([
@@ -83,7 +83,7 @@ it('is not visible for a single-site setup', function () {
 });
 
 it('is not visible for non-Entry items', function () {
-    config(['content-translator.collections' => ['articles']]);
+    config(['statamic.content-translator.collections' => ['articles']]);
 
     // Pass a plain object (not an Entry instance).
     expect(makeAction()->visibleTo(new stdClass()))->toBeFalse();

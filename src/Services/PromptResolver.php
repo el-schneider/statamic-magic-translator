@@ -16,13 +16,13 @@ final class PromptResolver
      */
     public function resolveViewName(string $type, string $targetLocale): string
     {
-        $overrides = config("content-translator.prism.prompts.overrides.{$targetLocale}", []);
+        $overrides = config("statamic.content-translator.prism.prompts.overrides.{$targetLocale}", []);
 
         if (isset($overrides[$type])) {
             return $overrides[$type];
         }
 
-        return config("content-translator.prism.prompts.{$type}");
+        return config("statamic.content-translator.prism.prompts.{$type}");
     }
 
     /**

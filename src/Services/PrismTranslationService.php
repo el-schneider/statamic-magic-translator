@@ -32,7 +32,7 @@ final class PrismTranslationService implements TranslationService
             return [];
         }
 
-        $maxUnits = $this->resolveChunkSize(config('content-translator.max_units_per_request'));
+        $maxUnits = $this->resolveChunkSize(config('statamic.content-translator.max_units_per_request'));
 
         if ($maxUnits !== null && count($units) > $maxUnits) {
             return $this->translateInChunks($units, $sourceLocale, $targetLocale, $maxUnits);
@@ -67,8 +67,8 @@ final class PrismTranslationService implements TranslationService
      */
     private function sendRequest(array $units, string $sourceLocale, string $targetLocale): array
     {
-        $provider = (string) config('content-translator.prism.provider');
-        $model = (string) config('content-translator.prism.model');
+        $provider = (string) config('statamic.content-translator.prism.provider');
+        $model = (string) config('statamic.content-translator.prism.model');
 
         $systemPrompt = $this->promptResolver->resolve('system', $sourceLocale, $targetLocale, $units);
         $userPromptIntro = $this->promptResolver->resolve('user', $sourceLocale, $targetLocale, $units);
@@ -217,7 +217,7 @@ final class PrismTranslationService implements TranslationService
         }
 
         if (! is_int($configured) || $configured <= 0) {
-            throw new InvalidArgumentException('content-translator.max_units_per_request must be a positive integer or null.');
+            throw new InvalidArgumentException('statamic.content-translator.max_units_per_request must be a positive integer or null.');
         }
 
         return $configured;

@@ -16,10 +16,10 @@ uses(StatamicTestHelpers::class);
 // ── Config ────────────────────────────────────────────────────────────────────
 
 it('merges the addon config under the content-translator key', function () {
-    expect(config('content-translator'))->toBeArray();
-    expect(config('content-translator.service'))->toBe('prism');
-    expect(config('content-translator.collections'))->toBe([]);
-    expect(config('content-translator.exclude_blueprints'))->toBe([]);
+    expect(config('statamic.content-translator'))->toBeArray();
+    expect(config('statamic.content-translator.service'))->toBe('prism');
+    expect(config('statamic.content-translator.collections'))->toBe([]);
+    expect(config('statamic.content-translator.exclude_blueprints'))->toBe([]);
 });
 
 // ── Service container bindings ────────────────────────────────────────────────
@@ -64,7 +64,7 @@ it('resolves ContentReassembler as singleton', function () {
 
 it('injects content_translator field into blueprint for a configured collection', function () {
     // Configure the collection.
-    config(['content-translator.collections' => ['articles']]);
+    config(['statamic.content-translator.collections' => ['articles']]);
 
     test()->createTestCollection('articles', ['en', 'fr']);
     $blueprint = test()->createTestBlueprint('articles', 'default');
@@ -78,7 +78,7 @@ it('injects content_translator field into blueprint for a configured collection'
 });
 
 it('injects the field with the correct configuration', function () {
-    config(['content-translator.collections' => ['articles']]);
+    config(['statamic.content-translator.collections' => ['articles']]);
 
     test()->createTestCollection('articles', ['en', 'fr']);
     $blueprint = test()->createTestBlueprint('articles', 'default');
@@ -99,7 +99,7 @@ it('injects the field with the correct configuration', function () {
 
 it('does not inject into blueprints for unconfigured collections', function () {
     // 'articles' is NOT in the configured collections.
-    config(['content-translator.collections' => ['news']]);
+    config(['statamic.content-translator.collections' => ['news']]);
 
     test()->createTestCollection('articles', ['en', 'fr']);
     $blueprint = test()->createTestBlueprint('articles', 'default');
@@ -113,8 +113,8 @@ it('does not inject into blueprints for unconfigured collections', function () {
 
 it('excludes blueprints listed in exclude_blueprints config', function () {
     config([
-        'content-translator.collections' => ['articles'],
-        'content-translator.exclude_blueprints' => ['articles.default'],
+        'statamic.content-translator.collections' => ['articles'],
+        'statamic.content-translator.exclude_blueprints' => ['articles.default'],
     ]);
 
     test()->createTestCollection('articles', ['en', 'fr']);
@@ -130,8 +130,8 @@ it('excludes blueprints listed in exclude_blueprints config', function () {
 it('injects into a non-excluded blueprint within a configured collection', function () {
     // Only 'articles.special' is excluded — 'articles.default' should still be injected.
     config([
-        'content-translator.collections' => ['articles'],
-        'content-translator.exclude_blueprints' => ['articles.special'],
+        'statamic.content-translator.collections' => ['articles'],
+        'statamic.content-translator.exclude_blueprints' => ['articles.special'],
     ]);
 
     test()->createTestCollection('articles', ['en', 'fr']);
@@ -145,7 +145,7 @@ it('injects into a non-excluded blueprint within a configured collection', funct
 });
 
 it('skips injection when the event has no entry', function () {
-    config(['content-translator.collections' => ['articles']]);
+    config(['statamic.content-translator.collections' => ['articles']]);
 
     test()->createTestCollection('articles', ['en', 'fr']);
     $blueprint = test()->createTestBlueprint('articles', 'default');

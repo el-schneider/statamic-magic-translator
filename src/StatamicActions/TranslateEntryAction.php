@@ -39,7 +39,7 @@ final class TranslateEntryAction extends Action
             return false;
         }
 
-        $configuredCollections = (array) config('content-translator.collections', []);
+        $configuredCollections = (array) config('statamic.content-translator.collections', []);
 
         if (! in_array($item->collectionHandle(), $configuredCollections, strict: true)) {
             return false;

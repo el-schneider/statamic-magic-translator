@@ -23,7 +23,7 @@ use Throwable;
  * be called directly (e.g. in tests or from controllers) without
  * going through the queue.
  *
- * Queue settings are picked up from config/content-translator.php.
+ * Queue settings are picked up from config/statamic/content-translator.php.
  * Retries use exponential backoff: 30s → 60s → 120s.
  *
  * When a $jobId is provided the job writes status updates to cache
@@ -63,7 +63,7 @@ final class TranslateEntryJob implements ShouldQueue
         private readonly array $options = [],
         private readonly ?string $jobId = null,
     ) {
-        $queueConfig = config('content-translator.queue', []);
+        $queueConfig = config('statamic.content-translator.queue', []);
 
         if (! empty($queueConfig['connection'])) {
             $this->onConnection($queueConfig['connection']);

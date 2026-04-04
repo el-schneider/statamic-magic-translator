@@ -11,7 +11,7 @@ final class TranslationServiceFactory
 {
     public function make(): TranslationService
     {
-        $service = config('content-translator.service');
+        $service = config('statamic.content-translator.service');
 
         return match ($service) {
             'prism' => app(PrismTranslationService::class),

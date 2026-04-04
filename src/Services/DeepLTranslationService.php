@@ -32,7 +32,7 @@ final class DeepLTranslationService implements TranslationService
             return [];
         }
 
-        $maxUnits = $this->resolveChunkSize(config('content-translator.max_units_per_request'));
+        $maxUnits = $this->resolveChunkSize(config('statamic.content-translator.max_units_per_request'));
 
         if ($maxUnits !== null && count($units) > $maxUnits) {
             return $this->translateInChunks($units, $sourceLocale, $targetLocale, $maxUnits);
@@ -150,13 +150,13 @@ final class DeepLTranslationService implements TranslationService
     private function resolveFormality(string $targetLocale): string
     {
         $baseLang = mb_strtolower(explode('-', str_replace('_', '-', $targetLocale))[0]);
-        $overrides = config('content-translator.deepl.overrides', []);
+        $overrides = config('statamic.content-translator.deepl.overrides', []);
 
         if (isset($overrides[$baseLang]['formality'])) {
             return (string) $overrides[$baseLang]['formality'];
         }
 
-        return (string) config('content-translator.deepl.formality', 'default');
+        return (string) config('statamic.content-translator.deepl.formality', 'default');
     }
 
     /**
@@ -234,7 +234,7 @@ final class DeepLTranslationService implements TranslationService
 
         if (! is_int($configured) || $configured <= 0) {
             throw new InvalidArgumentException(
-                'content-translator.max_units_per_request must be a positive integer or null.'
+                'statamic.content-translator.max_units_per_request must be a positive integer or null.'
             );
         }
 
