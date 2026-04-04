@@ -3,3 +3,4 @@
 /resources/dist/
 /.prettierignore.cache
 .DS_Store
+worktrees
