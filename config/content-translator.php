@@ -52,7 +52,7 @@ return [
     |
     */
 
-    'max_units_per_request' => null,
+    'max_units_per_request' => env('CONTENT_TRANSLATOR_MAX_UNITS_PER_REQUEST'),
 
     /*
     |--------------------------------------------------------------------------
@@ -92,6 +92,13 @@ return [
     'prism' => [
         'provider' => env('CONTENT_TRANSLATOR_PROVIDER', 'openai'),
         'model' => env('CONTENT_TRANSLATOR_MODEL', 'gpt-5-mini'),
+        // Long-form translation requests often exceed generic API defaults.
+        // Keep these transport limits addon-scoped so translation reliability
+        // does not depend on global Prism settings.
+        'request_timeout' => env('CONTENT_TRANSLATOR_PRISM_REQUEST_TIMEOUT', 120),
+        'connect_timeout' => env('CONTENT_TRANSLATOR_PRISM_CONNECT_TIMEOUT', 15),
+        'retry_attempts' => env('CONTENT_TRANSLATOR_PRISM_RETRY_ATTEMPTS', 1),
+        'retry_sleep_ms' => env('CONTENT_TRANSLATOR_PRISM_RETRY_SLEEP_MS', 1000),
         'prompts' => [
             'system' => 'content-translator::prompts.system',
             'user' => 'content-translator::prompts.user',
