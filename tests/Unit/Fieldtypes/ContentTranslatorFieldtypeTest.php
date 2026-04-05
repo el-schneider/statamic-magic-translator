@@ -243,7 +243,7 @@ it('preload returns only sites the user can access for editing', function () {
     $this->loginUser($user);
 
     $fieldtype = new ContentTranslatorFieldtype;
-    $field = (new \Statamic\Fields\Field('content_translator', ['type' => 'content_translator']))
+    $field = (new Field('content_translator', ['type' => 'content_translator']))
         ->setParent($entry);
     $fieldtype->setField($field);
 
@@ -265,7 +265,7 @@ it('preload returns empty sites when user lacks edit permission for the collecti
     $this->loginUser($user);
 
     $fieldtype = new ContentTranslatorFieldtype;
-    $field = (new \Statamic\Fields\Field('content_translator', ['type' => 'content_translator']))
+    $field = (new Field('content_translator', ['type' => 'content_translator']))
         ->setParent($entry);
     $fieldtype->setField($field);
 
@@ -275,7 +275,7 @@ it('preload returns empty sites when user lacks edit permission for the collecti
 });
 
 it('preload returns only collection sites, ignoring unrelated Statamic sites', function () {
-    \Statamic\Facades\Site::setSites([
+    Statamic\Facades\Site::setSites([
         'en' => ['name' => 'English', 'url' => 'http://localhost/', 'locale' => 'en'],
         'fr' => ['name' => 'French', 'url' => 'http://localhost/fr/', 'locale' => 'fr'],
         'es' => ['name' => 'Spanish', 'url' => 'http://localhost/es/', 'locale' => 'es'],
@@ -288,7 +288,7 @@ it('preload returns only collection sites, ignoring unrelated Statamic sites', f
     $this->loginUser(); // super
 
     $fieldtype = new ContentTranslatorFieldtype;
-    $field = (new \Statamic\Fields\Field('content_translator', ['type' => 'content_translator']))
+    $field = (new Field('content_translator', ['type' => 'content_translator']))
         ->setParent($entry);
     $fieldtype->setField($field);
 

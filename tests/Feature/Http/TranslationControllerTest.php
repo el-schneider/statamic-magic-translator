@@ -197,7 +197,7 @@ it('returns 404 when entry has no localization in source_site', function () {
 });
 
 it('allows dispatch when user has access to all requested target sites', function () {
-    \Illuminate\Support\Facades\Queue::fake();
+    Queue::fake();
 
     Statamic\Facades\Site::setSites([
         'en' => ['name' => 'English', 'url' => 'http://localhost/', 'locale' => 'en'],
@@ -226,7 +226,7 @@ it('allows dispatch when user has access to all requested target sites', functio
     $response->assertStatus(200)
         ->assertJson(['success' => true]);
 
-    \Illuminate\Support\Facades\Queue::assertPushed(TranslateEntryJob::class, 2);
+    Queue::assertPushed(TranslateEntryJob::class, 2);
 });
 
 // ── Trigger: validation ────────────────────────────────────────────────────────

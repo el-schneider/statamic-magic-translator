@@ -143,7 +143,7 @@ it('returns an indexed (non-associative) array of entry IDs', function () {
 });
 
 it('passes only user-accessible sites to the dialog', function () {
-    \Statamic\Facades\Site::setSites([
+    Site::setSites([
         'en' => ['name' => 'English', 'url' => 'http://localhost/', 'locale' => 'en'],
         'fr' => ['name' => 'French', 'url' => 'http://localhost/fr/', 'locale' => 'fr'],
         'de' => ['name' => 'German', 'url' => 'http://localhost/de/', 'locale' => 'de'],
@@ -170,7 +170,7 @@ it('passes only user-accessible sites to the dialog', function () {
 it('intersects accessible sites across multiple collections', function () {
     test()->loginUser(); // super sees all
 
-    \Statamic\Facades\Site::setSites([
+    Site::setSites([
         'en' => ['name' => 'English', 'url' => 'http://localhost/', 'locale' => 'en'],
         'fr' => ['name' => 'French', 'url' => 'http://localhost/fr/', 'locale' => 'fr'],
         'de' => ['name' => 'German', 'url' => 'http://localhost/de/', 'locale' => 'de'],
