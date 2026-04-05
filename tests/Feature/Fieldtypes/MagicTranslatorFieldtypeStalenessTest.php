@@ -83,6 +83,36 @@ it('keeps localization fresh when source edits do not affect extractable units',
     expect($frSite['is_stale'])->toBeFalse();
 });
 
+it('returns last_translated_at when locale uses hash-based staleness', function () {
+    $this->loginUser();
+    $this->createTestCollection('articles', ['en', 'fr']);
+    $this->createTestBlueprint('articles', 'default', [
+        'title' => ['type' => 'text', 'localizable' => true],
+    ]);
+
+    $entry = $this->createTestEntry(collection: 'articles', site: 'en', data: [
+        'title' => 'Hello',
+    ]);
+
+    $fieldDefs = FieldDefinitionBuilder::fromBlueprint($entry->blueprint());
+    $sourceHash = ContentFingerprint::compute($entry->data()->all(), $fieldDefs);
+    $translatedAt = '2026-04-05T10:30:00+00:00';
+
+    $entry->makeLocalization('fr')->data([
+        'title' => 'Bonjour',
+        'magic_translator' => [
+            'last_translated_at' => $translatedAt,
+            'source_content_hash' => $sourceHash,
+        ],
+    ])->save();
+
+    $result = preloadForEntry($entry);
+    $frSite = collect($result['sites'])->firstWhere('handle', 'fr');
+
+    expect($frSite['is_stale'])->toBeFalse();
+    expect($frSite['last_translated_at'])->toBe($translatedAt);
+});
+
 it('falls back to timestamp staleness when only last_translated_at exists', function () {
     $this->loginUser();
     $this->createTestCollection('articles', ['en', 'fr']);
