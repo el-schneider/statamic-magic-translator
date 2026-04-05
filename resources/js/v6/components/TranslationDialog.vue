@@ -16,6 +16,7 @@
 import { Badge, Button, Card, Checkbox, Icon, Label, Modal, ModalClose, Select, Separator } from '@statamic/cms/ui'
 import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { markCurrent } from '../../core/api'
+import { getMarkedHandles, markSiteCurrent, subscribeMarked } from '../../core/markCurrentStore'
 import {
   getSession,
   retryLocale as retryLocaleInStore,
@@ -112,7 +113,11 @@ const localeState = computed<Record<string, LocaleJobState>>(() => session.value
 const isTranslating = computed(() => session.value?.isTranslating ?? false)
 const markCurrentPending = ref<Record<string, boolean>>({})
 const markCurrentErrors = ref<Record<string, string>>({})
-const markedCurrentHandles = ref<Set<string>>(new Set())
+const singleEntryId = computed<string | null>(() =>
+  allEntryIds.value.length === 1 ? (allEntryIds.value[0] ?? null) : null,
+)
+const markedCurrentHandles = ref<Set<string>>(singleEntryId.value ? getMarkedHandles(singleEntryId.value) : new Set())
+let unsubscribeMarked: (() => void) | null = null
 
 let unsubscribeSession: (() => void) | null = null
 
@@ -188,7 +193,7 @@ function shouldShowMarkCurrentButton(site: SiteMeta | SiteDescriptor): boolean {
   return isEffectivelyStale(site) || !hasEffectiveTranslation(site)
 }
 
-async function markSiteCurrent(handle: string): Promise<void> {
+async function handleMarkCurrentClick(handle: string): Promise<void> {
   const entryId = allEntryIds.value[0]
   if (!entryId) return
 
@@ -215,15 +220,9 @@ async function markSiteCurrent(handle: string): Promise<void> {
       return
     }
 
-    markedCurrentHandles.value = new Set([...markedCurrentHandles.value, handle])
-
-    // Notify the fieldtype so its own markedCurrentHandles reflects this change
-    // and the next dialog instance doesn't see stale props for this locale.
-    window.dispatchEvent(
-      new CustomEvent('magic-translator:marked-current', {
-        detail: { siteHandle: handle },
-      }),
-    )
+    if (singleEntryId.value) {
+      markSiteCurrent(singleEntryId.value, handle)
+    }
 
     if (typeof Statamic !== 'undefined' && Statamic.$toast) {
       Statamic.$toast.success(t('mark_current_success'))
@@ -290,10 +289,18 @@ onMounted(() => {
   if (!existing || !existing.isTranslating) {
     syncSelectedLocales()
   }
+
+  const id = singleEntryId.value
+  if (id !== null) {
+    unsubscribeMarked = subscribeMarked(id, () => {
+      markedCurrentHandles.value = getMarkedHandles(id)
+    })
+  }
 })
 
 onBeforeUnmount(() => {
   unsubscribeSession?.()
+  unsubscribeMarked?.()
 })
 </script>
 
@@ -366,7 +373,7 @@ onBeforeUnmount(() => {
                   :text="t('mark_current_button')"
                   :loading="Boolean(markCurrentPending[site.handle])"
                   :disabled="Boolean(markCurrentPending[site.handle])"
-                  @click="markSiteCurrent(site.handle)"
+                  @click="handleMarkCurrentClick(site.handle)"
                 />
 
                 <Badge

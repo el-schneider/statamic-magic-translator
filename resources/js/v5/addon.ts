@@ -20,6 +20,7 @@ import {
   wasPreviouslyInjected,
   wasTranslateButtonPreviouslyInjected,
 } from '../core/injection'
+import { getMarkedHandles, markSiteCurrent, subscribeMarked } from '../core/markCurrentStore'
 import {
   getSession,
   retryLocale as retryLocaleInStore,
@@ -79,6 +80,7 @@ interface DialogData {
   markedCurrentHandles: string[]
   markCurrentPending: Record<string, boolean>
   markCurrentErrors: Record<string, string>
+  unsubscribeMarked: (() => void) | null
 }
 
 const TranslationDialog = {
@@ -106,6 +108,7 @@ const TranslationDialog = {
       markedCurrentHandles: [],
       markCurrentPending: {},
       markCurrentErrors: {},
+      unsubscribeMarked: null,
     }
   },
 
@@ -142,6 +145,11 @@ const TranslationDialog = {
       return sessionKey(self.allEntryIds)
     },
 
+    singleEntryId(): string | null {
+      const self = this as unknown as { allEntryIds: string[] }
+      return self.allEntryIds.length === 1 ? (self.allEntryIds[0] ?? null) : null
+    },
+
     localeState(): Record<string, LocaleJobState> {
       const self = this as unknown as { session: TranslationSession | null }
       return self.session?.localeState ?? {}
@@ -169,6 +177,9 @@ const TranslationDialog = {
       applySessionSnapshot: (session: TranslationSession | null) => void
       subscribeToSession: () => void
       syncSelectedLocales: () => void
+      singleEntryId: string | null
+      markedCurrentHandles: string[]
+      unsubscribeMarked: (() => void) | null
     }
 
     self.applySessionSnapshot(getSession(self.translationSessionKey))
@@ -177,6 +188,14 @@ const TranslationDialog = {
     const existing = getSession(self.translationSessionKey)
     if (!existing || !existing.isTranslating) {
       self.syncSelectedLocales()
+    }
+
+    const id = self.singleEntryId
+    if (id !== null) {
+      self.markedCurrentHandles = [...getMarkedHandles(id)]
+      self.unsubscribeMarked = subscribeMarked(id, () => {
+        self.markedCurrentHandles = [...getMarkedHandles(id)]
+      })
     }
   },
 
@@ -208,8 +227,12 @@ const TranslationDialog = {
   },
 
   beforeDestroy() {
-    const self = this as unknown as { unsubscribeFn: (() => void) | null }
+    const self = this as unknown as {
+      unsubscribeFn: (() => void) | null
+      unsubscribeMarked: (() => void) | null
+    }
     self.unsubscribeFn?.()
+    self.unsubscribeMarked?.()
   },
 
   methods: {
@@ -268,12 +291,11 @@ const TranslationDialog = {
       return self.isEffectivelyStale(site) || !self.hasEffectiveTranslation(site)
     },
 
-    async markSiteCurrent(handle: string) {
+    async handleMarkCurrentClick(handle: string) {
       const self = this as unknown as {
         allEntryIds: string[]
         markCurrentPending: Record<string, boolean>
         markCurrentErrors: Record<string, string>
-        markedCurrentHandles: string[]
       }
 
       const entryId = self.allEntryIds[0]
@@ -303,17 +325,7 @@ const TranslationDialog = {
           return
         }
 
-        if (!self.markedCurrentHandles.includes(handle)) {
-          self.markedCurrentHandles = [...self.markedCurrentHandles, handle]
-        }
-
-        // Notify the fieldtype so its own markedCurrentHandles reflects this
-        // change and the next dialog instance doesn't see stale props.
-        window.dispatchEvent(
-          new CustomEvent('magic-translator:marked-current', {
-            detail: { siteHandle: handle },
-          }),
-        )
+        markSiteCurrent(entryId, handle)
 
         Statamic.$toast.success(t('mark_current_success'))
       } catch (error) {
@@ -536,7 +548,7 @@ const TranslationDialog = {
                                     type="button"
                                     class="text-2xs text-blue underline hover:no-underline disabled:opacity-60 disabled:no-underline"
                                     :disabled="Boolean(markCurrentPending[site.handle])"
-                                    @click="markSiteCurrent(site.handle)"
+                                    @click="handleMarkCurrentClick(site.handle)"
                                 >
                                     {{ t('mark_current_button') }}
                                 </button>
@@ -660,7 +672,7 @@ interface FieldtypeData {
   markedCurrentHandles: string[]
   markCurrentPending: string[]
   markCurrentListener: ((event: Event) => void) | null
-  markedCurrentNoticeListener: ((event: Event) => void) | null
+  unsubscribeMarked: (() => void) | null
 }
 
 const TranslatorFieldtype = {
@@ -686,7 +698,7 @@ const TranslatorFieldtype = {
       markedCurrentHandles: [],
       markCurrentPending: [],
       markCurrentListener: null,
-      markedCurrentNoticeListener: null,
+      unsubscribeMarked: null,
     }
   },
 
@@ -792,12 +804,16 @@ const TranslatorFieldtype = {
 
       self.markCurrentPending = [...self.markCurrentPending, siteHandle]
 
+      const entryId = self.entryId
+      if (entryId === null) {
+        self.markCurrentPending = self.markCurrentPending.filter((handle) => handle !== siteHandle)
+        return
+      }
+
       try {
-        const response = await markCurrent(self.entryId, siteHandle)
+        const response = await markCurrent(entryId, siteHandle)
         if (response.success) {
-          if (!self.markedCurrentHandles.includes(siteHandle)) {
-            self.markedCurrentHandles = [...self.markedCurrentHandles, siteHandle]
-          }
+          markSiteCurrent(entryId, siteHandle)
           return
         }
 
@@ -812,36 +828,33 @@ const TranslatorFieldtype = {
 
     window.addEventListener('magic-translator:request-mark-current', self.markCurrentListener)
 
-    const selfForNotice = this as unknown as {
-      markedCurrentNoticeListener: ((event: Event) => void) | null
-      markedCurrentHandles: string[]
+    const entryIdForSub = (this as unknown as { entryId: string | null }).entryId
+    if (entryIdForSub !== null) {
+      const selfForSub = this as unknown as {
+        markedCurrentHandles: string[]
+        unsubscribeMarked: (() => void) | null
+      }
+      selfForSub.markedCurrentHandles = [...getMarkedHandles(entryIdForSub)]
+      selfForSub.unsubscribeMarked = subscribeMarked(entryIdForSub, () => {
+        selfForSub.markedCurrentHandles = [...getMarkedHandles(entryIdForSub)]
+      })
     }
-
-    selfForNotice.markedCurrentNoticeListener = (event: Event) => {
-      const detail = (event as CustomEvent).detail
-      if (!detail?.siteHandle) return
-      const siteHandle = String(detail.siteHandle)
-      if (selfForNotice.markedCurrentHandles.includes(siteHandle)) return
-      selfForNotice.markedCurrentHandles = [...selfForNotice.markedCurrentHandles, siteHandle]
-    }
-
-    window.addEventListener('magic-translator:marked-current', selfForNotice.markedCurrentNoticeListener)
   },
 
   beforeDestroy() {
     const self = this as unknown as {
       observer: MutationObserver | null
       markCurrentListener: ((event: Event) => void) | null
-      markedCurrentNoticeListener: ((event: Event) => void) | null
+      unsubscribeMarked: (() => void) | null
     }
     self.observer?.disconnect()
     if (self.markCurrentListener) {
       window.removeEventListener('magic-translator:request-mark-current', self.markCurrentListener)
       self.markCurrentListener = null
     }
-    if (self.markedCurrentNoticeListener) {
-      window.removeEventListener('magic-translator:marked-current', self.markedCurrentNoticeListener)
-      self.markedCurrentNoticeListener = null
+    if (self.unsubscribeMarked) {
+      self.unsubscribeMarked()
+      self.unsubscribeMarked = null
     }
     removeBadges()
     removeTranslateButtons()
