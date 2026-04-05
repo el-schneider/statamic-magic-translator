@@ -8,6 +8,8 @@ This file provides guidance to coding agents when working with code in this repo
 
 Package: `el-schneider/statamic-magic-translator`
 
+> ⚠️ **Pre-v1, active development.** Backwards compatibility is generally **not** a reason to hold back changes — breaking changes are acceptable and expected. **Remove this notice from AGENTS.md as soon as v1 is released.**
+
 ## Sandbox Environments
 
 This addon has companion Statamic sandboxes for testing. They may live as **siblings** or this addon may be **nested inside** a sandbox's `addons/` directory.
