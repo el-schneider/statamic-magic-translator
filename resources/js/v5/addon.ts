@@ -587,13 +587,21 @@ const TranslatorFieldtype = {
     const self = this as unknown as {
       tryInjectBadges: () => void
       hideFieldLabelChrome: () => void
+      hideEntireField: () => void
       badgeInjected: boolean
       buttonInjected: boolean
       observer: MutationObserver | null
       injecting: boolean
+      hasTargets: boolean
       hasInjectedBadgesInDom: () => boolean
       hasInjectedTranslateButtonInDom: () => boolean
     }
+
+    if (!self.hasTargets) {
+      self.hideEntireField()
+      return
+    }
+
     self.hideFieldLabelChrome()
     self.tryInjectBadges()
 
@@ -635,6 +643,18 @@ const TranslatorFieldtype = {
         wrapper.querySelectorAll('[data-ui-field-header], [data-ui-field-text], .publish-field-label').forEach((el) => {
           ;(el as HTMLElement).style.display = 'none'
         })
+      }
+    },
+
+    hideEntireField() {
+      const self = this as unknown as { $el: Element }
+
+      const wrappers = [self.$el.closest('[data-ui-input-group]'), self.$el.closest('.publish-field')].filter(
+        (el): el is Element => el !== null,
+      )
+
+      for (const wrapper of wrappers) {
+        ;(wrapper as HTMLElement).style.display = 'none'
       }
     },
 
@@ -709,33 +729,35 @@ const TranslatorFieldtype = {
 
   template: /* html */ `
         <div class="content-translator-fieldtype">
-            <button
-                v-if="!buttonInjected"
-                type="button"
-                class="btn btn-sm w-full"
-                :disabled="!hasTargets"
-                @click="openDialog"
-            >
-                {{ t('translate_button') }}
-            </button>
+            <template v-if="hasTargets">
+                <button
+                    v-if="!buttonInjected"
+                    type="button"
+                    class="btn btn-sm w-full"
+                    :disabled="!hasTargets"
+                    @click="openDialog"
+                >
+                    {{ t('translate_button') }}
+                </button>
 
-            <!-- Fallback status list when badge injection has not succeeded yet -->
-            <div v-if="!badgeInjected && sites.length > 0" class="mt-3 space-y-1">
-                <div v-for="site in sites" :key="site.handle" class="text-xs flex items-center gap-1.5 py-0.5">
-                    <span
-                        class="little-dot shrink-0"
-                        :class="{
-                            'bg-green-600': site.exists && !site.is_stale,
-                            'bg-orange': site.is_stale,
-                            'bg-red-500': !site.exists
-                        }"
-                    ></span>
-                    <span class="flex-1 truncate">{{ site.name }}</span>
-                    <span v-if="site.is_stale" class="text-orange">⚠</span>
-                    <span v-else-if="site.last_translated_at" class="text-gray-400">✓</span>
-                    <span v-else class="text-gray-400">—</span>
+                <!-- Fallback status list when badge injection has not succeeded yet -->
+                <div v-if="!badgeInjected && sites.length > 0" class="mt-3 space-y-1">
+                    <div v-for="site in sites" :key="site.handle" class="text-xs flex items-center gap-1.5 py-0.5">
+                        <span
+                            class="little-dot shrink-0"
+                            :class="{
+                                'bg-green-600': site.exists && !site.is_stale,
+                                'bg-orange': site.is_stale,
+                                'bg-red-500': !site.exists
+                            }"
+                        ></span>
+                        <span class="flex-1 truncate">{{ site.name }}</span>
+                        <span v-if="site.is_stale" class="text-orange">⚠</span>
+                        <span v-else-if="site.last_translated_at" class="text-gray-400">✓</span>
+                        <span v-else class="text-gray-400">—</span>
+                    </div>
                 </div>
-            </div>
+            </template>
         </div>
     `,
 }
