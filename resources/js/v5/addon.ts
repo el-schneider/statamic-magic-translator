@@ -672,8 +672,6 @@ interface FieldtypeData {
   observer: MutationObserver | null
   injecting: boolean
   markedCurrentHandles: string[]
-  markCurrentPending: string[]
-  markCurrentListener: ((event: Event) => void) | null
   unsubscribeMarked: (() => void) | null
 }
 
@@ -698,8 +696,6 @@ const TranslatorFieldtype = {
       observer: null,
       injecting: false,
       markedCurrentHandles: [],
-      markCurrentPending: [],
-      markCurrentListener: null,
       unsubscribeMarked: null,
     }
   },
@@ -762,11 +758,6 @@ const TranslatorFieldtype = {
       hasTargets: boolean
       hasInjectedBadgesInDom: () => boolean
       hasInjectedTranslateButtonInDom: () => boolean
-      markCurrentPending: string[]
-      markedCurrentHandles: string[]
-      markCurrentListener: ((event: Event) => void) | null
-      entryId: string | null
-      sites: SiteMeta[]
     }
 
     if (!self.hasTargets) {
@@ -791,45 +782,6 @@ const TranslatorFieldtype = {
     })
     self.observer.observe(document.body, { childList: true, subtree: true })
 
-    self.markCurrentListener = async (event: Event) => {
-      const detail = (event as CustomEvent).detail
-      if (!detail?.siteHandle || !self.entryId) return
-
-      const siteHandle = String(detail.siteHandle)
-      if (self.markCurrentPending.includes(siteHandle)) return
-
-      const site = self.sites.find((s) => s.handle === siteHandle)
-      const siteName = site?.name ?? siteHandle
-
-      const message = __('magic-translator::messages.mark_current_confirm', { site: siteName })
-      if (!window.confirm(message)) return
-
-      self.markCurrentPending = [...self.markCurrentPending, siteHandle]
-
-      const entryId = self.entryId
-      if (entryId === null) {
-        self.markCurrentPending = self.markCurrentPending.filter((handle) => handle !== siteHandle)
-        return
-      }
-
-      try {
-        const response = await markCurrent(entryId, siteHandle)
-        if (response.success) {
-          markSiteCurrent(entryId, siteHandle)
-          return
-        }
-
-        window.alert(response.error?.message ?? __('magic-translator::messages.mark_current_failed'))
-      } catch (error) {
-        console.error('[magic-translator] mark-current failed:', error)
-        window.alert(__('magic-translator::messages.mark_current_failed'))
-      } finally {
-        self.markCurrentPending = self.markCurrentPending.filter((handle) => handle !== siteHandle)
-      }
-    }
-
-    window.addEventListener('magic-translator:request-mark-current', self.markCurrentListener)
-
     const entryIdForSub = (this as unknown as { entryId: string | null }).entryId
     if (entryIdForSub !== null) {
       const selfForSub = this as unknown as {
@@ -846,14 +798,9 @@ const TranslatorFieldtype = {
   beforeDestroy() {
     const self = this as unknown as {
       observer: MutationObserver | null
-      markCurrentListener: ((event: Event) => void) | null
       unsubscribeMarked: (() => void) | null
     }
     self.observer?.disconnect()
-    if (self.markCurrentListener) {
-      window.removeEventListener('magic-translator:request-mark-current', self.markCurrentListener)
-      self.markCurrentListener = null
-    }
     if (self.unsubscribeMarked) {
       self.unsubscribeMarked()
       self.unsubscribeMarked = null
