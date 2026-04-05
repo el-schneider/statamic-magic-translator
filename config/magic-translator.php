@@ -44,15 +44,21 @@ return [
 
     /*
     |--------------------------------------------------------------------------
-    | Log Completions
+    | Log Payloads
     |--------------------------------------------------------------------------
     |
-    | Whether to log translation completions (useful for debugging prompts
-    | and monitoring API usage).
+    | Whether to log request/response payloads — prompts, raw provider
+    | responses, and translated text. Metadata (token usage, models,
+    | unit counts, finish reasons) is always emitted at `debug` level
+    | when LOG_LEVEL=debug is set, independent of this flag.
+    |
+    | Opt in only when you need to inspect actual prompts or translations.
+    | Payloads may contain user content; keep this off in production
+    | unless you've reviewed your log retention/access controls.
     |
     */
 
-    'log_completions' => env('CONTENT_TRANSLATOR_LOG_COMPLETIONS', true),
+    'log_payloads' => (bool) env('CONTENT_TRANSLATOR_LOG_PAYLOADS', false),
 
     /*
     |--------------------------------------------------------------------------

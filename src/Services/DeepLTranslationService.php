@@ -17,6 +17,7 @@ use ElSchneider\MagicTranslator\Exceptions\ProviderAuthException;
 use ElSchneider\MagicTranslator\Exceptions\ProviderRateLimitedException;
 use ElSchneider\MagicTranslator\Exceptions\ProviderResponseInvalidException;
 use ElSchneider\MagicTranslator\Exceptions\ProviderUnavailableException;
+use ElSchneider\MagicTranslator\Support\TranslationLogger;
 use InvalidArgumentException;
 
 final class DeepLTranslationService implements TranslationService
@@ -91,6 +92,13 @@ final class DeepLTranslationService implements TranslationService
             TranslateTextOptions::FORMALITY => $this->resolveFormality($targetLocale),
         ];
 
+        TranslationLogger::debug('deepl_request', array_merge($context, [
+            'character_count' => mb_strlen($concatenated),
+        ]));
+        TranslationLogger::payload('deepl_request_payload', array_merge($context, [
+            'text' => $concatenated,
+        ]));
+
         try {
             $result = $this->translator->translateText(
                 $concatenated,
@@ -113,6 +121,14 @@ final class DeepLTranslationService implements TranslationService
         } catch (DeepLException $exception) {
             throw new ProviderUnavailableException('DeepL request failed.', $exception, $context);
         }
+
+        TranslationLogger::debug('deepl_response', array_merge($context, [
+            'detected_source_language' => $result->detectedSourceLang,
+            'response_length' => mb_strlen($result->text),
+        ]));
+        TranslationLogger::payload('deepl_response_payload', array_merge($context, [
+            'text' => $result->text,
+        ]));
 
         return $this->parseResponse($units, $result->text, $context);
     }
