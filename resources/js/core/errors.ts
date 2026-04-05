@@ -7,13 +7,11 @@ export interface NormalizedError {
 
 /** Known error codes and their i18n message keys. */
 const ERROR_MESSAGE_KEYS: Record<string, string> = {
-  provider_not_configured: 'error_provider_not_configured',
   provider_auth_failed: 'error_provider_auth_failed',
   provider_rate_limited: 'error_provider_rate_limited',
   provider_unavailable: 'error_provider_unavailable',
   provider_response_invalid: 'error_provider_response_invalid',
   translation_config_invalid: 'error_translation_config_invalid',
-  translation_dispatch_failed: 'error_translation_dispatch_failed',
   resource_not_found: 'error_resource_not_found',
   forbidden: 'error_forbidden',
   unauthorized: 'error_unauthorized',

@@ -150,6 +150,7 @@ it('dispatches a job per processable pair when --dispatch-jobs is set', function
         '--no-interaction' => true,
     ])
         ->expectsOutputToContain('Dispatched 2 job')
+        ->expectsOutputToContain(cp_route('magic-translator.status'))
         ->assertExitCode(0);
 
     Queue::assertPushed(TranslateEntryJob::class, 2);

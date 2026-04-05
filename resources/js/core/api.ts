@@ -9,13 +9,6 @@ import type { NormalizedError } from './errors'
 import { normalizeApiError } from './errors'
 import type { TranslationJob, TranslationRequest } from './types'
 
-declare const Statamic: {
-  $axios?: {
-    post: (url: string, data?: unknown) => Promise<{ data: unknown }>
-    get: (url: string, config?: { params?: unknown }) => Promise<{ data: unknown }>
-  }
-}
-
 /** Shape of a job entry in the trigger response. */
 interface ApiJob {
   id: string
@@ -24,19 +17,19 @@ interface ApiJob {
   error?: string | NormalizedError
 }
 
-/** Response from POST /cp/magic-translator/translate */
+/** Response from the CP translation trigger endpoint. */
 export interface TriggerResponse {
   success: boolean
   jobs: ApiJob[]
   error?: string | NormalizedError
 }
 
-/** Response from GET /cp/magic-translator/status */
+/** Response from the CP translation status endpoint. */
 export interface StatusResponse {
   jobs: ApiJob[]
 }
 
-/** Response from POST /cp/magic-translator/mark-current */
+/** Response from the CP mark-current endpoint. */
 export interface MarkCurrentResponse {
   success: boolean
   meta?: {
@@ -71,6 +64,10 @@ function jsonHeaders(): Record<string, string> {
   }
 }
 
+function cpApiUrl(path: string): string {
+  return cp_url(path)
+}
+
 // ── Public API ────────────────────────────────────────────────────────────────
 
 /**
@@ -92,12 +89,12 @@ export async function triggerTranslation(request: TranslationRequest): Promise<T
 
   // v5 — use Statamic.$axios (has baseURL + interceptors already set up)
   if (Statamic.$axios) {
-    const response = await Statamic.$axios.post('/cp/magic-translator/translate', payload)
+    const response = await Statamic.$axios.post(cpApiUrl('magic-translator/translate'), payload)
     return response.data as TriggerResponse
   }
 
   // v6 — fall back to native fetch with XSRF-TOKEN
-  const response = await fetch('/cp/magic-translator/translate', {
+  const response = await fetch(cpApiUrl('magic-translator/translate'), {
     method: 'POST',
     headers: jsonHeaders(),
     body: JSON.stringify(payload),
@@ -126,11 +123,11 @@ export async function triggerTranslation(request: TranslationRequest): Promise<T
  */
 export async function checkStatus(jobIds: string[]): Promise<StatusResponse> {
   const params = jobIds.map((id) => `jobs[]=${encodeURIComponent(id)}`).join('&')
-  const url = `/cp/magic-translator/status?${params}`
+  const url = `${cpApiUrl('magic-translator/status')}?${params}`
 
   // v5 — use Statamic.$axios
   if (Statamic.$axios) {
-    const response = await Statamic.$axios.get('/cp/magic-translator/status', {
+    const response = await Statamic.$axios.get(cpApiUrl('magic-translator/status'), {
       params: { jobs: jobIds },
     })
     return response.data as StatusResponse
@@ -163,12 +160,12 @@ export async function markCurrent(entryId: string, locale: string): Promise<Mark
 
   // v5 — use Statamic.$axios (has baseURL + interceptors already set up)
   if (Statamic.$axios) {
-    const response = await Statamic.$axios.post('/cp/magic-translator/mark-current', payload)
+    const response = await Statamic.$axios.post(cpApiUrl('magic-translator/mark-current'), payload)
     return response.data as MarkCurrentResponse
   }
 
   // v6 — fall back to native fetch with XSRF-TOKEN
-  const response = await fetch('/cp/magic-translator/mark-current', {
+  const response = await fetch(cpApiUrl('magic-translator/mark-current'), {
     method: 'POST',
     headers: jsonHeaders(),
     body: JSON.stringify(payload),

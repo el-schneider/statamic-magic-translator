@@ -1,0 +1,5 @@
+docs/plans/
+docs/research/
+package-lock.json
+research.md
+tests/__fixtures__/

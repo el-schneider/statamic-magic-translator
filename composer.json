@@ -1,53 +1,53 @@
 {
-    "name": "el-schneider/statamic-magic-translator",
-    "description": "Translate Statamic content",
-    "type": "statamic-addon",
-    "license": "MIT",
-    "authors": [
-        {
-            "name": "Jonas List",
-            "email": "mail@jonaslist.de",
-            "role": "Developer"
-        }
-    ],
-    "autoload": {
-        "psr-4": {
-            "ElSchneider\\MagicTranslator\\": "src"
-        }
-    },
-    "autoload-dev": {
-        "psr-4": {
-            "Tests\\": "tests"
-        }
-    },
-    "extra": {
-        "statamic": {
-            "name": "Magic Translator",
-            "description": "Translate Statamic content"
-        },
-        "laravel": {
-            "providers": [
-                "ElSchneider\\MagicTranslator\\ServiceProvider"
-            ]
-        }
-    },
-    "require": {
-        "statamic/cms": "^5.0 || ^6.0",
-        "prism-php/prism": "^0.100",
-        "deeplcom/deepl-php": "^1.0"
-    },
-    "require-dev": {
-        "laravel/pint": "^1.14",
-        "orchestra/testbench": "^10.0",
-        "pestphp/pest": "^4.0"
-    },
-    "minimum-stability": "dev",
-    "prefer-stable": true,
-    "config": {
-        "sort-packages": true,
-        "allow-plugins": {
-            "pixelfear/composer-dist-plugin": true,
-            "pestphp/pest-plugin": true
-        }
+  "name": "el-schneider/statamic-magic-translator",
+  "description": "Translate Statamic content",
+  "type": "statamic-addon",
+  "license": "MIT",
+  "authors": [
+    {
+      "name": "Jonas List",
+      "email": "mail@jonaslist.de",
+      "role": "Developer"
     }
+  ],
+  "autoload": {
+    "psr-4": {
+      "ElSchneider\\MagicTranslator\\": "src"
+    }
+  },
+  "autoload-dev": {
+    "psr-4": {
+      "Tests\\": "tests"
+    }
+  },
+  "extra": {
+    "statamic": {
+      "name": "Magic Translator",
+      "description": "Translate Statamic content"
+    },
+    "laravel": {
+      "providers": [
+        "ElSchneider\\MagicTranslator\\ServiceProvider"
+      ]
+    }
+  },
+  "require": {
+    "statamic/cms": "^5.0 || ^6.0",
+    "prism-php/prism": "^0.100",
+    "deeplcom/deepl-php": "^1.0"
+  },
+  "require-dev": {
+    "laravel/pint": "^1.14",
+    "orchestra/testbench": "^10.0",
+    "pestphp/pest": "^4.0"
+  },
+  "minimum-stability": "dev",
+  "prefer-stable": true,
+  "config": {
+    "sort-packages": true,
+    "allow-plugins": {
+      "pixelfear/composer-dist-plugin": true,
+      "pestphp/pest-plugin": true
+    }
+  }
 }

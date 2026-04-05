@@ -248,7 +248,10 @@ final class TranslateCommand extends Command
         }
 
         $this->info(sprintf('Dispatched %d job%s to the queue.', $count, $count === 1 ? '' : 's'));
-        $this->comment('Track status: GET /cp/magic-translator/status or run `php artisan queue:work`.');
+        $this->comment(sprintf(
+            'Track status: GET %s or run `php artisan queue:work`.',
+            cp_route('magic-translator.status'),
+        ));
 
         return 0;
     }

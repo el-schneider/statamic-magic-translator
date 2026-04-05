@@ -24,10 +24,10 @@ use Throwable;
 /**
  * HTTP controller for the Magic Translator CP endpoints.
  *
- * Provides two endpoints:
- *  - POST /cp/magic-translator/translate  — dispatch translation jobs
- *  - POST /cp/magic-translator/mark-current — mark locale metadata as current
- *  - GET  /cp/magic-translator/status     — poll job statuses from cache
+ * Provides three CP endpoints:
+ *  - translate     — dispatch translation jobs
+ *  - mark-current  — mark locale metadata as current
+ *  - status        — poll job statuses from cache
  */
 final class TranslationController extends Controller
 {

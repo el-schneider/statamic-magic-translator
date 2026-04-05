@@ -10,7 +10,6 @@
  * Component registration uses `Statamic.$components.register()` which
  * delegates to `Vue.component()` under the hood.
  */
-import type { Axios } from 'axios'
 import { markCurrent } from '../core/api'
 import {
   injectBadges,
@@ -31,37 +30,6 @@ import {
   type TranslationSession,
 } from '../core/store'
 import type { FieldtypePreload, LocaleJobState, SiteDescriptor, SiteMeta } from '../core/types'
-
-declare global {
-  const Statamic: {
-    $axios: Axios
-    $toast: {
-      success: (msg: string) => void
-      error: (msg: string) => void
-      info: (msg: string) => void
-    }
-    $components: {
-      register: (name: string, component: unknown) => void
-      append: (
-        name: string,
-        options: { props: Record<string, unknown> },
-      ) => {
-        on: (event: string, handler: (...args: unknown[]) => void) => void
-        destroy: () => void
-      }
-    }
-    $callbacks: {
-      add: (name: string, callback: (...args: unknown[]) => void) => void
-    }
-    booting: (callback: () => void) => void
-  }
-
-  /** Vue 2 constructor provided globally by Statamic v5. */
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const Vue: any
-
-  function __(key: string, replacements?: Record<string, string | number>): string
-}
 
 function t(key: string, replacements: Record<string, string | number> = {}): string {
   return __('magic-translator::messages.' + key, replacements)
@@ -949,20 +917,20 @@ const TranslatorFieldtype = {
 // Bootstrap
 // ─────────────────────────────────────────────────────────────────────────────
 
-Statamic.booting(() => {
+Statamic.booting?.(() => {
   // Register the fieldtype (auto-injected into blueprints by ServiceProvider)
-  Statamic.$components.register('magic_translator-fieldtype', TranslatorFieldtype)
+  Statamic.$components?.register('magic_translator-fieldtype', TranslatorFieldtype)
 
   // Register the dialog component (opened via $components.append)
-  Statamic.$components.register('magic-translator-dialog', TranslationDialog)
+  Statamic.$components?.register('magic-translator-dialog', TranslationDialog)
 
   // Wire up the bulk-action callback
   // PHP TranslateEntryAction::run() calls: Statamic.$callbacks.call('openTranslationDialog', entryIds, sites)
-  Statamic.$callbacks.add('openTranslationDialog', (entryIds: unknown, sites: unknown) => {
+  Statamic.$callbacks?.add('openTranslationDialog', (entryIds: unknown, sites: unknown) => {
     const ids = Array.isArray(entryIds) ? (entryIds as string[]) : []
     const siteList = Array.isArray(sites) ? (sites as SiteDescriptor[]) : []
 
-    if (ids.length === 0) return
+    if (ids.length === 0 || !Statamic.$components) return
 
     const dialog = Statamic.$components.append('magic-translator-dialog', {
       props: {
