@@ -1,35 +1,35 @@
 {
-    "private": true,
-    "type": "module",
-    "scripts": {
-        "build": "vite build",
-        "dev": "vite",
-        "check": "npm run format:check && npm run pint:check",
-        "fix": "npm run format:fix && npm run pint:fix",
-        "format:check": "prettier --check .",
-        "format:fix": "prettier --write .",
-        "pint:check": "./vendor/bin/pint --test",
-        "pint:fix": "./vendor/bin/pint",
-        "prepare": "husky"
-    },
-    "dependencies": {
-        "@statamic/cms": "file:./vendor/statamic/cms/resources/dist-package"
-    },
-    "devDependencies": {
-        "@vitejs/plugin-vue": "^5.2.1",
-        "husky": "^9.0.0",
-        "laravel-vite-plugin": "^1.2.0",
-        "prettier": "^3.5.0",
-        "prettier-plugin-organize-imports": "^4.1.0",
-        "typescript": "^5.0.0",
-        "vite": "^6.1.0"
-    },
-    "peerDependencies": {
-        "vue": "^2.7.16 || ^3.5.0"
-    },
-    "peerDependenciesMeta": {
-        "vue": {
-            "optional": true
-        }
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "build": "vite build",
+    "dev": "vite",
+    "check": "npm run format:check && npm run pint:check",
+    "fix": "npm run format:fix && npm run pint:fix",
+    "format:check": "prettier --check .",
+    "format:fix": "prettier --write .",
+    "pint:check": "./vendor/bin/pint --test",
+    "pint:fix": "./vendor/bin/pint",
+    "prepare": "husky"
+  },
+  "dependencies": {
+    "@statamic/cms": "file:./vendor/statamic/cms/resources/dist-package"
+  },
+  "devDependencies": {
+    "@vitejs/plugin-vue": "^5.2.1",
+    "husky": "^9.0.0",
+    "laravel-vite-plugin": "^1.2.0",
+    "prettier": "^3.5.0",
+    "prettier-plugin-organize-imports": "^4.1.0",
+    "typescript": "^5.0.0",
+    "vite": "^6.1.0"
+  },
+  "peerDependencies": {
+    "vue": "^2.7.16 || ^3.5.0"
+  },
+  "peerDependenciesMeta": {
+    "vue": {
+      "optional": true
     }
+  }
 }

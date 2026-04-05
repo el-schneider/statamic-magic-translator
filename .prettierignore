@@ -1,0 +1,10 @@
+composer.lock
+composer.json
+package-lock.json
+package.json
+/resources/dist
+CHANGELOG.md
+*.md
+docs/plans/
+docs/research/
+tests/__fixtures__/

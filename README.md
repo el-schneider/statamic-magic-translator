@@ -8,7 +8,7 @@
 
 - **LLM & DeepL support**: Translate via any [Prism](https://prismphp.com)-supported provider (OpenAI, Anthropic, Gemini, Mistral, Ollama, …) or DeepL's dedicated translation API
 - **Deep content awareness**: Recursively walks Bard fields, Replicators, Grids, and Tables — translates text while preserving structure, marks, and custom extensions
-- **Async processing**: Every translation runs as a queued job with retry and backoff
+- **Async processing**: Control-panel translations run as queued jobs with retry and backoff; the CLI can run either synchronously or via dispatched jobs
 - **Sidebar UI**: Auto-injected fieldtype with a translation dialog — pick target locales, track progress per locale, retry failures inline
 - **Bulk actions**: Translate multiple entries at once from collection listings
 - **Artisan command**: `statamic:magic-translator:translate` for scripted/automated bulk translation with dry-run, filtering, and sync/async modes
@@ -47,10 +47,10 @@ Each locale shows its own progress indicator. Failed translations display the er
 
 ### Translation dialog options
 
-| Option | Description |
-|:---|:---|
-| **Source locale** | Defaults to origin entry. Can be changed to translate from any existing localization. |
-| **Generate slugs** | Auto-generate slugs from the translated title. |
+| Option                 | Description                                                                                                 |
+| :--------------------- | :---------------------------------------------------------------------------------------------------------- |
+| **Source locale**      | Defaults to origin entry. Can be changed to translate from any existing localization.                       |
+| **Generate slugs**     | Auto-generate slugs from the translated title.                                                              |
 | **Overwrite existing** | When disabled (default), locales with existing translations are unchecked to prevent accidental overwrites. |
 
 ### Staleness badges
@@ -99,27 +99,27 @@ php please statamic:magic-translator:translate --entry=abc-123
 
 ### Options
 
-| Option | Description |
-|:---|:---|
-| `--to=*` | Target site handle (repeatable). Default: all sites each entry supports minus source site. |
-| `--from=` | Source site handle. Default: entry origin site. |
-| `--collection=*` | Filter by collection handle (repeatable). |
-| `--entry=*` | Filter by entry ID (repeatable). |
-| `--blueprint=*` | Filter by blueprint handle (repeatable). |
-| `--include-stale` | Also re-translate entries where source was updated after target `last_translated_at`. |
-| `--overwrite` | Re-translate everything regardless of existing state. |
-| `--generate-slug` | Slugify translated title. |
-| `--dispatch-jobs` | Dispatch queued jobs instead of running synchronously. |
-| `--dry-run` | Print the plan without executing. |
-| `-n`, `--no-interaction` | Skip confirmation prompt (required in CI/non-interactive environments). |
+| Option                   | Description                                                                                |
+| :----------------------- | :----------------------------------------------------------------------------------------- |
+| `--to=*`                 | Target site handle (repeatable). Default: all sites each entry supports minus source site. |
+| `--from=`                | Source site handle. Default: entry origin site.                                            |
+| `--collection=*`         | Filter by collection handle (repeatable).                                                  |
+| `--entry=*`              | Filter by entry ID (repeatable).                                                           |
+| `--blueprint=*`          | Filter by blueprint handle (repeatable).                                                   |
+| `--include-stale`        | Also re-translate entries where source was updated after target `last_translated_at`.      |
+| `--overwrite`            | Re-translate everything regardless of existing state.                                      |
+| `--generate-slug`        | Slugify translated title.                                                                  |
+| `--dispatch-jobs`        | Dispatch queued jobs instead of running synchronously.                                     |
+| `--dry-run`              | Print the plan without executing.                                                          |
+| `-n`, `--no-interaction` | Skip confirmation prompt (required in CI/non-interactive environments).                    |
 
 ### Exit codes
 
-| Code | Meaning |
-|:---|:---|
-| `0` | Success, dry run, empty plan, or user-declined confirmation. |
-| `1` | Partial failure (some translations failed). |
-| `2` | Command-level error (invalid options/handles, unsafe non-interactive run without `-n`). |
+| Code | Meaning                                                                                 |
+| :--- | :-------------------------------------------------------------------------------------- |
+| `0`  | Success, dry run, empty plan, or user-declined confirmation.                            |
+| `1`  | Partial failure (some translations failed).                                             |
+| `2`  | Command-level error (invalid options/handles, unsafe non-interactive run without `-n`). |
 
 ## Configuration
 
@@ -129,7 +129,7 @@ By default, the addon auto-injects its fieldtype into entry blueprints. Use
 `exclude_blueprints` to opt out specific blueprints or whole collections:
 
 ```php
-// config/magic-translator.php
+// config/statamic/magic-translator.php
 
 'exclude_blueprints' => [
     'pages.redirect', // exact blueprint
@@ -146,7 +146,7 @@ Set your provider and model:
 ```env
 CONTENT_TRANSLATOR_SERVICE=prism
 CONTENT_TRANSLATOR_PROVIDER=openai
-CONTENT_TRANSLATOR_MODEL=gpt-4.1-mini
+CONTENT_TRANSLATOR_MODEL=gpt-5-mini
 OPENAI_API_KEY=sk-...
 ```
 
@@ -173,7 +173,7 @@ DeepL-specific options:
 
 ### 3. Set up a queue worker
 
-Translation jobs run asynchronously. You need a queue driver other than `sync` and a running worker:
+Control-panel translations and CLI runs using `--dispatch-jobs` execute asynchronously. You need a queue driver other than `sync` and a running worker:
 
 ```bash
 php artisan queue:work
@@ -190,17 +190,17 @@ CONTENT_TRANSLATOR_QUEUE_NAME=translations
 
 The addon handles all idiomatic Statamic content patterns:
 
-| Fieldtype | Handling |
-|:---|:---|
-| **Text, Textarea** | Translated as plain text |
-| **Markdown** | Translated as markdown (formatting preserved) |
-| **Bard** | Body text serialized with inline HTML tags, sets extracted recursively. Custom marks and extensions (e.g., Bard Texstyle) are preserved — the ProseMirror structure is never round-tripped through HTML. |
-| **Bard (raw markdown)** | Starter kit entries storing markdown instead of ProseMirror JSON are detected and translated as markdown. |
-| **Replicator** | Each set's fields are recursively extracted and translated. |
-| **Grid** | Each row's columns are recursively extracted and translated. |
-| **Table** | Each cell is translated as plain text. |
-| **Link** | `text` property is translated, `url` is preserved. |
-| **Assets, Toggle, Integer, Select, …** | Skipped (non-text fields are never translated). |
+| Fieldtype                              | Handling                                                                                                                                                                                                 |
+| :------------------------------------- | :------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **Text, Textarea**                     | Translated as plain text                                                                                                                                                                                 |
+| **Markdown**                           | Translated as markdown (formatting preserved)                                                                                                                                                            |
+| **Bard**                               | Body text serialized with inline HTML tags, sets extracted recursively. Custom marks and extensions (e.g., Bard Texstyle) are preserved — the ProseMirror structure is never round-tripped through HTML. |
+| **Bard (raw markdown)**                | Starter kit entries storing markdown instead of ProseMirror JSON are detected and translated as markdown.                                                                                                |
+| **Replicator**                         | Each set's fields are recursively extracted and translated.                                                                                                                                              |
+| **Grid**                               | Each row's columns are recursively extracted and translated.                                                                                                                                             |
+| **Table**                              | Each cell is translated as plain text.                                                                                                                                                                   |
+| **Link**                               | `text` property is translated, `url` is preserved.                                                                                                                                                       |
+| **Assets, Toggle, Integer, Select, …** | Skipped (non-text fields are never translated).                                                                                                                                                          |
 
 Fields marked `localizable: false` in the blueprint are always skipped. Individual fields can be excluded with `translatable: false` in the field config.
 
@@ -211,7 +211,7 @@ Deeply nested structures (Bard → set → Replicator → set → Bard → …) 
 Translation prompts are Blade views. Publish them to customize:
 
 ```bash
-php artisan vendor:publish --tag=magic-translator-views
+php artisan vendor:publish --tag=statamic-magic-translator-views
 ```
 
 This copies prompt templates to `resources/views/vendor/magic-translator/prompts/`.
@@ -221,7 +221,7 @@ This copies prompt templates to `resources/views/vendor/magic-translator/prompts
 Different languages may need different instructions (e.g., formal "Sie" in German, polite form in Japanese):
 
 ```php
-// config/magic-translator.php
+// config/statamic/magic-translator.php
 
 'prism' => [
     'prompts' => [
@@ -239,13 +239,13 @@ Create the override views (e.g., `resources/views/vendor/magic-translator/prompt
 
 ### Available prompt variables
 
-| Variable | Example |
-|:---|:---|
-| `$sourceLocale` | `en` |
-| `$targetLocale` | `de` |
-| `$sourceLocaleName` | `English` |
-| `$targetLocaleName` | `German` |
-| `$hasHtmlUnits` | `true` (Bard content present) |
+| Variable            | Example                          |
+| :------------------ | :------------------------------- |
+| `$sourceLocale`     | `en`                             |
+| `$targetLocale`     | `de`                             |
+| `$sourceLocaleName` | `English`                        |
+| `$targetLocaleName` | `German`                         |
+| `$hasHtmlUnits`     | `true` (Bard content present)    |
 | `$hasMarkdownUnits` | `true` (Markdown fields present) |
 
 ## Events

@@ -58,7 +58,7 @@ export interface TranslationJob {
 }
 
 /**
- * Payload sent to POST /cp/magic-translator/translate.
+ * Payload sent to the CP translation trigger endpoint.
  */
 export interface TranslationRequest {
   entryId: string | string[]
