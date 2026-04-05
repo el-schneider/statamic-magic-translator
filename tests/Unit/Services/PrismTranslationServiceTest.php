@@ -27,6 +27,10 @@ beforeEach(function () {
     config([
         'statamic.content-translator.prism.provider' => 'anthropic',
         'statamic.content-translator.prism.model' => 'claude-sonnet-4-20250514',
+        'statamic.content-translator.prism.request_timeout' => 120,
+        'statamic.content-translator.prism.connect_timeout' => 15,
+        'statamic.content-translator.prism.retry_attempts' => 1,
+        'statamic.content-translator.prism.retry_sleep_ms' => 1000,
         'statamic.content-translator.max_units_per_request' => null,
     ]);
 });
@@ -417,3 +421,47 @@ it('throws for invalid max_units_per_request config', function () {
         new TranslationUnit('title', 'Hello', TranslationFormat::Plain),
     ], 'en', 'fr');
 })->throws(InvalidArgumentException::class);
+
+it('applies configured prism transport options and retries to requests', function () {
+    config([
+        'statamic.content-translator.prism.request_timeout' => 180,
+        'statamic.content-translator.prism.connect_timeout' => 25,
+        'statamic.content-translator.prism.retry_attempts' => 2,
+        'statamic.content-translator.prism.retry_sleep_ms' => 1500,
+    ]);
+
+    $fake = Prism::fake([
+        makeStructuredResponse([
+            ['id' => 'title', 'text' => 'Bonjour'],
+        ]),
+    ]);
+
+    $units = [new TranslationUnit('title', 'Hello', TranslationFormat::Plain)];
+
+    $service = app(PrismTranslationService::class);
+    $service->translate($units, 'en', 'fr');
+
+    $fake->assertRequest(function (array $requests) {
+        $request = $requests[0];
+
+        expect($request->clientOptions())->toBe([
+            'timeout' => 180,
+            'connect_timeout' => 25,
+        ]);
+
+        $retry = $request->clientRetry();
+        expect($retry[0])->toBe(2);
+        expect($retry[1])->toBe(1500);
+        expect($retry[2])->toBeCallable();
+    });
+});
+
+it('throws for invalid prism transport config', function () {
+    config(['statamic.content-translator.prism.request_timeout' => 0]);
+
+    $service = app(PrismTranslationService::class);
+
+    $service->translate([
+        new TranslationUnit('title', 'Hello', TranslationFormat::Plain),
+    ], 'en', 'fr');
+})->throws(InvalidArgumentException::class, 'statamic.content-translator.prism.request_timeout must be a positive integer.');

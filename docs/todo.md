@@ -1,13 +1,23 @@
-# TODO — harden locale switcher integration
+# TODO — harden Prism timeout/retry behavior for full-page translations
 
 ## Goal
 
-Make Sites panel integration deterministic across CP locales and remove brittle dependence on the literal "Sites" heading.
+Prevent translation failures caused by overly aggressive HTTP timeout defaults (e.g. cURL error 28 at 30s) when translating large pages.
 
-## Plan
+## Execution Plan
 
-1. Inspect Statamic v6 source to verify where the localization switcher is rendered and which stable structural markers exist.
-2. Replace heading-text based panel lookup with structural candidate scoring using known site names/handles.
-3. Keep badge row matching translation-safe (site name, handle, and translated name token support).
-4. Run frontend formatting/build checks.
-5. Report tradeoffs and next step for translate-button injection into the same panel.
+1. Add addon-level Prism transport config in `config/content-translator.php`:
+   - request/connect timeout envs
+   - optional retry attempts + backoff
+   - env-backed `max_units_per_request` default wiring
+2. Update `PrismTranslationService` to apply request transport options via Prism client config (`withClientOptions` / `withClientRetry`) for structured translation requests.
+3. Add/adjust unit tests for Prism service config behavior.
+4. Run focused + full verification:
+   - `./vendor/bin/pest tests/Unit/Services/PrismTranslationServiceTest.php`
+   - `./vendor/bin/pest`
+   - `./vendor/bin/pint --test`
+
+## Replan Triggers
+
+- Prism transport option keys are incompatible across providers.
+- Retry callback behavior differs from Laravel HTTP client expectations.

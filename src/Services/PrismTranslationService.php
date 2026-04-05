@@ -10,6 +10,8 @@ use ElSchneider\ContentTranslator\Exceptions\ProviderAuthException;
 use ElSchneider\ContentTranslator\Exceptions\ProviderRateLimitedException;
 use ElSchneider\ContentTranslator\Exceptions\ProviderResponseInvalidException;
 use ElSchneider\ContentTranslator\Exceptions\ProviderUnavailableException;
+use Illuminate\Http\Client\ConnectionException;
+use Illuminate\Http\Client\RequestException;
 use InvalidArgumentException;
 use Prism\Prism\Contracts\Schema as PrismSchema;
 use Prism\Prism\Exceptions\PrismException;
@@ -95,13 +97,16 @@ final class PrismTranslationService implements TranslationService
 
         $userPrompt = $this->buildUserPrompt($userPromptIntro, $payload, $provider);
 
+        $request = Prism::structured()
+            ->using($provider, $model)
+            ->withSystemPrompt($systemPrompt)
+            ->withPrompt($userPrompt)
+            ->withSchema($this->buildSchema($provider));
+
+        $this->configureTransport($request);
+
         try {
-            $response = Prism::structured()
-                ->using($provider, $model)
-                ->withSystemPrompt($systemPrompt)
-                ->withPrompt($userPrompt)
-                ->withSchema($this->buildSchema($provider))
-                ->asStructured();
+            $response = $request->asStructured();
         } catch (PrismException $exception) {
             throw $this->mapPrismException($exception, $context);
         }
@@ -320,6 +325,105 @@ final class PrismTranslationService implements TranslationService
 
         if (! is_int($configured) || $configured <= 0) {
             throw new InvalidArgumentException('statamic.content-translator.max_units_per_request must be a positive integer or null.');
+        }
+
+        return $configured;
+    }
+
+    private function configureTransport(\Prism\Prism\Structured\PendingRequest $request): void
+    {
+        $requestTimeout = $this->resolvePositiveInt(
+            config('statamic.content-translator.prism.request_timeout'),
+            120,
+            'statamic.content-translator.prism.request_timeout'
+        );
+
+        $connectTimeout = $this->resolvePositiveInt(
+            config('statamic.content-translator.prism.connect_timeout'),
+            15,
+            'statamic.content-translator.prism.connect_timeout'
+        );
+
+        $request->withClientOptions([
+            'timeout' => $requestTimeout,
+            'connect_timeout' => $connectTimeout,
+        ]);
+
+        $retryAttempts = $this->resolveNonNegativeInt(
+            config('statamic.content-translator.prism.retry_attempts'),
+            1,
+            'statamic.content-translator.prism.retry_attempts'
+        );
+
+        if ($retryAttempts === 0) {
+            return;
+        }
+
+        $retrySleepMs = $this->resolveNonNegativeInt(
+            config('statamic.content-translator.prism.retry_sleep_ms'),
+            1000,
+            'statamic.content-translator.prism.retry_sleep_ms'
+        );
+
+        $request->withClientRetry(
+            $retryAttempts,
+            $retrySleepMs,
+            fn (Throwable $exception): bool => $this->isRetryableTransportFailure($exception),
+        );
+    }
+
+    private function isRetryableTransportFailure(Throwable $exception): bool
+    {
+        if ($exception instanceof ConnectionException) {
+            return true;
+        }
+
+        if ($exception instanceof RequestException) {
+            if (str_contains($exception->getMessage(), 'cURL error 28')) {
+                return true;
+            }
+
+            $status = $exception->response?->status();
+
+            if ($status === 429) {
+                return true;
+            }
+
+            return $status !== null && $status >= 500;
+        }
+
+        return str_contains($exception->getMessage(), 'cURL error 28');
+    }
+
+    private function resolvePositiveInt(mixed $configured, int $fallback, string $configKey): int
+    {
+        if ($configured === null || $configured === '') {
+            return $fallback;
+        }
+
+        if (is_string($configured) && ctype_digit($configured)) {
+            $configured = (int) $configured;
+        }
+
+        if (! is_int($configured) || $configured <= 0) {
+            throw new InvalidArgumentException("{$configKey} must be a positive integer.");
+        }
+
+        return $configured;
+    }
+
+    private function resolveNonNegativeInt(mixed $configured, int $fallback, string $configKey): int
+    {
+        if ($configured === null || $configured === '') {
+            return $fallback;
+        }
+
+        if (is_string($configured) && ctype_digit($configured)) {
+            $configured = (int) $configured;
+        }
+
+        if (! is_int($configured) || $configured < 0) {
+            throw new InvalidArgumentException("{$configKey} must be an integer greater than or equal to 0.");
         }
 
         return $configured;
