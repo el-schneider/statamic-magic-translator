@@ -10,6 +10,7 @@ use ElSchneider\MagicTranslator\Exceptions\ProviderAuthException;
 use ElSchneider\MagicTranslator\Exceptions\ProviderRateLimitedException;
 use ElSchneider\MagicTranslator\Exceptions\ProviderResponseInvalidException;
 use ElSchneider\MagicTranslator\Exceptions\ProviderUnavailableException;
+use ElSchneider\MagicTranslator\Support\TranslationLogger;
 use Illuminate\Http\Client\ConnectionException;
 use Illuminate\Http\Client\RequestException;
 use InvalidArgumentException;
@@ -105,11 +106,28 @@ final class PrismTranslationService implements TranslationService
 
         $this->configureTransport($request);
 
+        TranslationLogger::debug('prism_request', $context);
+        TranslationLogger::payload('prism_request_payload', array_merge($context, [
+            'system_prompt' => $systemPrompt,
+            'user_prompt' => $userPrompt,
+        ]));
+
         try {
             $response = $request->asStructured();
         } catch (PrismException $exception) {
             throw $this->mapPrismException($exception, $context);
         }
+
+        TranslationLogger::debug('prism_response', array_merge($context, [
+            'finish_reason' => $response->finishReason->name,
+            'prompt_tokens' => $response->usage->promptTokens,
+            'completion_tokens' => $response->usage->completionTokens,
+            'response_id' => $response->meta->id,
+            'response_model' => $response->meta->model,
+        ]));
+        TranslationLogger::payload('prism_response_payload', array_merge($context, [
+            'structured' => $response->structured,
+        ]));
 
         return $this->mapResponse($units, $response->structured, $context);
     }

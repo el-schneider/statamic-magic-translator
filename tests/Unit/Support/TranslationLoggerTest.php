@@ -44,6 +44,42 @@ it('logs non-retryable exceptions at error level', function () {
     );
 });
 
+it('logs debug events at debug level without gating', function () {
+    Log::shouldReceive('debug')
+        ->once()
+        ->withArgs(function (string $message, array $context): bool {
+            expect($message)->toBe('[magic-translator] prism_request');
+            expect($context['provider'])->toBe('openai');
+
+            return true;
+        });
+
+    TranslationLogger::debug('prism_request', ['provider' => 'openai']);
+});
+
+it('skips payload logs when log_payloads is disabled', function () {
+    config()->set('statamic.magic-translator.log_payloads', false);
+
+    Log::shouldReceive('debug')->never();
+
+    TranslationLogger::payload('prism_request_payload', ['user_prompt' => 'secret']);
+});
+
+it('emits payload logs at debug level when log_payloads is enabled', function () {
+    config()->set('statamic.magic-translator.log_payloads', true);
+
+    Log::shouldReceive('debug')
+        ->once()
+        ->withArgs(function (string $message, array $context): bool {
+            expect($message)->toBe('[magic-translator] prism_request_payload');
+            expect($context['user_prompt'])->toBe('secret');
+
+            return true;
+        });
+
+    TranslationLogger::payload('prism_request_payload', ['user_prompt' => 'secret']);
+});
+
 it('logs unexpected exceptions at error level with unexpected_error code', function () {
     Log::shouldReceive('error')
         ->once()
