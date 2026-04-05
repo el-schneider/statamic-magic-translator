@@ -5,6 +5,8 @@ declare(strict_types=1);
 use ElSchneider\MagicTranslator\Contracts\TranslationService;
 use ElSchneider\MagicTranslator\Exceptions\ProviderRateLimitedException;
 use ElSchneider\MagicTranslator\Jobs\TranslateEntryJob;
+use ElSchneider\MagicTranslator\Support\ContentFingerprint;
+use ElSchneider\MagicTranslator\Support\FieldDefinitionBuilder;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\Queue;
 use Tests\StatamicTestHelpers;
@@ -32,6 +34,25 @@ function triggerPayload(string $entryId, array $targetSites = ['fr']): array
         'entry_id' => $entryId,
         'target_sites' => $targetSites,
     ];
+}
+
+/**
+ * Minimal mark-current payload for a valid request.
+ */
+function markCurrentPayload(string $entryId, string $locale = 'fr'): array
+{
+    return [
+        'entry_id' => $entryId,
+        'locale' => $locale,
+    ];
+}
+
+function sourceContentHashFor($entry): string
+{
+    $root = $entry->isRoot() ? $entry : $entry->root();
+    $fieldDefs = FieldDefinitionBuilder::fromBlueprint($root->blueprint());
+
+    return ContentFingerprint::compute($root->data()->all(), $fieldDefs);
 }
 
 // ── Authentication ─────────────────────────────────────────────────────────────
@@ -452,6 +473,203 @@ it('passes source_site and options through to the dispatched job', function () {
     // Job is pushed — specific constructor args are verified via integration
     // in TranslateEntryJobTest; here we just confirm it was dispatched.
     Queue::assertPushed(TranslateEntryJob::class);
+});
+
+// ── Mark current endpoint ─────────────────────────────────────────────────────
+
+it('marks an existing localization as current and persists updated metadata', function () {
+    $this->loginUser();
+
+    $this->createTestCollection('articles', ['en', 'fr']);
+    $this->createTestBlueprint('articles', 'default', [
+        'title' => ['type' => 'text', 'localizable' => true],
+    ]);
+
+    $entry = $this->createTestEntry('articles', ['title' => 'Hello source']);
+
+    $localization = $entry->makeLocalization('fr');
+
+    Statamic\Facades\Blink::put("magic-translator:translating:{$localization->id()}", true);
+
+    try {
+        $localization->data([
+            'title' => 'Bonjour cible',
+            'magic_translator' => ['custom' => 'keep-me'],
+        ]);
+        $localization->save();
+    } finally {
+        Statamic\Facades\Blink::forget("magic-translator:translating:{$localization->id()}");
+    }
+
+    $expectedSourceHash = sourceContentHashFor($entry);
+
+    $response = $this->postJson(cpUrl('magic-translator/mark-current'), markCurrentPayload($entry->id(), 'fr'));
+
+    $response->assertStatus(200)
+        ->assertJsonPath('success', true)
+        ->assertJsonPath('meta.handle', 'fr')
+        ->assertJsonPath('meta.exists', true)
+        ->assertJsonPath('meta.is_stale', false)
+        ->assertJsonPath('meta.source_content_hash', $expectedSourceHash);
+
+    $lastTranslatedAt = $response->json('meta.last_translated_at');
+
+    expect($lastTranslatedAt)->toBeString()->not->toBeEmpty();
+
+    $fresh = Statamic\Facades\Entry::find($entry->id())->in('fr');
+    $meta = $fresh->get('magic_translator');
+
+    expect($meta)->toBeArray();
+    expect($meta['custom'])->toBe('keep-me');
+    expect($meta['source_content_hash'])->toBe($expectedSourceHash);
+    expect($meta['last_translated_at'])->toBe($lastTranslatedAt);
+});
+
+it('returns 404 when mark-current entry does not exist', function () {
+    $this->loginUser();
+
+    $response = $this->postJson(cpUrl('magic-translator/mark-current'), markCurrentPayload('missing-entry', 'fr'));
+
+    $response->assertStatus(404)
+        ->assertJsonPath('success', false)
+        ->assertJsonPath('error.code', 'resource_not_found')
+        ->assertJsonPath('error.message', 'Entry [missing-entry] not found.')
+        ->assertJsonPath('error.retryable', false);
+});
+
+it('returns 404 when mark-current localization does not exist for locale', function () {
+    $this->loginUser();
+
+    $this->createTestCollection('articles', ['en', 'fr']);
+    $this->createTestBlueprint('articles', 'default');
+    $entry = $this->createTestEntry('articles', site: 'en');
+
+    $response = $this->postJson(cpUrl('magic-translator/mark-current'), markCurrentPayload($entry->id(), 'fr'));
+
+    $response->assertStatus(404)
+        ->assertJsonPath('success', false)
+        ->assertJsonPath('error.code', 'resource_not_found')
+        ->assertJsonPath('error.message', "Entry [{$entry->id()}] has no localization in [fr].")
+        ->assertJsonPath('error.retryable', false);
+});
+
+it('requires authentication to mark a localization as current', function () {
+    $response = $this->postJson(cpUrl('magic-translator/mark-current'), [
+        'entry_id' => 'some-id',
+        'locale' => 'fr',
+    ]);
+
+    $response->assertStatus(401);
+});
+
+it('forbids mark-current when user cannot edit the entry', function () {
+    $this->createTestCollection('articles', ['en', 'fr']);
+    $this->createTestBlueprint('articles', 'default', [
+        'title' => ['type' => 'text', 'localizable' => true],
+    ]);
+
+    $entry = $this->createTestEntry('articles', site: 'en');
+
+    $user = $this->createRestrictedUser([
+        'access cp',
+        'access en site',
+        'access fr site',
+        // intentionally no "edit articles entries"
+    ], 'mark-current-no-edit');
+
+    $this->loginUser($user);
+
+    $response = $this->postJson(cpUrl('magic-translator/mark-current'), markCurrentPayload($entry->id(), 'fr'));
+
+    $response->assertStatus(403)
+        ->assertJsonPath('success', false)
+        ->assertJsonPath('error.code', 'forbidden')
+        ->assertJsonPath('error.message', 'Forbidden.')
+        ->assertJsonPath('error.retryable', false);
+});
+
+it('forbids mark-current for target locales outside accessible sites', function () {
+    Statamic\Facades\Site::setSites([
+        'en' => ['name' => 'English', 'url' => 'http://localhost/', 'locale' => 'en'],
+        'fr' => ['name' => 'French', 'url' => 'http://localhost/fr/', 'locale' => 'fr'],
+    ]);
+
+    $this->createTestCollection('articles', ['en', 'fr']);
+    $this->createTestBlueprint('articles', 'default');
+    $entry = $this->createTestEntry('articles', site: 'en');
+
+    $localization = $entry->makeLocalization('fr');
+    $localization->set('title', 'Bonjour');
+    $localization->save();
+
+    $user = $this->createRestrictedUser([
+        'access cp',
+        'access en site',
+        'edit articles entries',
+    ], 'mark-current-en-only');
+
+    $this->loginUser($user);
+
+    $response = $this->postJson(cpUrl('magic-translator/mark-current'), markCurrentPayload($entry->id(), 'fr'));
+
+    $response->assertStatus(403)
+        ->assertJsonPath('success', false)
+        ->assertJsonPath('error.code', 'forbidden')
+        ->assertJsonPath('error.message', 'Not authorized to mark [fr] as current.')
+        ->assertJsonPath('error.retryable', false);
+});
+
+it('returns 422 for mark-current on an excluded blueprint', function () {
+    config(['statamic.magic-translator.exclude_blueprints' => ['articles.default']]);
+
+    $this->loginUser();
+    $this->createTestCollection('articles', ['en', 'fr']);
+    $this->createTestBlueprint('articles', 'default');
+
+    $entry = $this->createTestEntry('articles', site: 'en');
+
+    $localization = $entry->makeLocalization('fr');
+    $localization->set('title', 'Bonjour');
+    $localization->save();
+
+    $response = $this->postJson(cpUrl('magic-translator/mark-current'), markCurrentPayload($entry->id(), 'fr'));
+
+    $response->assertStatus(422)
+        ->assertJsonPath('success', false)
+        ->assertJsonPath('error.code', 'unsupported')
+        ->assertJsonPath('error.message', 'Mark current is not supported for excluded blueprint [articles.default].')
+        ->assertJsonPath('error.retryable', false);
+});
+
+it('is idempotent when marking a localization current multiple times', function () {
+    $this->loginUser();
+
+    $this->createTestCollection('articles', ['en', 'fr']);
+    $this->createTestBlueprint('articles', 'default', [
+        'title' => ['type' => 'text', 'localizable' => true],
+    ]);
+
+    $entry = $this->createTestEntry('articles', ['title' => 'Stable source'], 'en', 'stable-source');
+
+    $localization = $entry->makeLocalization('fr');
+    $localization->set('title', 'Source stable');
+    $localization->save();
+
+    $first = $this->postJson(cpUrl('magic-translator/mark-current'), markCurrentPayload($entry->id(), 'fr'));
+    $second = $this->postJson(cpUrl('magic-translator/mark-current'), markCurrentPayload($entry->id(), 'fr'));
+
+    $first->assertStatus(200);
+    $second->assertStatus(200);
+
+    $firstHash = $first->json('meta.source_content_hash');
+    $secondHash = $second->json('meta.source_content_hash');
+
+    expect($firstHash)->toBeString()->not->toBeEmpty();
+    expect($secondHash)->toBe($firstHash);
+
+    $freshMeta = Statamic\Facades\Entry::find($entry->id())->in('fr')->get('magic_translator');
+
+    expect($freshMeta['source_content_hash'])->toBe($firstHash);
 });
 
 // ── Status endpoint ────────────────────────────────────────────────────────────
