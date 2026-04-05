@@ -12,6 +12,8 @@
  */
 import type { Axios } from 'axios'
 import { triggerTranslation } from '../core/api'
+import { normalizeApiError } from '../core/errors'
+import type { NormalizedError } from '../core/errors'
 import {
   injectBadges,
   injectTranslateButton,
@@ -238,6 +240,7 @@ const TranslationDialog = {
         const terminalCount = completedCount + failedJobs.length
         const hasRunning = relatedJobs.some((job) => job.status === 'running')
         const hasPending = relatedJobs.some((job) => job.status === 'pending')
+        const normalizedFailedJob = failedJobs[0] ? normalizeApiError(failedJobs[0].error) : null
 
         let nextStatus: LocaleJobState['status'] = 'pending'
         if (failedJobs.length > 0) {
@@ -253,7 +256,8 @@ const TranslationDialog = {
         self.$set(self.localeState, handle, {
           ...state,
           status: nextStatus,
-          error: failedJobs[0]?.error ?? null,
+          error: normalizedFailedJob?.message ?? null,
+          errorCode: normalizedFailedJob?.code ?? null,
           completedCount: terminalCount,
         })
       }
@@ -283,6 +287,7 @@ const TranslationDialog = {
         self.$set(self.localeState, handle, {
           status: 'pending',
           error: null,
+          errorCode: null,
           completedCount: 0,
           totalCount: totalEntries,
           jobIds: [],
@@ -304,12 +309,15 @@ const TranslationDialog = {
           })
 
           if (!result.success) {
+            const normalized = normalizeApiError(result.error ?? t('error_trigger_failed'))
+
             for (const handle of self.selectedLocales) {
               if (self.localeState[handle]) {
                 self.$set(self.localeState, handle, {
                   ...self.localeState[handle],
                   status: 'failed',
-                  error: result.error ?? t('error_trigger_failed'),
+                  error: normalized.message,
+                  errorCode: normalized.code,
                   completedCount: Math.min(
                     self.localeState[handle].completedCount + 1,
                     self.localeState[handle].totalCount,
@@ -335,12 +343,15 @@ const TranslationDialog = {
         }
       } catch (err) {
         console.error('[content-translator] dispatch error:', err)
+        const normalized = normalizeApiError(err)
+
         for (const handle of self.selectedLocales) {
           if (self.localeState[handle]) {
             self.$set(self.localeState, handle, {
               ...self.localeState[handle],
               status: 'failed',
-              error: t('error_unexpected'),
+              error: normalized.message,
+              errorCode: normalized.code,
             })
           }
         }
@@ -375,11 +386,13 @@ const TranslationDialog = {
         ...self.localeState[handle],
         status: 'pending',
         error: null,
+        errorCode: null,
         completedCount: 0,
         jobIds: [],
       })
 
       const newJobIds: string[] = []
+      let lastError: NormalizedError | null = null
 
       for (const entryId of self.allEntryIds) {
         try {
@@ -391,13 +404,26 @@ const TranslationDialog = {
           })
           if (result.success) {
             for (const job of result.jobs) newJobIds.push(job.id)
+          } else {
+            lastError = normalizeApiError(result.error ?? t('error_trigger_failed'))
           }
         } catch (err) {
           console.error('[content-translator] retry error:', err)
+          lastError = normalizeApiError(err)
         }
       }
 
-      if (newJobIds.length === 0) return
+      if (newJobIds.length === 0) {
+        if (self.localeState[handle]) {
+          self.$set(self.localeState, handle, {
+            ...self.localeState[handle],
+            status: 'failed',
+            error: lastError?.message ?? t('translation_failed'),
+            errorCode: lastError?.code ?? 'unexpected_error',
+          })
+        }
+        return
+      }
 
       self.$set(self.localeState, handle, {
         ...self.localeState[handle],

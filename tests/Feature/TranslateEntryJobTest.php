@@ -7,7 +7,10 @@ use ElSchneider\ContentTranslator\Contracts\TranslationService;
 use ElSchneider\ContentTranslator\Data\TranslationUnit;
 use ElSchneider\ContentTranslator\Events\AfterEntryTranslation;
 use ElSchneider\ContentTranslator\Events\BeforeEntryTranslation;
+use ElSchneider\ContentTranslator\Exceptions\ProviderAuthException;
+use ElSchneider\ContentTranslator\Exceptions\ProviderRateLimitedException;
 use ElSchneider\ContentTranslator\Jobs\TranslateEntryJob;
+use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\Event;
 use Statamic\Facades\Entry;
 use Tests\StatamicTestHelpers;
@@ -383,4 +386,107 @@ it('builds nested blueprint field definitions so replicator set fields are trans
     expect($fr->get('title'))->toBe('FR: Blueprint Test');
     expect($fr->get('blocks')[0]['body'])->toBe('FR: Nested body');
     expect($fr->get('blocks')[0]['summary'])->toBe('FR: Nested summary');
+});
+
+it('stores a structured unexpected error in cache when translation throws a generic exception', function () {
+    app()->instance(TranslationService::class, new class implements TranslationService
+    {
+        public function translate(array $units, string $sourceLocale = 'en', string $targetLocale = 'fr'): array
+        {
+            throw new RuntimeException('Simulated API error');
+        }
+    });
+
+    $jobId = 'generic-fail-job-test';
+
+    Cache::put("content-translator:job:{$jobId}", [
+        'id' => $jobId,
+        'target_site' => 'fr',
+        'status' => 'pending',
+        'error' => null,
+    ], 600);
+
+    test()->createTestCollection('articles', ['en', 'fr']);
+    test()->createTestBlueprint('articles', 'default');
+    $entry = test()->createTestEntry(collection: 'articles', site: 'en');
+
+    $job = new TranslateEntryJob($entry->id(), 'fr', null, [], $jobId);
+
+    expect(fn () => app()->call([$job, 'handle']))->toThrow(RuntimeException::class);
+
+    $cached = Cache::get("content-translator:job:{$jobId}");
+    expect($cached['status'])->toBe('failed');
+    expect($cached['error'])->toBe([
+        'code' => 'unexpected_error',
+        'message' => 'An unexpected error occurred.',
+        'retryable' => false,
+    ]);
+});
+
+it('stores the domain exception api error in cache when translation throws a content translator exception', function () {
+    app()->instance(TranslationService::class, new class implements TranslationService
+    {
+        public function translate(array $units, string $sourceLocale = 'en', string $targetLocale = 'fr'): array
+        {
+            throw new ProviderAuthException('Provider authentication failed.', null, ['provider' => 'prism']);
+        }
+    });
+
+    $jobId = 'domain-fail-job-test';
+
+    Cache::put("content-translator:job:{$jobId}", [
+        'id' => $jobId,
+        'target_site' => 'fr',
+        'status' => 'pending',
+        'error' => null,
+    ], 600);
+
+    test()->createTestCollection('articles', ['en', 'fr']);
+    test()->createTestBlueprint('articles', 'default');
+    $entry = test()->createTestEntry(collection: 'articles', site: 'en');
+
+    $job = new TranslateEntryJob($entry->id(), 'fr', null, [], $jobId);
+
+    expect(fn () => app()->call([$job, 'handle']))->toThrow(ProviderAuthException::class);
+
+    $cached = Cache::get("content-translator:job:{$jobId}");
+    expect($cached['status'])->toBe('failed');
+    expect($cached['error'])->toBe([
+        'code' => 'provider_auth_failed',
+        'message' => 'Translation service authentication failed.',
+        'message_key' => 'content-translator::messages.error_provider_auth_failed',
+        'retryable' => false,
+    ]);
+});
+
+it('preserves the retryable flag in cached structured job errors', function () {
+    app()->instance(TranslationService::class, new class implements TranslationService
+    {
+        public function translate(array $units, string $sourceLocale = 'en', string $targetLocale = 'fr'): array
+        {
+            throw new ProviderRateLimitedException('Provider rate limit exceeded.', null, ['provider' => 'prism']);
+        }
+    });
+
+    $jobId = 'retryable-domain-fail-job-test';
+
+    Cache::put("content-translator:job:{$jobId}", [
+        'id' => $jobId,
+        'target_site' => 'fr',
+        'status' => 'pending',
+        'error' => null,
+    ], 600);
+
+    test()->createTestCollection('articles', ['en', 'fr']);
+    test()->createTestBlueprint('articles', 'default');
+    $entry = test()->createTestEntry(collection: 'articles', site: 'en');
+
+    $job = new TranslateEntryJob($entry->id(), 'fr', null, [], $jobId);
+
+    expect(fn () => app()->call([$job, 'handle']))->toThrow(ProviderRateLimitedException::class);
+
+    $cached = Cache::get("content-translator:job:{$jobId}");
+    expect($cached['status'])->toBe('failed');
+    expect($cached['error']['code'])->toBe('provider_rate_limited');
+    expect($cached['error']['retryable'])->toBeTrue();
 });

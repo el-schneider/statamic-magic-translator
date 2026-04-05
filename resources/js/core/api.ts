@@ -5,6 +5,8 @@
  * CSRF tokens and base URL). In Statamic v6, falls back to native `fetch` with
  * XSRF-TOKEN cookie-based CSRF handling (v6 dropped `$axios` in favour of Inertia).
  */
+import type { NormalizedError } from './errors'
+import { normalizeApiError } from './errors'
 import type { TranslationJob, TranslationRequest } from './types'
 
 declare const Statamic: {
@@ -19,14 +21,14 @@ interface ApiJob {
   id: string
   target_site: string
   status: string
-  error?: string
+  error?: string | NormalizedError
 }
 
 /** Response from POST /cp/content-translator/translate */
 export interface TriggerResponse {
   success: boolean
   jobs: ApiJob[]
-  error?: string
+  error?: string | NormalizedError
 }
 
 /** Response from GET /cp/content-translator/status */
@@ -89,7 +91,18 @@ export async function triggerTranslation(request: TranslationRequest): Promise<T
   })
 
   if (!response.ok) {
-    throw new Error(`HTTP ${response.status}: ${response.statusText}`)
+    try {
+      const body = await response.json()
+      throw normalizeApiError(body)
+    } catch (error) {
+      if (error && typeof error === 'object' && 'code' in error) throw error
+
+      throw {
+        code: 'unexpected_error',
+        message: `HTTP ${response.status}: ${response.statusText}`,
+        retryable: false,
+      } satisfies NormalizedError
+    }
   }
 
   return (await response.json()) as TriggerResponse

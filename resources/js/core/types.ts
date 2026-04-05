@@ -1,3 +1,5 @@
+import type { NormalizedError } from './errors'
+
 /**
  * Core TypeScript types for the Content Translator addon.
  *
@@ -48,7 +50,7 @@ export interface TranslationJob {
   id: string
   targetSite: string
   status: 'pending' | 'running' | 'completed' | 'failed'
-  error?: string
+  error?: string | NormalizedError
   progress?: {
     completed: number
     total: number
@@ -82,6 +84,7 @@ export interface SiteDescriptor {
 export interface LocaleJobState {
   status: 'idle' | 'pending' | 'running' | 'completed' | 'failed'
   error: string | null
+  errorCode?: string | null
   /** For bulk mode: number of completed jobs for this locale. */
   completedCount: number
   /** For bulk mode: total jobs for this locale. */

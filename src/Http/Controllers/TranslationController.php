@@ -4,13 +4,16 @@ declare(strict_types=1);
 
 namespace ElSchneider\ContentTranslator\Http\Controllers;
 
+use ElSchneider\ContentTranslator\Exceptions\ContentTranslatorException;
 use ElSchneider\ContentTranslator\Jobs\TranslateEntryJob;
+use ElSchneider\ContentTranslator\Support\TranslationLogger;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Routing\Controller;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Str;
 use Statamic\Facades\Entry;
+use Throwable;
 
 /**
  * HTTP controller for the Content Translator CP endpoints.
@@ -56,7 +59,11 @@ final class TranslationController extends Controller
         if ($entry === null) {
             return response()->json([
                 'success' => false,
-                'error' => "Entry [{$validated['entry_id']}] not found.",
+                'error' => [
+                    'code' => 'resource_not_found',
+                    'message' => "Entry [{$validated['entry_id']}] not found.",
+                    'retryable' => false,
+                ],
             ], 404);
         }
 
@@ -66,14 +73,22 @@ final class TranslationController extends Controller
         if ($user === null) {
             return response()->json([
                 'success' => false,
-                'error' => 'Unauthorized.',
+                'error' => [
+                    'code' => 'unauthorized',
+                    'message' => 'Unauthorized.',
+                    'retryable' => false,
+                ],
             ], 401);
         }
 
         if (! $user->can('edit', $entry)) {
             return response()->json([
                 'success' => false,
-                'error' => 'Forbidden.',
+                'error' => [
+                    'code' => 'forbidden',
+                    'message' => 'Forbidden.',
+                    'retryable' => false,
+                ],
             ], 403);
         }
 
@@ -83,36 +98,54 @@ final class TranslationController extends Controller
         $options = $validated['options'] ?? [];
 
         $jobs = [];
+        $currentTargetSite = null;
 
-        foreach ($targetSites as $targetSite) {
-            $jobId = (string) Str::uuid();
+        try {
+            foreach ($targetSites as $targetSite) {
+                $currentTargetSite = $targetSite;
+                $jobId = (string) Str::uuid();
 
-            // Store initial status in cache so the status endpoint can return
-            // something meaningful even before the job starts.
-            Cache::put(
-                self::CACHE_PREFIX.$jobId,
-                [
+                // Store initial status in cache so the status endpoint can return
+                // something meaningful even before the job starts.
+                Cache::put(
+                    self::CACHE_PREFIX.$jobId,
+                    [
+                        'id' => $jobId,
+                        'target_site' => $targetSite,
+                        'status' => 'pending',
+                        'error' => null,
+                    ],
+                    self::CACHE_TTL,
+                );
+
+                TranslateEntryJob::dispatch(
+                    $validated['entry_id'],
+                    $targetSite,
+                    $sourceSite,
+                    $options,
+                    $jobId,
+                );
+
+                $jobs[] = [
                     'id' => $jobId,
                     'target_site' => $targetSite,
                     'status' => 'pending',
-                    'error' => null,
-                ],
-                self::CACHE_TTL,
-            );
+                ];
+            }
+        } catch (ContentTranslatorException $exception) {
+            TranslationLogger::error($exception, $this->requestLogContext($request, $validated, $currentTargetSite));
 
-            TranslateEntryJob::dispatch(
-                $validated['entry_id'],
-                $targetSite,
-                $sourceSite,
-                $options,
-                $jobId,
-            );
+            return response()->json([
+                'success' => false,
+                'error' => $exception->toApiError(),
+            ], $exception->httpStatus());
+        } catch (Throwable $exception) {
+            TranslationLogger::unexpected($exception, $this->requestLogContext($request, $validated, $currentTargetSite));
 
-            $jobs[] = [
-                'id' => $jobId,
-                'target_site' => $targetSite,
-                'status' => 'pending',
-            ];
+            return response()->json([
+                'success' => false,
+                'error' => $this->unexpectedApiError(),
+            ], 500);
         }
 
         return response()->json([
@@ -154,13 +187,48 @@ final class TranslationController extends Controller
                 'status' => is_string($data['status']) ? $data['status'] : 'unknown',
             ];
 
-            if (is_string($data['error'] ?? null) && $data['error'] !== '') {
-                $result['error'] = $data['error'];
+            if ($result['status'] === 'failed') {
+                if (is_array($data['error'] ?? null)) {
+                    $result['error'] = $data['error'];
+                } elseif (is_string($data['error'] ?? null) && $data['error'] !== '') {
+                    $result['error'] = [
+                        'code' => 'unexpected_error',
+                        'message' => $data['error'],
+                        'retryable' => false,
+                    ];
+                }
             }
 
             return $result;
         }, $jobIds);
 
         return response()->json(['jobs' => $jobs]);
+    }
+
+    /**
+     * @param  array<string, mixed>  $validated
+     * @return array<string, mixed>
+     */
+    private function requestLogContext(Request $request, array $validated, ?string $targetSite = null): array
+    {
+        return array_filter([
+            'entry_id' => $validated['entry_id'] ?? null,
+            'source_site' => $validated['source_site'] ?? null,
+            'target_sites' => is_array($validated['target_sites'] ?? null) ? $validated['target_sites'] : null,
+            'target_site' => $targetSite,
+            'user_id' => $request->user()?->id(),
+        ], static fn (mixed $value): bool => $value !== null);
+    }
+
+    /**
+     * @return array{code: string, message: string, retryable: bool}
+     */
+    private function unexpectedApiError(): array
+    {
+        return [
+            'code' => 'unexpected_error',
+            'message' => (string) __('content-translator::messages.error_unexpected'),
+            'retryable' => false,
+        ];
     }
 }

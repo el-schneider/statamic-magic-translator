@@ -2,11 +2,20 @@
 
 declare(strict_types=1);
 
+use DeepL\AuthorizationException;
+use DeepL\ConnectionException;
+use DeepL\DeepLException;
+use DeepL\QuotaExceededException;
 use DeepL\TextResult;
+use DeepL\TooManyRequestsException;
 use DeepL\TranslateTextOptions;
 use DeepL\Translator;
 use ElSchneider\ContentTranslator\Data\TranslationFormat;
 use ElSchneider\ContentTranslator\Data\TranslationUnit;
+use ElSchneider\ContentTranslator\Exceptions\ProviderAuthException;
+use ElSchneider\ContentTranslator\Exceptions\ProviderRateLimitedException;
+use ElSchneider\ContentTranslator\Exceptions\ProviderResponseInvalidException;
+use ElSchneider\ContentTranslator\Exceptions\ProviderUnavailableException;
 use ElSchneider\ContentTranslator\Services\DeepLTranslationService;
 
 uses(Tests\TestCase::class);
@@ -38,6 +47,19 @@ function mockTranslator(string $translatedXml): Translator
     $mock->shouldReceive('translateText')
         ->once()
         ->andReturn(deeplTextResult($translatedXml));
+
+    return $mock;
+}
+
+/**
+ * Create a Mockery mock of the Translator that throws the given exception.
+ */
+function mockTranslatorThatThrows(Throwable $exception): Translator
+{
+    $mock = Mockery::mock(Translator::class);
+    $mock->shouldReceive('translateText')
+        ->once()
+        ->andThrow($exception);
 
     return $mock;
 }
@@ -199,7 +221,76 @@ it('throws when DeepL response strips ct-unit tags', function () {
     ];
 
     expect(fn () => deeplService($translator)->translate($units, 'en', 'fr'))
-        ->toThrow(RuntimeException::class, 'Missing translation for unit index [0]');
+        ->toThrow(ProviderResponseInvalidException::class, 'Missing translation for unit index [0]');
+});
+
+it('maps deepl authorization errors to provider auth exceptions', function () {
+    $previous = new AuthorizationException('Auth key invalid.', 403);
+    $translator = mockTranslatorThatThrows($previous);
+    $units = [new TranslationUnit('title', 'Hello', TranslationFormat::Plain)];
+
+    try {
+        deeplService($translator)->translate($units, 'en', 'fr');
+
+        $this->fail('Expected ProviderAuthException to be thrown.');
+    } catch (ProviderAuthException $exception) {
+        expect($exception->getPrevious())->toBe($previous)
+            ->and($exception->context())->toMatchArray([
+                'provider' => 'deepl',
+                'source_locale' => 'en',
+                'target_locale' => 'fr',
+            ]);
+    }
+});
+
+it('maps deepl rate limiting errors to provider rate limited exceptions', function () {
+    $translator = mockTranslatorThatThrows(new TooManyRequestsException('Too many requests.', 429));
+    $units = [new TranslationUnit('title', 'Hello', TranslationFormat::Plain)];
+
+    expect(fn () => deeplService($translator)->translate($units, 'en', 'fr'))
+        ->toThrow(ProviderRateLimitedException::class, 'DeepL rate limit exceeded.');
+});
+
+it('maps deepl quota exceeded errors to provider rate limited exceptions with context', function () {
+    $previous = new QuotaExceededException('Quota exceeded.', 456);
+    $translator = mockTranslatorThatThrows($previous);
+    $units = [new TranslationUnit('title', 'Hello', TranslationFormat::Plain)];
+
+    try {
+        deeplService($translator)->translate($units, 'en', 'fr');
+
+        $this->fail('Expected ProviderRateLimitedException to be thrown.');
+    } catch (ProviderRateLimitedException $exception) {
+        expect($exception->getPrevious())->toBe($previous)
+            ->and($exception->context())->toMatchArray([
+                'provider' => 'deepl',
+                'detail' => 'quota_exceeded',
+            ]);
+    }
+});
+
+it('maps deepl connection errors to provider unavailable exceptions', function () {
+    $previous = new ConnectionException('Connection timed out.', 0, null, true);
+    $translator = mockTranslatorThatThrows($previous);
+    $units = [new TranslationUnit('title', 'Hello', TranslationFormat::Plain)];
+
+    expect(fn () => deeplService($translator)->translate($units, 'en', 'fr'))
+        ->toThrow(ProviderUnavailableException::class, 'DeepL is temporarily unavailable.');
+});
+
+it('maps generic deepl sdk errors to provider unavailable exceptions', function () {
+    $previous = new DeepLException('Internal API error.', 500);
+    $translator = mockTranslatorThatThrows($previous);
+    $units = [new TranslationUnit('title', 'Hello', TranslationFormat::Plain)];
+
+    try {
+        deeplService($translator)->translate($units, 'en', 'fr');
+
+        $this->fail('Expected ProviderUnavailableException to be thrown.');
+    } catch (ProviderUnavailableException $exception) {
+        expect($exception->getPrevious())->toBe($previous)
+            ->and($exception->context()['provider'])->toBe('deepl');
+    }
 });
 
 // ─── XML tag handling ─────────────────────────────────────────────────────────
