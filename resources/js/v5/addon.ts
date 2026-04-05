@@ -309,7 +309,8 @@ const TranslationDialog = {
 
         Statamic.$toast.success(t('mark_current_success'))
       } catch (error) {
-        const message = error && typeof error === 'object' && 'message' in error ? String(error.message) : t('mark_current_failed')
+        const message =
+          error && typeof error === 'object' && 'message' in error ? String(error.message) : t('mark_current_failed')
 
         self.markCurrentErrors = {
           ...self.markCurrentErrors,
