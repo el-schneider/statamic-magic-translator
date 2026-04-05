@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace ElSchneider\ContentTranslator\Console;
 
+use ElSchneider\ContentTranslator\Support\BlueprintExclusions;
 use Statamic\Contracts\Entries\Entry as EntryContract;
 use Statamic\Facades\Collection as CollectionFacade;
 use Statamic\Facades\Entry as EntryFacade;
@@ -41,6 +42,10 @@ final class TranslationPlanner
                     continue;
                 }
 
+                if (! $this->passesBlueprintFilters($entry, $filters)) {
+                    continue;
+                }
+
                 yield $entry;
             }
 
@@ -51,11 +56,41 @@ final class TranslationPlanner
             ? $filters->collections
             : CollectionFacade::handles()->all();
 
+        $seen = [];
+
         foreach ($collections as $collectionHandle) {
             foreach (EntryFacade::query()->where('collection', $collectionHandle)->get() as $entry) {
-                yield $entry->hasOrigin() ? $entry->root() : $entry;
+                $root = $entry->hasOrigin() ? $entry->root() : $entry;
+
+                if (isset($seen[$root->id()])) {
+                    continue;
+                }
+
+                $seen[$root->id()] = true;
+
+                if (! $this->passesBlueprintFilters($root, $filters)) {
+                    continue;
+                }
+
+                yield $root;
             }
         }
+    }
+
+    private function passesBlueprintFilters(EntryContract $entry, FilterCriteria $filters): bool
+    {
+        $collectionHandle = $entry->collectionHandle();
+        $blueprintHandle = $entry->blueprint()->handle();
+
+        if (BlueprintExclusions::contains($collectionHandle, $blueprintHandle)) {
+            return false;
+        }
+
+        if ($filters->blueprints !== [] && ! in_array($blueprintHandle, $filters->blueprints, true)) {
+            return false;
+        }
+
+        return true;
     }
 
     /**

@@ -85,3 +85,57 @@ it('filters by --entry IDs', function () {
     expect($plan->count())->toBe(1);
     expect($plan->items[0]->entryId)->toBe($e1->id());
 });
+
+it('filters by --blueprint handle', function () {
+    $this->createTestCollection('articles', ['en', 'de']);
+    $this->createTestBlueprint('articles', 'default');
+    $this->createTestBlueprint('articles', 'news');
+
+    $news = $this->createTestEntry(collection: 'articles', site: 'en', slug: 'n');
+    $news->blueprint('news')->save();
+
+    $this->createTestEntry(collection: 'articles', site: 'en', slug: 'd');
+
+    $planner = app(TranslationPlanner::class);
+    $plan = $planner->plan(makeCriteria([
+        'targetSites' => ['de'],
+        'blueprints' => ['news'],
+    ]));
+
+    expect($plan->count())->toBe(1);
+    expect($plan->items[0]->entryId)->toBe($news->id());
+});
+
+it('respects config exclude_blueprints', function () {
+    config(['statamic.content-translator.exclude_blueprints' => ['articles.*']]);
+
+    $this->createTestCollection('articles', ['en', 'de']);
+    $this->createTestCollection('pages', ['en', 'de']);
+    $this->createTestBlueprint('articles');
+    $this->createTestBlueprint('pages');
+    $this->createTestEntry(collection: 'articles', site: 'en', slug: 'a');
+    $this->createTestEntry(collection: 'pages', site: 'en', slug: 'p');
+
+    $planner = app(TranslationPlanner::class);
+    $plan = $planner->plan(makeCriteria([
+        'targetSites' => ['de'],
+    ]));
+
+    expect($plan->count())->toBe(1);
+    expect($plan->collections())->toBe(['pages']);
+});
+
+it('defaults target sites to all collection sites minus source when --to omitted', function () {
+    $this->createTestCollection('articles', ['en', 'de', 'fr']);
+    $this->createTestBlueprint('articles');
+    $this->createTestEntry(collection: 'articles', site: 'en');
+
+    $planner = app(TranslationPlanner::class);
+    $plan = $planner->plan(makeCriteria([
+        'targetSites' => [],
+        'sourceSite' => 'en',
+    ]));
+
+    expect($plan->count())->toBe(2);
+    expect($plan->targetSites())->toBe(['de', 'fr']);
+});
