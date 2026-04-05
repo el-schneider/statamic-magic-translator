@@ -139,3 +139,96 @@ it('defaults target sites to all collection sites minus source when --to omitted
     expect($plan->count())->toBe(2);
     expect($plan->targetSites())->toBe(['de', 'fr']);
 });
+
+it('skips pair when target localization already exists (safe default)', function () {
+    $this->createTestCollection('articles', ['en', 'fr']);
+    $this->createTestBlueprint('articles');
+    $en = $this->createTestEntry(collection: 'articles', site: 'en');
+
+    $en->makeLocalization('fr')->data([
+        'title' => 'Hallo',
+        'content_translator' => ['last_translated_at' => now()->toIso8601String()],
+    ])->save();
+
+    $planner = app(TranslationPlanner::class);
+    $plan = $planner->plan(makeCriteria([
+        'targetSites' => ['fr'],
+    ]));
+
+    expect($plan->count())->toBe(1);
+    expect($plan->items[0]->action)->toBe(PlanAction::SkipExists);
+    expect($plan->processable())->toBeEmpty();
+});
+
+it('includes stale targets when --include-stale is set', function () {
+    $this->createTestCollection('articles', ['en', 'fr']);
+    $this->createTestBlueprint('articles');
+    $en = $this->createTestEntry(collection: 'articles', site: 'en');
+
+    $en->makeLocalization('fr')->data([
+        'title' => 'Hallo',
+        'content_translator' => ['last_translated_at' => now()->subDays(7)->toIso8601String()],
+    ])->save();
+
+    touch($en->path(), now()->timestamp);
+    clearstatcache();
+
+    $planner = app(TranslationPlanner::class);
+    $plan = $planner->plan(makeCriteria([
+        'targetSites' => ['fr'],
+        'includeStale' => true,
+    ]));
+
+    expect($plan->count())->toBe(1);
+    expect($plan->items[0]->action)->toBe(PlanAction::Stale);
+    expect($plan->processable())->toHaveCount(1);
+});
+
+it('keeps SkipExists when target is fresh even with --include-stale', function () {
+    $this->createTestCollection('articles', ['en', 'fr']);
+    $this->createTestBlueprint('articles');
+    $en = $this->createTestEntry(collection: 'articles', site: 'en');
+
+    $en->makeLocalization('fr')->data([
+        'title' => 'Hallo',
+        'content_translator' => ['last_translated_at' => now()->addDay()->toIso8601String()],
+    ])->save();
+
+    $planner = app(TranslationPlanner::class);
+    $plan = $planner->plan(makeCriteria([
+        'targetSites' => ['fr'],
+        'includeStale' => true,
+    ]));
+
+    expect($plan->items[0]->action)->toBe(PlanAction::SkipExists);
+});
+
+it('marks pair Overwrite when --overwrite set and target exists', function () {
+    $this->createTestCollection('articles', ['en', 'fr']);
+    $this->createTestBlueprint('articles');
+    $en = $this->createTestEntry(collection: 'articles', site: 'en');
+
+    $en->makeLocalization('fr')->data(['title' => 'Hallo'])->save();
+
+    $planner = app(TranslationPlanner::class);
+    $plan = $planner->plan(makeCriteria([
+        'targetSites' => ['fr'],
+        'overwrite' => true,
+    ]));
+
+    expect($plan->items[0]->action)->toBe(PlanAction::Overwrite);
+});
+
+it('marks pair Translate when target missing regardless of overwrite flag', function () {
+    $this->createTestCollection('articles', ['en', 'fr']);
+    $this->createTestBlueprint('articles');
+    $this->createTestEntry(collection: 'articles', site: 'en');
+
+    $planner = app(TranslationPlanner::class);
+
+    $withoutFlag = $planner->plan(makeCriteria(['targetSites' => ['fr']]));
+    $withFlag = $planner->plan(makeCriteria(['targetSites' => ['fr'], 'overwrite' => true]));
+
+    expect($withoutFlag->items[0]->action)->toBe(PlanAction::Translate);
+    expect($withFlag->items[0]->action)->toBe(PlanAction::Translate);
+});
