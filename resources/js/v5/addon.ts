@@ -11,6 +11,7 @@
  * delegates to `Vue.component()` under the hood.
  */
 import type { Axios } from 'axios'
+import { markCurrent } from '../core/api'
 import {
   injectBadges,
   injectTranslateButton,
@@ -19,7 +20,6 @@ import {
   wasPreviouslyInjected,
   wasTranslateButtonPreviouslyInjected,
 } from '../core/injection'
-import { markCurrent } from '../core/api'
 import {
   getSession,
   retryLocale as retryLocaleInStore,
@@ -648,6 +648,9 @@ interface FieldtypeData {
   buttonInjected: boolean
   observer: MutationObserver | null
   injecting: boolean
+  markedCurrentHandles: string[]
+  markCurrentPending: string[]
+  markCurrentListener: ((event: Event) => void) | null
 }
 
 const TranslatorFieldtype = {
@@ -670,6 +673,9 @@ const TranslatorFieldtype = {
       buttonInjected: wasTranslateButtonPreviouslyInjected(),
       observer: null,
       injecting: false,
+      markedCurrentHandles: [],
+      markCurrentPending: [],
+      markCurrentListener: null,
     }
   },
 
@@ -698,6 +704,25 @@ const TranslatorFieldtype = {
     hasTargets(): boolean {
       return (this as unknown as { targetSites: SiteMeta[] }).targetSites.length > 0
     },
+
+    effectiveSites(): SiteMeta[] {
+      const self = this as unknown as { sites: SiteMeta[]; markedCurrentHandles: string[] }
+      return self.sites.map((site) =>
+        self.markedCurrentHandles.includes(site.handle)
+          ? { ...site, is_stale: false, last_translated_at: new Date().toISOString() }
+          : site,
+      )
+    },
+  },
+
+  watch: {
+    effectiveSites: {
+      handler() {
+        const self = this as unknown as { tryInjectBadges: () => void }
+        self.tryInjectBadges()
+      },
+      deep: true,
+    },
   },
 
   mounted() {
@@ -712,6 +737,11 @@ const TranslatorFieldtype = {
       hasTargets: boolean
       hasInjectedBadgesInDom: () => boolean
       hasInjectedTranslateButtonInDom: () => boolean
+      markCurrentPending: string[]
+      markedCurrentHandles: string[]
+      markCurrentListener: ((event: Event) => void) | null
+      entryId: string | null
+      sites: SiteMeta[]
     }
 
     if (!self.hasTargets) {
@@ -735,11 +765,53 @@ const TranslatorFieldtype = {
       self.tryInjectBadges()
     })
     self.observer.observe(document.body, { childList: true, subtree: true })
+
+    self.markCurrentListener = async (event: Event) => {
+      const detail = (event as CustomEvent).detail
+      if (!detail?.siteHandle || !self.entryId) return
+
+      const siteHandle = String(detail.siteHandle)
+      if (self.markCurrentPending.includes(siteHandle)) return
+
+      const site = self.sites.find((s) => s.handle === siteHandle)
+      const siteName = site?.name ?? siteHandle
+
+      const message = __('magic-translator::messages.mark_current_confirm', { site: siteName })
+      if (!window.confirm(message)) return
+
+      self.markCurrentPending = [...self.markCurrentPending, siteHandle]
+
+      try {
+        const response = await markCurrent(self.entryId, siteHandle)
+        if (response.success) {
+          if (!self.markedCurrentHandles.includes(siteHandle)) {
+            self.markedCurrentHandles = [...self.markedCurrentHandles, siteHandle]
+          }
+          return
+        }
+
+        window.alert(response.error?.message ?? __('magic-translator::messages.mark_current_failed'))
+      } catch (error) {
+        console.error('[magic-translator] mark-current failed:', error)
+        window.alert(__('magic-translator::messages.mark_current_failed'))
+      } finally {
+        self.markCurrentPending = self.markCurrentPending.filter((handle) => handle !== siteHandle)
+      }
+    }
+
+    window.addEventListener('magic-translator:request-mark-current', self.markCurrentListener)
   },
 
   beforeDestroy() {
-    const self = this as unknown as { observer: MutationObserver | null }
+    const self = this as unknown as {
+      observer: MutationObserver | null
+      markCurrentListener: ((event: Event) => void) | null
+    }
     self.observer?.disconnect()
+    if (self.markCurrentListener) {
+      window.removeEventListener('magic-translator:request-mark-current', self.markCurrentListener)
+      self.markCurrentListener = null
+    }
     removeBadges()
     removeTranslateButtons()
   },
@@ -785,7 +857,7 @@ const TranslatorFieldtype = {
 
     tryInjectBadges() {
       const self = this as unknown as {
-        sites: SiteMeta[]
+        effectiveSites: SiteMeta[]
         badgeInjected: boolean
         buttonInjected: boolean
         observer: MutationObserver | null
@@ -793,12 +865,12 @@ const TranslatorFieldtype = {
         hasTargets: boolean
         openDialog: () => void
       }
-      if (self.injecting || !self.sites.length) return
+      if (self.injecting || !self.effectiveSites.length) return
 
       self.injecting = true
       try {
-        self.badgeInjected = injectBadges(self.sites, 'v5')
-        self.buttonInjected = injectTranslateButton(self.sites, 'v5', {
+        self.badgeInjected = injectBadges(self.effectiveSites, 'v5')
+        self.buttonInjected = injectTranslateButton(self.effectiveSites, 'v5', {
           onClick: () => self.openDialog(),
           disabled: !self.hasTargets,
         })
@@ -858,8 +930,8 @@ const TranslatorFieldtype = {
                 </button>
 
                 <!-- Fallback status list when badge injection has not succeeded yet -->
-                <div v-if="!badgeInjected && sites.length > 0" class="mt-3 space-y-1">
-                    <div v-for="site in sites" :key="site.handle" class="text-xs flex items-center gap-1.5 py-0.5">
+                <div v-if="!badgeInjected && effectiveSites.length > 0" class="mt-3 space-y-1">
+                    <div v-for="site in effectiveSites" :key="site.handle" class="text-xs flex items-center gap-1.5 py-0.5">
                         <span
                             class="little-dot shrink-0"
                             :class="{

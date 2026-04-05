@@ -253,31 +253,60 @@ function relativeTime(iso: string): string {
   }
 }
 
-/** Build a small inline badge <span> for a given site status. */
+/** Build a small inline badge element for a given site status. */
 function createBadge(site: SiteMeta): HTMLElement {
-  const span = document.createElement('span')
-  span.setAttribute(BADGE_ATTR, site.handle)
+  const isManual = site.exists && !site.last_translated_at
+  const isClickable = site.is_stale || isManual
+  const clickableStyle = isClickable ? 'cursor:pointer;background:none;border:none;padding:0;line-height:inherit;' : ''
+  const badge = document.createElement(isClickable ? 'button' : 'span')
 
-  if (!site.exists) {
-    span.textContent = '—'
-    span.setAttribute('style', 'font-size:11px;color:#9ca3af;margin-left:6px;')
-  } else if (site.is_stale) {
-    span.textContent = `⚠ ${t('badge_outdated')}`
-    span.setAttribute('style', 'font-size:11px;color:#f59e0b;margin-left:6px;font-weight:500;')
-    if (site.last_translated_at) {
-      span.setAttribute('title', t('last_translated', { time: relativeTime(site.last_translated_at) }))
-    }
-  } else if (site.last_translated_at) {
-    span.textContent = relativeTime(site.last_translated_at)
-    span.setAttribute('title', t('last_translated', { time: site.last_translated_at }))
-    span.setAttribute('style', 'font-size:11px;color:#6b7280;margin-left:6px;')
-  } else {
-    // Exists but no translation timestamp = manually created
-    span.textContent = t('badge_manual')
-    span.setAttribute('style', 'font-size:11px;color:#6b7280;margin-left:6px;font-style:italic;')
+  badge.setAttribute(BADGE_ATTR, site.handle)
+
+  if (isClickable) {
+    badge.setAttribute('type', 'button')
+    badge.setAttribute('aria-label', t('mark_current_button'))
+    badge.addEventListener('mouseenter', () => {
+      ;(badge as HTMLElement).style.opacity = '0.85'
+    })
+    badge.addEventListener('mouseleave', () => {
+      ;(badge as HTMLElement).style.opacity = '1'
+    })
+    badge.addEventListener('click', (event) => {
+      event.stopPropagation()
+      window.dispatchEvent(
+        new CustomEvent('magic-translator:request-mark-current', {
+          detail: { siteHandle: site.handle },
+        }),
+      )
+    })
   }
 
-  return span
+  if (!site.exists) {
+    badge.textContent = '—'
+    badge.setAttribute('style', 'font-size:11px;color:#9ca3af;margin-left:6px;')
+  } else if (site.is_stale) {
+    badge.textContent = `⚠ ${t('badge_outdated')}`
+    badge.setAttribute(
+      'style',
+      `font-size:11px;color:#f59e0b;margin-left:6px;font-weight:500;${clickableStyle}`,
+    )
+    if (site.last_translated_at) {
+      badge.setAttribute('title', t('last_translated', { time: relativeTime(site.last_translated_at) }))
+    }
+  } else if (site.last_translated_at) {
+    badge.textContent = relativeTime(site.last_translated_at)
+    badge.setAttribute('title', t('last_translated', { time: site.last_translated_at }))
+    badge.setAttribute('style', 'font-size:11px;color:#6b7280;margin-left:6px;')
+  } else {
+    // Exists but no translation timestamp = manually created
+    badge.textContent = t('badge_manual')
+    badge.setAttribute(
+      'style',
+      `font-size:11px;color:#6b7280;margin-left:6px;font-style:italic;${clickableStyle}`,
+    )
+  }
+
+  return badge
 }
 
 type TranslateButtonOptions = {
