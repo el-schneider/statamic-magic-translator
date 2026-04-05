@@ -108,6 +108,127 @@ it('forbids users who cannot edit the specific entry', function () {
         ]);
 });
 
+it('forbids target sites the user cannot access', function () {
+    Statamic\Facades\Site::setSites([
+        'en' => ['name' => 'English', 'url' => 'http://localhost/', 'locale' => 'en'],
+        'fr' => ['name' => 'French', 'url' => 'http://localhost/fr/', 'locale' => 'fr'],
+        'de' => ['name' => 'German', 'url' => 'http://localhost/de/', 'locale' => 'de'],
+    ]);
+
+    $this->createTestCollection('articles', ['en', 'fr', 'de']);
+    $this->createTestBlueprint('articles');
+    $entry = $this->createTestEntry('articles');
+
+    $user = $this->createRestrictedUser([
+        'access cp',
+        'access en site',
+        'access fr site',
+        'edit articles entries',
+    ]);
+    $this->loginUser($user);
+
+    $response = $this->postJson(cpUrl('content-translator/translate'), [
+        'entry_id' => $entry->id(),
+        'target_sites' => ['fr', 'de'], // de is not accessible
+    ]);
+
+    $response->assertStatus(403)
+        ->assertJsonPath('success', false)
+        ->assertJsonPath('error.code', 'forbidden')
+        ->assertJsonPath('error.retryable', false)
+        ->assertJsonPath('error.message', 'Not authorized to translate into: de.');
+});
+
+it('forbids a source_site the user cannot access', function () {
+    Statamic\Facades\Site::setSites([
+        'en' => ['name' => 'English', 'url' => 'http://localhost/', 'locale' => 'en'],
+        'fr' => ['name' => 'French', 'url' => 'http://localhost/fr/', 'locale' => 'fr'],
+        'de' => ['name' => 'German', 'url' => 'http://localhost/de/', 'locale' => 'de'],
+    ]);
+
+    $this->createTestCollection('articles', ['en', 'fr', 'de']);
+    $this->createTestBlueprint('articles');
+    $entry = $this->createTestEntry('articles', site: 'en');
+
+    // User has access to fr + de but not en.
+    // They also cannot 'edit' the entry (which is in en), so this should
+    // fail at the earlier $user->can('edit', $entry) check — EntryPolicy
+    // requires access to the entry's current site.
+    $user = $this->createRestrictedUser([
+        'access cp',
+        'access fr site',
+        'access de site',
+        'edit articles entries',
+    ]);
+    $this->loginUser($user);
+
+    $response = $this->postJson(cpUrl('content-translator/translate'), [
+        'entry_id' => $entry->id(),
+        'source_site' => 'en',
+        'target_sites' => ['fr'],
+    ]);
+
+    $response->assertStatus(403)
+        ->assertJsonPath('error.code', 'forbidden');
+});
+
+it('returns 404 when entry has no localization in source_site', function () {
+    Statamic\Facades\Site::setSites([
+        'en' => ['name' => 'English', 'url' => 'http://localhost/', 'locale' => 'en'],
+        'fr' => ['name' => 'French', 'url' => 'http://localhost/fr/', 'locale' => 'fr'],
+    ]);
+
+    $this->createTestCollection('articles', ['en', 'fr']);
+    $this->createTestBlueprint('articles');
+    $entry = $this->createTestEntry('articles', site: 'en');
+
+    $this->loginUser(); // super
+
+    // Entry only exists in en; attempt to translate from fr.
+    $response = $this->postJson(cpUrl('content-translator/translate'), [
+        'entry_id' => $entry->id(),
+        'source_site' => 'fr',
+        'target_sites' => ['en'],
+    ]);
+
+    $response->assertStatus(404)
+        ->assertJsonPath('error.code', 'resource_not_found')
+        ->assertJsonPath('error.message', "Entry [{$entry->id()}] has no localization in [fr].");
+});
+
+it('allows dispatch when user has access to all requested target sites', function () {
+    \Illuminate\Support\Facades\Queue::fake();
+
+    Statamic\Facades\Site::setSites([
+        'en' => ['name' => 'English', 'url' => 'http://localhost/', 'locale' => 'en'],
+        'fr' => ['name' => 'French', 'url' => 'http://localhost/fr/', 'locale' => 'fr'],
+        'de' => ['name' => 'German', 'url' => 'http://localhost/de/', 'locale' => 'de'],
+    ]);
+
+    $this->createTestCollection('articles', ['en', 'fr', 'de']);
+    $this->createTestBlueprint('articles');
+    $entry = $this->createTestEntry('articles');
+
+    $user = $this->createRestrictedUser([
+        'access cp',
+        'access en site',
+        'access fr site',
+        'access de site',
+        'edit articles entries',
+    ]);
+    $this->loginUser($user);
+
+    $response = $this->postJson(cpUrl('content-translator/translate'), [
+        'entry_id' => $entry->id(),
+        'target_sites' => ['fr', 'de'],
+    ]);
+
+    $response->assertStatus(200)
+        ->assertJson(['success' => true]);
+
+    \Illuminate\Support\Facades\Queue::assertPushed(TranslateEntryJob::class, 2);
+});
+
 // ── Trigger: validation ────────────────────────────────────────────────────────
 
 it('returns 422 when entry_id is missing', function () {
