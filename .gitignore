@@ -4,3 +4,8 @@
 /.prettierignore.cache
 .DS_Store
 worktrees
+
+# Agent scratch dirs — never commit
+/docs/plans/
+/docs/research/
+/research.md
