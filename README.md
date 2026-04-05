@@ -1,3 +1,5 @@
+![Magic Translator](images/mt_banner.png)
+
 # Statamic Magic Translator
 
 > Translate Statamic entry content across multi-site localizations using LLMs or DeepL — with full support for Bard, Replicator, Grid, and deeply nested content structures.
