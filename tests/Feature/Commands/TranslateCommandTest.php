@@ -46,3 +46,28 @@ it('prints empty plan when no entries match filter', function () {
         ->expectsOutputToContain('No translations to perform')
         ->assertExitCode(0);
 });
+
+it('aborts gracefully when user answers no at confirm prompt', function () {
+    $this->createTestCollection('articles', ['en', 'fr']);
+    $this->createTestBlueprint('articles');
+    $this->createTestEntry(collection: 'articles', site: 'en');
+
+    $this->artisan('statamic:content-translator:translate', [
+        '--to' => ['fr'],
+    ])
+        ->expectsConfirmation('Proceed?', 'no')
+        ->expectsOutputToContain('Aborted')
+        ->assertExitCode(0);
+});
+
+it('proceeds past confirm with --no-interaction', function () {
+    $this->createTestCollection('articles', ['en', 'fr']);
+    $this->createTestBlueprint('articles');
+    $this->createTestEntry(collection: 'articles', site: 'en');
+
+    $this->artisan('statamic:content-translator:translate', [
+        '--to' => ['fr'],
+        '--no-interaction' => true,
+    ])
+        ->assertExitCode(0);
+});
