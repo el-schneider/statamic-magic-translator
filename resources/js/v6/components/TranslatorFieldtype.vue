@@ -144,10 +144,20 @@ function openDialog(): void {
     return
   }
 
+  // Pick the default source, preferring the origin site but falling back to
+  // the current site if the user has no access to the origin. `sites` is
+  // already filtered server-side to the user's accessible sites.
+  const accessibleHandles = new Set(sites.value.map((s) => s.handle))
+  const defaultSource =
+    (originSite.value && accessibleHandles.has(originSite.value) ? originSite.value : null) ??
+    (currentSite.value && accessibleHandles.has(currentSite.value) ? currentSite.value : null) ??
+    sites.value[0]?.handle ??
+    ''
+
   const dialog = Statamic.$components.append('content-translator-dialog', {
     props: {
       entryId: entryId.value,
-      sourceSite: originSite.value ?? currentSite.value ?? sites.value[0]?.handle ?? '',
+      sourceSite: defaultSource,
       sites: sites.value,
     },
   })
