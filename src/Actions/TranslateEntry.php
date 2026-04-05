@@ -14,6 +14,7 @@ use ElSchneider\MagicTranslator\Support\FieldDefinitionBuilder;
 use Illuminate\Support\Str;
 use InvalidArgumentException;
 use Statamic\Entries\Entry;
+use Statamic\Facades\Blink;
 use Statamic\Facades\Entry as EntryFacade;
 
 final class TranslateEntry
@@ -147,7 +148,13 @@ final class TranslateEntry
         $localization->set('magic_translator', $meta);
 
         // ── 14. Save ──────────────────────────────────────────────────────────
-        $localization->save();
+        Blink::put("magic-translator:translating:{$localization->id()}", true);
+
+        try {
+            $localization->save();
+        } finally {
+            Blink::forget("magic-translator:translating:{$localization->id()}");
+        }
     }
 
     // ── Helpers ───────────────────────────────────────────────────────────────
