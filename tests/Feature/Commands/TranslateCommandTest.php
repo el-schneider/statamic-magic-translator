@@ -4,6 +4,8 @@ declare(strict_types=1);
 
 use ElSchneider\ContentTranslator\Contracts\TranslationService;
 use ElSchneider\ContentTranslator\Data\TranslationUnit;
+use ElSchneider\ContentTranslator\Jobs\TranslateEntryJob;
+use Illuminate\Support\Facades\Queue;
 use Statamic\Facades\Entry;
 use Tests\StatamicTestHelpers;
 
@@ -127,4 +129,44 @@ it('reports partial failure and exits 1 when a translation throws', function () 
         ->expectsOutputToContain('Failed:       1')
         ->expectsOutputToContain('provider exploded')
         ->assertExitCode(1);
+});
+
+it('dispatches a job per processable pair when --dispatch-jobs is set', function () {
+    Queue::fake();
+
+    $this->createMultiSiteSetup([
+        'en' => ['name' => 'English', 'url' => 'http://localhost/', 'locale' => 'en'],
+        'fr' => ['name' => 'French', 'url' => 'http://localhost/fr/', 'locale' => 'fr'],
+        'de' => ['name' => 'German', 'url' => 'http://localhost/de/', 'locale' => 'de'],
+    ]);
+
+    $this->createTestCollection('articles', ['en', 'fr', 'de']);
+    $this->createTestBlueprint('articles');
+    $this->createTestEntry(collection: 'articles', site: 'en');
+
+    $this->artisan('statamic:content-translator:translate', [
+        '--to' => ['fr', 'de'],
+        '--dispatch-jobs' => true,
+        '--no-interaction' => true,
+    ])
+        ->expectsOutputToContain('Dispatched 2 job')
+        ->assertExitCode(0);
+
+    Queue::assertPushed(TranslateEntryJob::class, 2);
+});
+
+it('dispatches zero jobs when plan is empty', function () {
+    Queue::fake();
+
+    $this->createTestCollection('articles', ['en', 'fr']);
+
+    $this->artisan('statamic:content-translator:translate', [
+        '--to' => ['fr'],
+        '--dispatch-jobs' => true,
+        '--no-interaction' => true,
+    ])
+        ->expectsOutputToContain('No translations to perform')
+        ->assertExitCode(0);
+
+    Queue::assertNothingPushed();
 });

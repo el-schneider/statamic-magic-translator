@@ -10,6 +10,7 @@ use ElSchneider\ContentTranslator\Console\PlanAction;
 use ElSchneider\ContentTranslator\Console\PlanItem;
 use ElSchneider\ContentTranslator\Console\TranslationPlan;
 use ElSchneider\ContentTranslator\Console\TranslationPlanner;
+use ElSchneider\ContentTranslator\Jobs\TranslateEntryJob;
 use Illuminate\Console\Command;
 use InvalidArgumentException;
 use Statamic\Console\RunsInPlease;
@@ -74,6 +75,10 @@ final class TranslateCommand extends Command
             $this->info('Aborted.');
 
             return 0;
+        }
+
+        if ($this->option('dispatch-jobs')) {
+            return $this->dispatchJobs($plan->processable());
         }
 
         return $this->executeSync($plan->processable(), app(TranslateEntry::class));
@@ -222,6 +227,30 @@ final class TranslateCommand extends Command
             'overwrite' => true,
             'generate_slug' => (bool) $this->option('generate-slug'),
         ];
+    }
+
+    /**
+     * @param  PlanItem[]  $items
+     */
+    private function dispatchJobs(array $items): int
+    {
+        $options = $this->buildExecutionOptions();
+        $count = 0;
+
+        foreach ($items as $item) {
+            TranslateEntryJob::dispatch(
+                $item->entryId,
+                $item->targetSite,
+                $item->sourceSite,
+                $options,
+            );
+            $count++;
+        }
+
+        $this->info(sprintf('Dispatched %d job%s to the queue.', $count, $count === 1 ? '' : 's'));
+        $this->comment('Track status: GET /cp/content-translator/status or run `php artisan queue:work`.');
+
+        return 0;
     }
 
     /**
