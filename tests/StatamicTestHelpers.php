@@ -9,6 +9,7 @@ use Statamic\Facades\Blink;
 use Statamic\Facades\Blueprint;
 use Statamic\Facades\Collection;
 use Statamic\Facades\Entry;
+use Statamic\Facades\Role;
 use Statamic\Facades\Site;
 use Statamic\Facades\User;
 
@@ -35,6 +36,35 @@ trait StatamicTestHelpers
         $user ??= $this->testUser ?? $this->createTestUser();
 
         $this->actingAs($user, 'statamic');
+
+        return $user;
+    }
+
+    /**
+     * Create a non-super user with a role carrying the given permissions.
+     *
+     * @param  array<int, string>  $permissions
+     */
+    protected function createRestrictedUser(array $permissions, string $id = 'restricted-user'): UserModel
+    {
+        $role = Role::make()
+            ->handle($id.'-role')
+            ->title(ucfirst($id).' Role')
+            ->permissions($permissions);
+
+        Role::save($role);
+
+        $user = User::make()
+            ->email($id.'@example.com')
+            ->id($id)
+            ->set('name', ucfirst($id))
+            ->password('password');
+
+        $user->save();
+        $user->assignRole($role);
+        $user->save();
+
+        app(\Statamic\Auth\PermissionCache::class)->clear();
 
         return $user;
     }
