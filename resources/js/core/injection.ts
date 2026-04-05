@@ -286,10 +286,7 @@ function createBadge(site: SiteMeta): HTMLElement {
     badge.setAttribute('style', 'font-size:11px;color:#9ca3af;margin-left:6px;')
   } else if (site.is_stale) {
     badge.textContent = `⚠ ${t('badge_outdated')}`
-    badge.setAttribute(
-      'style',
-      `font-size:11px;color:#f59e0b;margin-left:6px;font-weight:500;${clickableStyle}`,
-    )
+    badge.setAttribute('style', `font-size:11px;color:#f59e0b;margin-left:6px;font-weight:500;${clickableStyle}`)
     if (site.last_translated_at) {
       badge.setAttribute('title', t('last_translated', { time: relativeTime(site.last_translated_at) }))
     }
@@ -300,10 +297,7 @@ function createBadge(site: SiteMeta): HTMLElement {
   } else {
     // Exists but no translation timestamp = manually created
     badge.textContent = t('badge_manual')
-    badge.setAttribute(
-      'style',
-      `font-size:11px;color:#6b7280;margin-left:6px;font-style:italic;${clickableStyle}`,
-    )
+    badge.setAttribute('style', `font-size:11px;color:#6b7280;margin-left:6px;font-style:italic;${clickableStyle}`)
   }
 
   return badge
