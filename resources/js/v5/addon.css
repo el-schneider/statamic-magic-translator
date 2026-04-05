@@ -4,11 +4,11 @@
  * gets tree-shaken out. Define it here so our dialog spinners work correctly.
  */
 @keyframes ct-spin {
-    to {
-        transform: rotate(360deg);
-    }
+  to {
+    transform: rotate(360deg);
+  }
 }
 
 .animate-spin {
-    animation: ct-spin 1s linear infinite;
+  animation: ct-spin 1s linear infinite;
 }

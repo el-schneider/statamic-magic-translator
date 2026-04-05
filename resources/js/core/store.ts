@@ -302,19 +302,62 @@ function startPolling(session: InternalSession, jobIds: string[]): void {
 
   session.isTranslating = true
 
-  session.stopPolling = pollJobs(
-    ids,
-    (jobs) => {
+  session.stopPolling = pollJobs(ids, {
+    maxAttempts: 600,
+    onStatus: (jobs) => {
       const latest = sessions.get(session.key)
       if (!latest) return
 
       applyJobSnapshot(latest, jobs)
       updateSessionFlags(latest)
+
+      const allTerminal = jobs.every((job) => job.status === 'completed' || job.status === 'failed')
+      if (allTerminal) {
+        latest.stopPolling?.()
+        latest.stopPolling = null
+      }
+
       notify(latest.key)
       finalizeIfComplete(latest)
     },
-    { maxAttempts: 600 },
-  )
+    onTimeout: () => {
+      const latest = sessions.get(session.key)
+      if (!latest) return
+
+      for (const [handle, state] of Object.entries(latest.localeState)) {
+        if (state.status === 'completed' || state.status === 'failed') continue
+
+        latest.localeState[handle] = {
+          ...state,
+          status: 'failed',
+          error: 'Translation timed out.',
+          errorCode: 'poll_timeout',
+          completedCount: state.totalCount,
+        }
+      }
+
+      latest.stopPolling?.()
+      latest.stopPolling = null
+      updateSessionFlags(latest)
+      notify(latest.key)
+      finalizeIfComplete(latest)
+    },
+  })
+}
+
+export function resumeSessionIfStuck(key: string): boolean {
+  const session = sessions.get(key)
+  if (!session) return false
+  if (!session.isTranslating) return false
+  if (session.stopPolling !== null) return false
+
+  const jobIds = [...new Set(Object.values(session.localeState).flatMap((state) => state.jobIds))]
+  if (jobIds.length === 0) return false
+
+  startPolling(session, jobIds)
+  notify(key)
+
+  return true
 }
 
 function applyJobSnapshot(session: InternalSession, jobs: TranslationJob[]): void {

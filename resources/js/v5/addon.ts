@@ -23,6 +23,7 @@ import {
 import { getMarkedHandles, markSiteCurrent, subscribeMarked } from '../core/markCurrentStore'
 import {
   getSession,
+  resumeSessionIfStuck,
   retryLocale as retryLocaleInStore,
   sessionKey,
   startTranslation,
@@ -184,6 +185,7 @@ const TranslationDialog = {
 
     self.applySessionSnapshot(getSession(self.translationSessionKey))
     self.subscribeToSession()
+    resumeSessionIfStuck(self.translationSessionKey)
 
     const existing = getSession(self.translationSessionKey)
     if (!existing || !existing.isTranslating) {

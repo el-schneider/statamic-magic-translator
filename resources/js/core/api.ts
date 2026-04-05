@@ -196,10 +196,24 @@ export async function markCurrent(entryId: string, locale: string): Promise<Mark
  * Map a raw API job object to our typed TranslationJob interface.
  */
 export function mapApiJob(apiJob: ApiJob): TranslationJob {
+  const allowedStatuses: TranslationJob['status'][] = ['pending', 'running', 'completed', 'failed']
+  const status = allowedStatuses.includes(apiJob.status as TranslationJob['status'])
+    ? (apiJob.status as TranslationJob['status'])
+    : 'failed'
+
+  const error =
+    status === 'failed' && !allowedStatuses.includes(apiJob.status as TranslationJob['status'])
+      ? {
+          code: 'unexpected_status',
+          message: `Unknown job status: ${apiJob.status}`,
+          retryable: false,
+        }
+      : apiJob.error
+
   return {
     id: apiJob.id,
     targetSite: apiJob.target_site,
-    status: apiJob.status as TranslationJob['status'],
-    error: apiJob.error,
+    status,
+    error,
   }
 }

@@ -453,6 +453,90 @@ it('stores a pending cache entry for each dispatched job', function () {
     expect($cached['target_site'])->toBe('fr');
 });
 
+it('writes heartbeat_at on every status update (pending, running, completed, failed)', function () {
+    $this->loginUser();
+    $this->createTestCollection('articles', ['en', 'fr']);
+    $this->createTestBlueprint('articles');
+    $entry = $this->createTestEntry('articles');
+
+    // ── Success path: pending -> running -> completed ─────────────────────
+    Queue::fake();
+
+    $triggerSuccess = $this->postJson(cpUrl('magic-translator/translate'), triggerPayload($entry->id(), ['fr']));
+    $triggerSuccess->assertStatus(200)->assertJsonPath('success', true);
+
+    $successJobId = $triggerSuccess->json('jobs.0.id');
+    $pending = Cache::get("magic-translator:job:{$successJobId}");
+
+    expect($pending['status'])->toBe('pending');
+    expect($pending['heartbeat_at'] ?? null)->toBeString()->not->toBeEmpty();
+
+    $successJob = null;
+    Queue::assertPushed(TranslateEntryJob::class, function (TranslateEntryJob $job) use (&$successJob): bool {
+        $successJob = $job;
+
+        return true;
+    });
+
+    $runningHeartbeatOnSuccess = null;
+    $successMock = Mockery::mock(TranslationService::class);
+    $successMock->shouldReceive('translate')->once()->andReturnUsing(function (array $units) use ($successJobId, &$runningHeartbeatOnSuccess) {
+        $running = Cache::get("magic-translator:job:{$successJobId}");
+        $runningHeartbeatOnSuccess = is_array($running) ? ($running['heartbeat_at'] ?? null) : null;
+
+        return array_map(
+            fn (ElSchneider\MagicTranslator\Data\TranslationUnit $unit) => $unit->withTranslation('FR: '.$unit->text),
+            $units,
+        );
+    });
+    app()->instance(TranslationService::class, $successMock);
+
+    expect($successJob)->toBeInstanceOf(TranslateEntryJob::class);
+    app()->call([$successJob, 'handle']);
+
+    $completed = Cache::get("magic-translator:job:{$successJobId}");
+    expect($runningHeartbeatOnSuccess)->toBeString()->not->toBeEmpty();
+    expect($completed['status'])->toBe('completed');
+    expect($completed['heartbeat_at'] ?? null)->toBeString()->not->toBeEmpty();
+
+    // ── Failure path: pending -> running -> failed ────────────────────────
+    Queue::fake();
+
+    $triggerFailed = $this->postJson(cpUrl('magic-translator/translate'), triggerPayload($entry->id(), ['fr']));
+    $triggerFailed->assertStatus(200)->assertJsonPath('success', true);
+
+    $failedJobId = $triggerFailed->json('jobs.0.id');
+    $failedPending = Cache::get("magic-translator:job:{$failedJobId}");
+
+    expect($failedPending['status'])->toBe('pending');
+    expect($failedPending['heartbeat_at'] ?? null)->toBeString()->not->toBeEmpty();
+
+    $failedJob = null;
+    Queue::assertPushed(TranslateEntryJob::class, function (TranslateEntryJob $job) use (&$failedJob): bool {
+        $failedJob = $job;
+
+        return true;
+    });
+
+    $runningHeartbeatOnFailed = null;
+    $failingMock = Mockery::mock(TranslationService::class);
+    $failingMock->shouldReceive('translate')->once()->andReturnUsing(function (array $units, string $sourceLocale = 'en', string $targetLocale = 'fr') use ($failedJobId, &$runningHeartbeatOnFailed) {
+        $running = Cache::get("magic-translator:job:{$failedJobId}");
+        $runningHeartbeatOnFailed = is_array($running) ? ($running['heartbeat_at'] ?? null) : null;
+
+        throw new RuntimeException('Simulated API error');
+    });
+    app()->instance(TranslationService::class, $failingMock);
+
+    expect($failedJob)->toBeInstanceOf(TranslateEntryJob::class);
+    expect(fn () => app()->call([$failedJob, 'handle']))->toThrow(RuntimeException::class);
+
+    $failed = Cache::get("magic-translator:job:{$failedJobId}");
+    expect($runningHeartbeatOnFailed)->toBeString()->not->toBeEmpty();
+    expect($failed['status'])->toBe('failed');
+    expect($failed['heartbeat_at'] ?? null)->toBeString()->not->toBeEmpty();
+});
+
 it('passes source_site and options through to the dispatched job', function () {
     Queue::fake();
 
@@ -778,7 +862,7 @@ it('wraps legacy string job errors into a structured error object', function () 
     ]);
 });
 
-it('returns unknown status for an expired or invalid job id', function () {
+it('returns failed with job_expired when status is queried for a missing cache key', function () {
     $this->loginUser();
 
     $response = $this->getJson(cpUrl('magic-translator/status').'?'.http_build_query(['jobs' => ['expired-job-id']]));
@@ -786,17 +870,65 @@ it('returns unknown status for an expired or invalid job id', function () {
     $response->assertStatus(200);
 
     $jobs = $response->json('jobs');
-    expect($jobs[0]['status'])->toBe('unknown');
+    expect($jobs[0]['status'])->toBe('failed');
     expect($jobs[0]['id'])->toBe('expired-job-id');
+    expect($jobs[0]['target_site'])->toBeNull();
+    expect($jobs[0]['error'])->toBe([
+        'code' => 'job_expired',
+        'message' => 'Translation job status expired.',
+        'retryable' => false,
+    ]);
 });
 
-it('handles malformed cache payloads without failing', function () {
+it('returns failed with job_stale when a running job heartbeat is older than the threshold', function () {
+    $this->loginUser();
+
+    $jobId = 'stale-running-job-id';
+
+    Cache::put("magic-translator:job:{$jobId}", [
+        'id' => $jobId,
+        'target_site' => 'fr',
+        'status' => 'running',
+        'heartbeat_at' => now()->subMinutes(11)->toIso8601String(),
+    ], 600);
+
+    $response = $this->getJson(cpUrl('magic-translator/status').'?'.http_build_query(['jobs' => [$jobId]]));
+
+    $response->assertStatus(200)
+        ->assertJsonPath('jobs.0.id', $jobId)
+        ->assertJsonPath('jobs.0.target_site', 'fr')
+        ->assertJsonPath('jobs.0.status', 'failed')
+        ->assertJsonPath('jobs.0.error.code', 'job_stale')
+        ->assertJsonPath('jobs.0.error.message', 'Translation job is no longer responding.')
+        ->assertJsonPath('jobs.0.error.retryable', false);
+});
+
+it('returns running with heartbeat intact when job is fresh', function () {
+    $this->loginUser();
+
+    $jobId = 'fresh-running-job-id';
+    $heartbeat = now()->subMinutes(2)->toIso8601String();
+
+    Cache::put("magic-translator:job:{$jobId}", [
+        'id' => $jobId,
+        'target_site' => 'fr',
+        'status' => 'running',
+        'heartbeat_at' => $heartbeat,
+    ], 600);
+
+    $response = $this->getJson(cpUrl('magic-translator/status').'?'.http_build_query(['jobs' => [$jobId]]));
+
+    $response->assertStatus(200)
+        ->assertJsonPath('jobs.0.id', $jobId)
+        ->assertJsonPath('jobs.0.target_site', 'fr')
+        ->assertJsonPath('jobs.0.status', 'running');
+});
+
+it('treats malformed running cache payloads without heartbeat as stale failures', function () {
     $this->loginUser();
 
     $jobId = 'malformed-payload-job-id';
 
-    // Simulate a stale/incomplete payload, e.g. after pending status expired
-    // before the worker started and repopulated only the status field.
     Cache::put("magic-translator:job:{$jobId}", [
         'status' => 'running',
     ], 600);
@@ -808,7 +940,12 @@ it('handles malformed cache payloads without failing', function () {
     $job = $response->json('jobs.0');
     expect($job['id'])->toBe($jobId);
     expect($job['target_site'])->toBeNull();
-    expect($job['status'])->toBe('running');
+    expect($job['status'])->toBe('failed');
+    expect($job['error'])->toBe([
+        'code' => 'job_stale',
+        'message' => 'Translation job is no longer responding.',
+        'retryable' => false,
+    ]);
 });
 
 it('returns statuses for multiple jobs in one request', function () {
@@ -816,7 +953,7 @@ it('returns statuses for multiple jobs in one request', function () {
 
     $completedId = 'job-completed';
     $failedId = 'job-failed';
-    $unknownId = 'job-unknown';
+    $expiredId = 'job-expired';
 
     Cache::put("magic-translator:job:{$completedId}", [
         'id' => $completedId,
@@ -836,7 +973,7 @@ it('returns statuses for multiple jobs in one request', function () {
         ],
     ], 600);
 
-    $queryString = http_build_query(['jobs' => [$completedId, $failedId, $unknownId]]);
+    $queryString = http_build_query(['jobs' => [$completedId, $failedId, $expiredId]]);
     $response = $this->getJson(cpUrl('magic-translator/status').'?'.$queryString);
 
     $response->assertStatus(200);
@@ -850,7 +987,12 @@ it('returns statuses for multiple jobs in one request', function () {
         'message' => 'Something went wrong.',
         'retryable' => false,
     ]);
-    expect($jobs->get($unknownId)['status'])->toBe('unknown');
+    expect($jobs->get($expiredId)['status'])->toBe('failed');
+    expect($jobs->get($expiredId)['error'])->toBe([
+        'code' => 'job_expired',
+        'message' => 'Translation job status expired.',
+        'retryable' => false,
+    ]);
 });
 
 it('returns 422 when status request is missing jobs parameter', function () {
