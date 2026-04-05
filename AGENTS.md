@@ -79,4 +79,6 @@ Check first: `pgrep -f 'queue:listen'` — only start one if none is running.
 ## Gotchas
 
 - In tests, `Entry::blueprint()->handle()` may resolve to the collection handle unless an explicit blueprint is created first. Create the blueprint when asserting exact `exclude_blueprints` matches.
+- Feature tests already extend `Tests\TestCase` via `tests/Pest.php`; adding `uses(Tests\TestCase::class)` again in a Feature test file causes a Pest duplicate-test-case error.
 - `npx tsc --noEmit` can crash with `RangeError: Maximum call stack size exceeded` in this workspace (Node 22 + current include set). Use `node --stack_size=16384 ./node_modules/typescript/bin/tsc --noEmit` to inspect actual TS errors.
+- In tests, `makeLocalization('<site>')->save()` fails with `Call to a member function lang() on null` if the site handle is not configured in Statamic's active sites. Use configured handles (default test setup includes `en`/`fr`) or set sites first.
