@@ -25,6 +25,99 @@ Publish the configuration:
 php artisan vendor:publish --tag=statamic-content-translator-config
 ```
 
+## CP Usage
+
+### Translating a single entry
+
+1. Open an entry in the control panel
+2. Click **Translate** in the sidebar
+3. Select target locales and options
+4. Click **Translate selected**
+
+Each locale shows its own progress indicator. Failed translations display the error inline with a retry button.
+
+### Bulk translation
+
+1. Select entries in a collection listing
+2. Choose **Translate** from the actions menu
+3. Pick target locales and options in the dialog
+
+### Translation dialog options
+
+| Option | Description |
+|:---|:---|
+| **Source locale** | Defaults to origin entry. Can be changed to translate from any existing localization. |
+| **Generate slugs** | Auto-generate slugs from the translated title. |
+| **Overwrite existing** | When disabled (default), locales with existing translations are unchecked to prevent accidental overwrites. |
+
+### Staleness badges
+
+The Sites panel in the sidebar shows translation status per locale:
+
+- **2h ago** — translated, up-to-date
+- **⚠️ outdated** — origin has been updated since last translation
+- **—** — localization exists but was never machine-translated
+
+## CLI Usage
+
+The addon also ships with an artisan command for bulk and automated translation:
+
+```bash
+php please statamic:content-translator:translate [options]
+```
+
+> Requires at least one filter: `--to`, `--collection`, `--entry`, or `--blueprint`.
+
+### Common examples
+
+Preview what would be translated for a collection (safe, no changes):
+
+```bash
+php please statamic:content-translator:translate --collection=pages --to=de --dry-run
+```
+
+Translate all missing `pages` entries into German and French asynchronously:
+
+```bash
+php please statamic:content-translator:translate --collection=pages --to=de --to=fr --dispatch-jobs -n
+```
+
+Re-translate stale entries for CI/cron:
+
+```bash
+php please statamic:content-translator:translate --collection=pages --include-stale --dispatch-jobs -n
+```
+
+Translate one specific entry to every site its collection supports:
+
+```bash
+php please statamic:content-translator:translate --entry=abc-123
+```
+
+### Options
+
+| Option | Description |
+|:---|:---|
+| `--to=*` | Target site handle (repeatable). Default: all sites each entry supports minus source site. |
+| `--from=` | Source site handle. Default: entry origin site. |
+| `--collection=*` | Filter by collection handle (repeatable). |
+| `--entry=*` | Filter by entry ID (repeatable). |
+| `--blueprint=*` | Filter by blueprint handle (repeatable). |
+| `--include-stale` | Also re-translate entries where source was updated after target `last_translated_at`. |
+| `--overwrite` | Re-translate everything regardless of existing state. |
+| `--generate-slug` | Slugify translated title. |
+| `--dispatch-jobs` | Dispatch queued jobs instead of running synchronously. |
+| `--dry-run` | Print the plan without executing. |
+| `-n`, `--no-interaction` | Skip confirmation prompt (required in CI/non-interactive environments). |
+
+### Exit codes
+
+| Code | Meaning |
+|:---|:---|
+| `0` | Success, dry run, empty plan, or user-declined confirmation. |
+| `1` | Partial failure (some translations failed). |
+| `2` | Command-level error (invalid options/handles, unsafe non-interactive run without `-n`). |
+
 ## Configuration
 
 ### 1. Exclude blueprints (optional)
@@ -89,39 +182,6 @@ Optionally configure a dedicated queue:
 CONTENT_TRANSLATOR_QUEUE_CONNECTION=redis
 CONTENT_TRANSLATOR_QUEUE_NAME=translations
 ```
-
-## Usage
-
-### Translating a single entry
-
-1. Open an entry in the control panel
-2. Click **Translate** in the sidebar
-3. Select target locales and options
-4. Click **Translate selected**
-
-Each locale shows its own progress indicator. Failed translations display the error inline with a retry button.
-
-### Bulk translation
-
-1. Select entries in a collection listing
-2. Choose **Translate** from the actions menu
-3. Pick target locales and options in the dialog
-
-### Translation dialog options
-
-| Option | Description |
-|:---|:---|
-| **Source locale** | Defaults to origin entry. Can be changed to translate from any existing localization. |
-| **Generate slugs** | Auto-generate slugs from the translated title. |
-| **Overwrite existing** | When disabled (default), locales with existing translations are unchecked to prevent accidental overwrites. |
-
-### Staleness badges
-
-The Sites panel in the sidebar shows translation status per locale:
-
-- **2h ago** — translated, up-to-date
-- **⚠️ outdated** — origin has been updated since last translation
-- **—** — localization exists but was never machine-translated
 
 ## Content Structure Support
 

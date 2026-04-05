@@ -1,4 +1,4 @@
-import { triggerTranslation } from './api'
+import { checkStatus, mapApiJob, triggerTranslation } from './api'
 import { normalizeApiError } from './errors'
 import { pollJobs } from './polling'
 import type { LocaleJobState, TranslationJob } from './types'
@@ -395,6 +395,8 @@ function notify(key: string): void {
   const session = sessions.get(key)
   if (!session) return
 
+  persistSessions()
+
   const keyListeners = listeners.get(key)
   if (!keyListeners || keyListeners.size === 0) return
 
@@ -434,3 +436,192 @@ function cloneSession(session: TranslationSession): TranslationSession {
 function t(key: string, replacements: Record<string, string | number> = {}): string {
   return __('content-translator::messages.' + key, replacements)
 }
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Cross-reload persistence
+//
+// Non-terminal sessions are mirrored to localStorage so that a full page
+// reload can reconstruct them. On module load we re-query the server for
+// fresh job statuses (server is source of truth) and resume polling any
+// sessions still in flight. Stale records (> 24h) and sessions whose jobs
+// have been purged server-side are dropped silently.
+// ─────────────────────────────────────────────────────────────────────────────
+
+const STORAGE_KEY = 'content-translator:sessions'
+const MAX_AGE_MS = 24 * 60 * 60 * 1000
+
+interface PersistedSession {
+  key: string
+  entryIds: string[]
+  sourceSite: string
+  selectedLocales: string[]
+  options: TranslationOptions
+  startedAt: number
+  jobIdsByHandle: Record<string, string[]>
+  totalCountByHandle: Record<string, number>
+}
+
+function persistSessions(): void {
+  if (typeof localStorage === 'undefined') return
+
+  const records: PersistedSession[] = []
+  for (const session of sessions.values()) {
+    if (session.isComplete) continue
+
+    const jobIdsByHandle: Record<string, string[]> = {}
+    const totalCountByHandle: Record<string, number> = {}
+    for (const [handle, state] of Object.entries(session.localeState)) {
+      jobIdsByHandle[handle] = [...state.jobIds]
+      totalCountByHandle[handle] = state.totalCount
+    }
+
+    records.push({
+      key: session.key,
+      entryIds: [...session.entryIds],
+      sourceSite: session.sourceSite,
+      selectedLocales: [...session.selectedLocales],
+      options: { ...session.options },
+      startedAt: session.startedAt,
+      jobIdsByHandle,
+      totalCountByHandle,
+    })
+  }
+
+  try {
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(records))
+  } catch {
+    // localStorage full or unavailable — non-fatal
+  }
+}
+
+function dropPersisted(key: string): void {
+  if (typeof localStorage === 'undefined') return
+
+  try {
+    const raw = localStorage.getItem(STORAGE_KEY)
+    if (!raw) return
+    const parsed = JSON.parse(raw)
+    if (!Array.isArray(parsed)) return
+    const filtered = (parsed as PersistedSession[]).filter((r) => r.key !== key)
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(filtered))
+  } catch {
+    // ignore
+  }
+}
+
+async function rehydrateSessions(): Promise<void> {
+  if (typeof localStorage === 'undefined') return
+
+  let records: PersistedSession[]
+  try {
+    const raw = localStorage.getItem(STORAGE_KEY)
+    if (!raw) return
+    const parsed = JSON.parse(raw)
+    if (!Array.isArray(parsed)) return
+    records = parsed as PersistedSession[]
+  } catch {
+    return
+  }
+
+  const now = Date.now()
+  const fresh = records.filter((r) => typeof r.startedAt === 'number' && now - r.startedAt < MAX_AGE_MS)
+
+  if (fresh.length !== records.length) {
+    try {
+      localStorage.setItem(STORAGE_KEY, JSON.stringify(fresh))
+    } catch {
+      // ignore
+    }
+  }
+
+  await Promise.all(
+    fresh.map((record) =>
+      rehydrateSession(record).catch((err) => {
+        console.error('[content-translator] session rehydration error:', err)
+      }),
+    ),
+  )
+}
+
+async function rehydrateSession(record: PersistedSession): Promise<void> {
+  if (sessions.has(record.key)) return
+
+  const allJobIds = Object.values(record.jobIdsByHandle).flat()
+  if (allJobIds.length === 0) return
+
+  const statusResponse = await checkStatus(allJobIds)
+  const jobs = statusResponse.jobs.map(mapApiJob)
+  const jobsById = new Map(jobs.map((j) => [j.id, j]))
+
+  const localeState: Record<string, LocaleJobState> = {}
+
+  for (const handle of record.selectedLocales) {
+    const jobIds = record.jobIdsByHandle[handle] ?? []
+    const knownJobs = jobIds.map((id) => jobsById.get(id)).filter((j): j is TranslationJob => Boolean(j))
+
+    if (knownJobs.length === 0) continue
+
+    const completedCount = knownJobs.filter((j) => j.status === 'completed').length
+    const failedJobs = knownJobs.filter((j) => j.status === 'failed')
+    const terminalCount = completedCount + failedJobs.length
+    const hasRunning = knownJobs.some((j) => j.status === 'running')
+    const hasPending = knownJobs.some((j) => j.status === 'pending')
+    const normalizedFailedJob = failedJobs[0] ? normalizeApiError(failedJobs[0].error) : null
+
+    let status: LocaleJobState['status'] = 'pending'
+    if (failedJobs.length > 0) status = 'failed'
+    else if (terminalCount === knownJobs.length) status = 'completed'
+    else if (hasRunning) status = 'running'
+    else if (hasPending) status = 'pending'
+
+    localeState[handle] = {
+      status,
+      error: normalizedFailedJob?.message ?? null,
+      errorCode: normalizedFailedJob?.code ?? null,
+      completedCount: terminalCount,
+      totalCount: record.totalCountByHandle[handle] ?? knownJobs.length,
+      jobIds: [...jobIds],
+    }
+  }
+
+  if (Object.keys(localeState).length === 0) {
+    // All jobs expired / purged server-side — drop silently.
+    dropPersisted(record.key)
+    return
+  }
+
+  if (sessions.has(record.key)) return
+
+  const session: InternalSession = {
+    key: record.key,
+    entryIds: [...record.entryIds],
+    sourceSite: record.sourceSite,
+    selectedLocales: [...record.selectedLocales],
+    options: { ...record.options },
+    localeState,
+    isTranslating: false,
+    isComplete: false,
+    hasFailed: false,
+    startedAt: record.startedAt,
+    stopPolling: null,
+    toastFired: false,
+  }
+
+  sessions.set(record.key, session)
+  updateSessionFlags(session)
+
+  if (session.isComplete) {
+    // Completed while we were gone — no toast, just silent final-state display.
+    session.toastFired = true
+    dropPersisted(record.key)
+    notify(record.key)
+    return
+  }
+
+  const remainingIds = Object.values(session.localeState).flatMap((s) => s.jobIds)
+  notify(record.key)
+  startPolling(session, remainingIds)
+}
+
+// Fire-and-forget rehydration at module load.
+void rehydrateSessions()
