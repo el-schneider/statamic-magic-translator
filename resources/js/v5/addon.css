@@ -1,0 +1,14 @@
+/*
+ * Statamic v5's CP stylesheet is Tailwind v3 with JIT purging. The
+ * animate-spin utility is not used in Statamic's own templates and therefore
+ * gets tree-shaken out. Define it here so our dialog spinners work correctly.
+ */
+@keyframes ct-spin {
+    to {
+        transform: rotate(360deg);
+    }
+}
+
+.animate-spin {
+    animation: ct-spin 1s linear infinite;
+}

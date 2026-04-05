@@ -84,8 +84,14 @@ final class ServiceProvider extends AddonServiceProvider
             ? 'resources/js/v6/addon.ts'
             : 'resources/js/v5/addon.ts';
 
+        $input = [$entryPoint];
+
+        if (! $this->supportsInertia()) {
+            $input[] = 'resources/js/v5/addon.css';
+        }
+
         $this->registerVite([
-            'input' => [$entryPoint],
+            'input' => $input,
             'publicDirectory' => 'resources/dist',
         ]);
 
