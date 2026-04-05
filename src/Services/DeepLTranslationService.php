@@ -4,12 +4,20 @@ declare(strict_types=1);
 
 namespace ElSchneider\ContentTranslator\Services;
 
+use DeepL\AuthorizationException;
+use DeepL\ConnectionException;
+use DeepL\DeepLException;
+use DeepL\QuotaExceededException;
+use DeepL\TooManyRequestsException;
 use DeepL\TranslateTextOptions;
 use DeepL\Translator;
 use ElSchneider\ContentTranslator\Contracts\TranslationService;
 use ElSchneider\ContentTranslator\Data\TranslationUnit;
+use ElSchneider\ContentTranslator\Exceptions\ProviderAuthException;
+use ElSchneider\ContentTranslator\Exceptions\ProviderRateLimitedException;
+use ElSchneider\ContentTranslator\Exceptions\ProviderResponseInvalidException;
+use ElSchneider\ContentTranslator\Exceptions\ProviderUnavailableException;
 use InvalidArgumentException;
-use RuntimeException;
 
 final class DeepLTranslationService implements TranslationService
 {
@@ -69,20 +77,44 @@ final class DeepLTranslationService implements TranslationService
         $concatenated = $this->concatenateUnits($units);
         $deeplSourceLocale = $this->mapSourceLocale($sourceLocale);
         $deeplTargetLocale = $this->mapTargetLocale($targetLocale);
+        $context = [
+            'provider' => 'deepl',
+            'source_locale' => $sourceLocale,
+            'target_locale' => $targetLocale,
+            'deepl_source_locale' => $deeplSourceLocale,
+            'deepl_target_locale' => $deeplTargetLocale,
+            'unit_count' => count($units),
+        ];
 
         $options = [
             TranslateTextOptions::TAG_HANDLING => 'xml',
             TranslateTextOptions::FORMALITY => $this->resolveFormality($targetLocale),
         ];
 
-        $result = $this->translator->translateText(
-            $concatenated,
-            $deeplSourceLocale,
-            $deeplTargetLocale,
-            $options
-        );
+        try {
+            $result = $this->translator->translateText(
+                $concatenated,
+                $deeplSourceLocale,
+                $deeplTargetLocale,
+                $options
+            );
+        } catch (AuthorizationException $exception) {
+            throw new ProviderAuthException('DeepL authentication failed.', $exception, $context);
+        } catch (TooManyRequestsException $exception) {
+            throw new ProviderRateLimitedException('DeepL rate limit exceeded.', $exception, $context);
+        } catch (QuotaExceededException $exception) {
+            throw new ProviderRateLimitedException(
+                'DeepL translation quota exceeded.',
+                $exception,
+                array_merge($context, ['detail' => 'quota_exceeded'])
+            );
+        } catch (ConnectionException $exception) {
+            throw new ProviderUnavailableException('DeepL is temporarily unavailable.', $exception, $context);
+        } catch (DeepLException $exception) {
+            throw new ProviderUnavailableException('DeepL request failed.', $exception, $context);
+        }
 
-        return $this->parseResponse($units, $result->text);
+        return $this->parseResponse($units, $result->text, $context);
     }
 
     /**
@@ -110,7 +142,7 @@ final class DeepLTranslationService implements TranslationService
      * @param  TranslationUnit[]  $units
      * @return TranslationUnit[]
      */
-    private function parseResponse(array $units, string $responseText): array
+    private function parseResponse(array $units, string $responseText, array $context = []): array
     {
         preg_match_all(
             '/<ct-unit\b[^>]*\bid\s*=\s*([\'\"])(\d+)\1[^>]*>(.*?)<\/ct-unit\s*>/si',
@@ -130,8 +162,13 @@ final class DeepLTranslationService implements TranslationService
 
         foreach ($reindexed as $index => $unit) {
             if (! array_key_exists($index, $translatedByIndex)) {
-                throw new RuntimeException(
-                    sprintf('Missing translation for unit index [%d] (path: %s).', $index, $unit->path)
+                throw new ProviderResponseInvalidException(
+                    sprintf('Missing translation for unit index [%d] (path: %s).', $index, $unit->path),
+                    context: array_merge($context, [
+                        'unit_index' => $index,
+                        'unit_path' => $unit->path,
+                        'response_length' => mb_strlen($responseText),
+                    ])
                 );
             }
 

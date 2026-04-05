@@ -2,6 +2,8 @@
 
 declare(strict_types=1);
 
+use ElSchneider\ContentTranslator\Contracts\TranslationService;
+use ElSchneider\ContentTranslator\Exceptions\ProviderRateLimitedException;
 use ElSchneider\ContentTranslator\Jobs\TranslateEntryJob;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\Queue;
@@ -96,7 +98,14 @@ it('forbids users who cannot edit the specific entry', function () {
     ]);
 
     $response->assertStatus(403)
-        ->assertJson(['success' => false, 'error' => 'Forbidden.']);
+        ->assertJson([
+            'success' => false,
+            'error' => [
+                'code' => 'forbidden',
+                'message' => 'Forbidden.',
+                'retryable' => false,
+            ],
+        ]);
 });
 
 // ── Trigger: validation ────────────────────────────────────────────────────────
@@ -163,7 +172,47 @@ it('returns 404 when the entry does not exist', function () {
     ]);
 
     $response->assertStatus(404)
-        ->assertJson(['success' => false]);
+        ->assertJson([
+            'success' => false,
+            'error' => [
+                'code' => 'resource_not_found',
+                'message' => 'Entry [nonexistent-entry-id] not found.',
+                'retryable' => false,
+            ],
+        ]);
+});
+
+it('returns a structured error envelope when dispatch throws a domain exception', function () {
+    config()->set('queue.default', 'sync');
+
+    app()->instance(TranslationService::class, new class implements TranslationService
+    {
+        public function translate(array $units, string $sourceLocale = 'en', string $targetLocale = 'fr'): array
+        {
+            throw new ProviderRateLimitedException('Provider temporarily rate limited the request.');
+        }
+    });
+
+    $this->loginUser();
+    $this->createTestCollection('articles', ['en', 'fr']);
+    $this->createTestBlueprint('articles');
+    $entry = $this->createTestEntry('articles');
+
+    $response = $this->postJson(cpUrl('content-translator/translate'), [
+        'entry_id' => $entry->id(),
+        'target_sites' => ['fr'],
+    ]);
+
+    $response->assertStatus(502)
+        ->assertJson([
+            'success' => false,
+            'error' => [
+                'code' => 'provider_rate_limited',
+                'message' => 'Translation service rate limit exceeded. Please try again later.',
+                'message_key' => 'content-translator::messages.error_provider_rate_limited',
+                'retryable' => true,
+            ],
+        ]);
 });
 
 // ── Trigger: job dispatch ─────────────────────────────────────────────────────
@@ -334,10 +383,41 @@ it('returns completed status for a finished job', function () {
     expect($jobs[0])->not->toHaveKey('error');
 });
 
-it('returns failed status with error message for a failed job', function () {
+it('returns failed status with a structured error object for a failed job', function () {
     $this->loginUser();
 
     $jobId = 'test-failed-job-id';
+
+    Cache::put("content-translator:job:{$jobId}", [
+        'id' => $jobId,
+        'target_site' => 'fr',
+        'status' => 'failed',
+        'error' => [
+            'code' => 'provider_unavailable',
+            'message' => 'Translation service is temporarily unavailable. Please try again later.',
+            'message_key' => 'content-translator::messages.error_provider_unavailable',
+            'retryable' => true,
+        ],
+    ], 600);
+
+    $response = $this->getJson(cpUrl('content-translator/status').'?'.http_build_query(['jobs' => [$jobId]]));
+
+    $response->assertStatus(200);
+
+    $jobs = $response->json('jobs');
+    expect($jobs[0]['status'])->toBe('failed');
+    expect($jobs[0]['error'])->toBe([
+        'code' => 'provider_unavailable',
+        'message' => 'Translation service is temporarily unavailable. Please try again later.',
+        'message_key' => 'content-translator::messages.error_provider_unavailable',
+        'retryable' => true,
+    ]);
+});
+
+it('wraps legacy string job errors into a structured error object', function () {
+    $this->loginUser();
+
+    $jobId = 'legacy-failed-job-id';
 
     Cache::put("content-translator:job:{$jobId}", [
         'id' => $jobId,
@@ -352,7 +432,11 @@ it('returns failed status with error message for a failed job', function () {
 
     $jobs = $response->json('jobs');
     expect($jobs[0]['status'])->toBe('failed');
-    expect($jobs[0]['error'])->toBe('Translation API unavailable.');
+    expect($jobs[0]['error'])->toBe([
+        'code' => 'unexpected_error',
+        'message' => 'Translation API unavailable.',
+        'retryable' => false,
+    ]);
 });
 
 it('returns unknown status for an expired or invalid job id', function () {
@@ -406,7 +490,11 @@ it('returns statuses for multiple jobs in one request', function () {
         'id' => $failedId,
         'target_site' => 'de',
         'status' => 'failed',
-        'error' => 'Something went wrong.',
+        'error' => [
+            'code' => 'unexpected_error',
+            'message' => 'Something went wrong.',
+            'retryable' => false,
+        ],
     ], 600);
 
     $queryString = http_build_query(['jobs' => [$completedId, $failedId, $unknownId]]);
@@ -418,7 +506,11 @@ it('returns statuses for multiple jobs in one request', function () {
 
     expect($jobs->get($completedId)['status'])->toBe('completed');
     expect($jobs->get($failedId)['status'])->toBe('failed');
-    expect($jobs->get($failedId)['error'])->toBe('Something went wrong.');
+    expect($jobs->get($failedId)['error'])->toBe([
+        'code' => 'unexpected_error',
+        'message' => 'Something went wrong.',
+        'retryable' => false,
+    ]);
     expect($jobs->get($unknownId)['status'])->toBe('unknown');
 });
 
@@ -483,8 +575,8 @@ it('clears stale cache errors when a retried job later succeeds', function () {
 it('job updates cache to failed when translation throws', function () {
     // Bind a translation service that always throws.
     app()->instance(
-        ElSchneider\ContentTranslator\Contracts\TranslationService::class,
-        new class implements ElSchneider\ContentTranslator\Contracts\TranslationService
+        TranslationService::class,
+        new class implements TranslationService
         {
             public function translate(array $units, string $sourceLocale = 'en', string $targetLocale = 'fr'): array
             {
@@ -512,19 +604,23 @@ it('job updates cache to failed when translation throws', function () {
 
     $cached = Cache::get("content-translator:job:{$jobId}");
     expect($cached['status'])->toBe('failed');
-    expect($cached['error'])->toBe('Simulated API error');
+    expect($cached['error'])->toBe([
+        'code' => 'unexpected_error',
+        'message' => 'An unexpected error occurred.',
+        'retryable' => false,
+    ]);
 });
 
 // ── Helpers (file-scope) ──────────────────────────────────────────────────────
 
 function use_fake_translation_service_for_job_test(): void
 {
-    $mock = Mockery::mock(ElSchneider\ContentTranslator\Contracts\TranslationService::class);
+    $mock = Mockery::mock(TranslationService::class);
     $mock->shouldReceive('translate')->andReturnUsing(
         fn (array $units) => array_map(
             fn (ElSchneider\ContentTranslator\Data\TranslationUnit $u) => $u->withTranslation('FR: '.$u->text),
             $units,
         ),
     );
-    app()->instance(ElSchneider\ContentTranslator\Contracts\TranslationService::class, $mock);
+    app()->instance(TranslationService::class, $mock);
 }

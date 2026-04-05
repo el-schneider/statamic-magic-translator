@@ -5,7 +5,7 @@ declare(strict_types=1);
 namespace ElSchneider\ContentTranslator\Services;
 
 use ElSchneider\ContentTranslator\Contracts\TranslationService;
-use InvalidArgumentException;
+use ElSchneider\ContentTranslator\Exceptions\TranslationConfigException;
 
 final class TranslationServiceFactory
 {
@@ -16,7 +16,7 @@ final class TranslationServiceFactory
         return match ($service) {
             'prism' => app(PrismTranslationService::class),
             'deepl' => app(DeepLTranslationService::class),
-            default => throw new InvalidArgumentException("Unknown translation service: [{$service}]"),
+            default => throw new TranslationConfigException("Unknown translation service: [{$service}]"),
         };
     }
 }

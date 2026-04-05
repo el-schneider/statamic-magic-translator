@@ -17,6 +17,8 @@ import { Badge, Button, Card, Checkbox, Icon, Label, Modal, ModalClose, Select, 
 import { computed, onBeforeUnmount, reactive, ref, watch } from 'vue'
 import { pollJobs } from '../../core/polling'
 import { triggerTranslation } from '../../core/api'
+import { normalizeApiError } from '../../core/errors'
+import type { NormalizedError } from '../../core/errors'
 import type { LocaleJobState, SiteMeta, SiteDescriptor, TranslationJob } from '../../core/types'
 
 declare function __(key: string, replacements?: Record<string, string | number>): string
@@ -171,6 +173,8 @@ function applyJobSnapshot(jobs: TranslationJob[]): void {
     const hasPending = relatedJobs.some((job) => job.status === 'pending')
 
     let nextStatus: LocaleJobState['status'] = 'pending'
+    const normalizedFailedJob = failedJobs[0] ? normalizeApiError(failedJobs[0].error) : null
+
     if (failedJobs.length > 0) {
       nextStatus = 'failed'
     } else if (terminalCount === relatedJobs.length) {
@@ -184,7 +188,8 @@ function applyJobSnapshot(jobs: TranslationJob[]): void {
     localeState[handle] = {
       ...state,
       status: nextStatus,
-      error: failedJobs[0]?.error ?? null,
+      error: normalizedFailedJob?.message ?? null,
+      errorCode: normalizedFailedJob?.code ?? null,
       completedCount: terminalCount,
     }
   }
@@ -208,6 +213,7 @@ async function translate(): Promise<void> {
     localeState[handle] = {
       status: 'pending',
       error: null,
+      errorCode: null,
       completedCount: 0,
       totalCount: totalEntries,
       jobIds: [],
@@ -230,13 +236,16 @@ async function translate(): Promise<void> {
 
       if (!result.success) {
         console.error('[content-translator] trigger failed:', result.error)
+        const normalized = normalizeApiError(result.error ?? t('error_trigger_failed'))
+
         // Mark affected locales as failed
         for (const handle of selectedLocales.value) {
           if (localeState[handle]) {
             localeState[handle] = {
               ...localeState[handle]!,
               status: 'failed',
-              error: result.error ?? t('error_trigger_failed'),
+              error: normalized.message,
+              errorCode: normalized.code,
               completedCount: Math.min(localeState[handle]!.completedCount + 1, localeState[handle]!.totalCount),
             }
           }
@@ -258,13 +267,16 @@ async function translate(): Promise<void> {
     }
   } catch (err) {
     console.error('[content-translator] dispatch error:', err)
+    const normalized = normalizeApiError(err)
+
     // Mark everything as failed
     for (const handle of selectedLocales.value) {
       if (localeState[handle]) {
         localeState[handle] = {
           ...localeState[handle]!,
           status: 'failed',
-          error: t('error_unexpected'),
+          error: normalized.message,
+          errorCode: normalized.code,
         }
       }
     }
@@ -292,11 +304,13 @@ async function retryLocale(handle: string): Promise<void> {
     ...localeState[handle]!,
     status: 'pending',
     error: null,
+    errorCode: null,
     completedCount: 0,
     jobIds: [],
   }
 
   const newJobIds: string[] = []
+  let lastError: NormalizedError | null = null
 
   for (const entryId of allEntryIds.value) {
     try {
@@ -313,13 +327,26 @@ async function retryLocale(handle: string): Promise<void> {
         for (const job of result.jobs) {
           newJobIds.push(job.id)
         }
+      } else {
+        lastError = normalizeApiError(result.error ?? t('error_trigger_failed'))
       }
     } catch (err) {
       console.error('[content-translator] retry error:', err)
+      lastError = normalizeApiError(err)
     }
   }
 
-  if (newJobIds.length === 0) return
+  if (newJobIds.length === 0) {
+    if (localeState[handle]) {
+      localeState[handle] = {
+        ...localeState[handle]!,
+        status: 'failed',
+        error: lastError?.message ?? t('translation_failed'),
+        errorCode: lastError?.code ?? 'unexpected_error',
+      }
+    }
+    return
+  }
 
   localeState[handle] = {
     ...localeState[handle]!,

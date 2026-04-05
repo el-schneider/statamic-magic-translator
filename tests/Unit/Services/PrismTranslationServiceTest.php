@@ -4,9 +4,19 @@ declare(strict_types=1);
 
 use ElSchneider\ContentTranslator\Data\TranslationFormat;
 use ElSchneider\ContentTranslator\Data\TranslationUnit;
+use ElSchneider\ContentTranslator\Exceptions\ProviderAuthException;
+use ElSchneider\ContentTranslator\Exceptions\ProviderRateLimitedException;
+use ElSchneider\ContentTranslator\Exceptions\ProviderResponseInvalidException;
+use ElSchneider\ContentTranslator\Exceptions\ProviderUnavailableException;
 use ElSchneider\ContentTranslator\Services\PrismTranslationService;
 use Prism\Prism\Enums\FinishReason;
+use Prism\Prism\Exceptions\PrismException;
+use Prism\Prism\Exceptions\PrismRateLimitedException;
+use Prism\Prism\Exceptions\PrismStructuredDecodingException;
 use Prism\Prism\Facades\Prism;
+use Prism\Prism\PrismManager;
+use Prism\Prism\Providers\Provider;
+use Prism\Prism\Structured\Request as StructuredRequest;
 use Prism\Prism\Structured\Response as StructuredResponse;
 use Prism\Prism\ValueObjects\Meta;
 use Prism\Prism\ValueObjects\Usage;
@@ -31,6 +41,29 @@ function makeStructuredResponse(array $structured): StructuredResponse
         usage: new Usage(100, 50),
         meta: new Meta('req-1', 'claude-sonnet-4-20250514'),
     );
+}
+
+function bindPrismProviderThatThrows(Throwable $throwable): void
+{
+    $provider = new class($throwable) extends Provider
+    {
+        public function __construct(private readonly Throwable $throwable) {}
+
+        public function structured(StructuredRequest $request): StructuredResponse
+        {
+            throw $this->throwable;
+        }
+    };
+
+    app()->instance(PrismManager::class, new class($provider) extends PrismManager
+    {
+        public function __construct(private readonly Provider $provider) {}
+
+        public function resolve(\Prism\Prism\Enums\Provider|string $name, array $providerConfig = []): Provider
+        {
+            return $this->provider;
+        }
+    });
 }
 
 it('returns empty array when no units provided', function () {
@@ -313,7 +346,67 @@ it('throws when prism response misses a unit translation', function () {
     $service = app(PrismTranslationService::class);
 
     $service->translate($units, 'en', 'fr');
-})->throws(RuntimeException::class, 'Missing translation for unit id [body].');
+})->throws(ProviderResponseInvalidException::class, 'Missing translation for unit id [body].');
+
+it('maps prism authentication failures to provider auth exceptions', function () {
+    $previous = PrismException::providerRequestErrorWithDetails(
+        'Anthropic',
+        401,
+        'invalid_request_error',
+        'x-api-key header is required'
+    );
+
+    bindPrismProviderThatThrows($previous);
+
+    $units = [new TranslationUnit('title', 'Hello', TranslationFormat::Plain)];
+
+    try {
+        app(PrismTranslationService::class)->translate($units, 'en', 'fr');
+
+        $this->fail('Expected ProviderAuthException to be thrown.');
+    } catch (ProviderAuthException $exception) {
+        expect($exception->getPrevious())->toBe($previous)
+            ->and($exception->context())->toMatchArray([
+                'provider' => 'anthropic',
+                'model' => 'claude-sonnet-4-20250514',
+                'status_code' => 401,
+            ]);
+    }
+});
+
+it('maps prism rate limiting failures to provider rate limited exceptions', function () {
+    bindPrismProviderThatThrows(PrismRateLimitedException::make());
+
+    $units = [new TranslationUnit('title', 'Hello', TranslationFormat::Plain)];
+
+    expect(fn () => app(PrismTranslationService::class)->translate($units, 'en', 'fr'))
+        ->toThrow(ProviderRateLimitedException::class, 'Prism provider rate limited the request.');
+});
+
+it('maps prism decoding failures to provider response invalid exceptions', function () {
+    bindPrismProviderThatThrows(PrismStructuredDecodingException::make('{invalid json'));
+
+    $units = [new TranslationUnit('title', 'Hello', TranslationFormat::Plain)];
+
+    expect(fn () => app(PrismTranslationService::class)->translate($units, 'en', 'fr'))
+        ->toThrow(ProviderResponseInvalidException::class, 'Prism returned a malformed structured response.');
+});
+
+it('maps prism timeout failures to provider unavailable exceptions', function () {
+    $previous = new PrismException('Connection timeout while contacting provider');
+    bindPrismProviderThatThrows($previous);
+
+    $units = [new TranslationUnit('title', 'Hello', TranslationFormat::Plain)];
+
+    try {
+        app(PrismTranslationService::class)->translate($units, 'en', 'fr');
+
+        $this->fail('Expected ProviderUnavailableException to be thrown.');
+    } catch (ProviderUnavailableException $exception) {
+        expect($exception->getPrevious())->toBe($previous)
+            ->and($exception->context()['provider'])->toBe('anthropic');
+    }
+});
 
 it('throws for invalid max_units_per_request config', function () {
     config(['statamic.content-translator.max_units_per_request' => 0]);

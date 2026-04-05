@@ -5,6 +5,8 @@ declare(strict_types=1);
 namespace ElSchneider\ContentTranslator\Jobs;
 
 use ElSchneider\ContentTranslator\Actions\TranslateEntry;
+use ElSchneider\ContentTranslator\Exceptions\ContentTranslatorException;
+use ElSchneider\ContentTranslator\Support\TranslationLogger;
 use Illuminate\Bus\Queueable;
 use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Foundation\Bus\Dispatchable;
@@ -112,11 +114,18 @@ final class TranslateEntryJob implements ShouldQueue
                 return;
             }
 
-            $this->updateCacheStatus('failed', $e->getMessage());
+            TranslationLogger::unexpected($e, $this->jobLogContext());
+            $this->updateCacheStatus('failed', $this->unexpectedApiError());
+
+            throw $e;
+        } catch (ContentTranslatorException $e) {
+            TranslationLogger::error($e, $this->jobLogContext());
+            $this->updateCacheStatus('failed', $e->toApiError());
 
             throw $e;
         } catch (Throwable $e) {
-            $this->updateCacheStatus('failed', $e->getMessage());
+            TranslationLogger::unexpected($e, $this->jobLogContext());
+            $this->updateCacheStatus('failed', $this->unexpectedApiError());
 
             throw $e;
         }
@@ -129,7 +138,13 @@ final class TranslateEntryJob implements ShouldQueue
      */
     public function failed(Throwable $exception): void
     {
-        $this->updateCacheStatus('failed', $exception->getMessage());
+        if ($exception instanceof ContentTranslatorException) {
+            $this->updateCacheStatus('failed', $exception->toApiError());
+
+            return;
+        }
+
+        $this->updateCacheStatus('failed', $this->unexpectedApiError());
     }
 
     // ── Helpers ───────────────────────────────────────────────────────────────
@@ -138,7 +153,7 @@ final class TranslateEntryJob implements ShouldQueue
      * Merge a status (and optional error) into the existing cache entry for
      * this job. Does nothing when no $jobId was provided (backwards compat).
      */
-    private function updateCacheStatus(string $status, ?string $error = null): void
+    private function updateCacheStatus(string $status, string|array|null $error = null): void
     {
         if ($this->jobId === null) {
             return;
@@ -167,9 +182,50 @@ final class TranslateEntryJob implements ShouldQueue
         }
 
         if ($error !== null) {
-            $data['error'] = $error;
+            $data['error'] = $this->normalizeErrorPayload($error);
         }
 
         Cache::put($cacheKey, $data, self::CACHE_TTL);
+    }
+
+    /**
+     * @param  string|array<string, mixed>  $error
+     * @return array<string, mixed>
+     */
+    private function normalizeErrorPayload(string|array $error): array
+    {
+        if (is_array($error)) {
+            return $error;
+        }
+
+        return [
+            'code' => 'unexpected_error',
+            'message' => $error,
+            'retryable' => false,
+        ];
+    }
+
+    /**
+     * @return array{code: string, message: string, retryable: bool}
+     */
+    private function unexpectedApiError(): array
+    {
+        return [
+            'code' => 'unexpected_error',
+            'message' => (string) __('content-translator::messages.error_unexpected'),
+            'retryable' => false,
+        ];
+    }
+
+    /**
+     * @return array<string, string>
+     */
+    private function jobLogContext(): array
+    {
+        return array_filter([
+            'entry_id' => $this->entryId,
+            'target_site' => $this->targetSite,
+            'job_id' => $this->jobId,
+        ], static fn (?string $value): bool => $value !== null);
     }
 }

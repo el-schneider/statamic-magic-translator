@@ -2,6 +2,7 @@
 
 declare(strict_types=1);
 
+use ElSchneider\ContentTranslator\Exceptions\TranslationConfigException;
 use ElSchneider\ContentTranslator\Services\DeepLTranslationService;
 use ElSchneider\ContentTranslator\Services\PrismTranslationService;
 use ElSchneider\ContentTranslator\Services\TranslationServiceFactory;
@@ -23,4 +24,4 @@ it('creates deepl service when configured', function () {
 it('throws for unknown service', function () {
     config(['statamic.content-translator.service' => 'unknown']);
     app(TranslationServiceFactory::class)->make();
-})->throws(InvalidArgumentException::class);
+})->throws(TranslationConfigException::class);
