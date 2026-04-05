@@ -29,15 +29,19 @@ jobs:
           php-version: '8.4'
           coverage: none
 
-      - name: Cache Composer dependencies
+      - name: Get composer cache directory
+        id: composer-cache
+        run: echo "dir=$(composer config cache-files-dir)" >> "$GITHUB_OUTPUT"
+
+      - name: Cache composer dependencies
         uses: actions/cache@v4
         with:
-          path: vendor
-          key: composer-8.4-${{ hashFiles('composer.lock') }}
+          path: ${{ steps.composer-cache.outputs.dir }}
+          key: composer-8.4-${{ hashFiles('composer.json') }}
           restore-keys: |
             composer-8.4-
 
-      - run: composer install --no-interaction --prefer-dist --optimize-autoloader
+      - run: composer update --prefer-stable --prefer-dist --no-interaction
 
       - name: Pint
         run: ./vendor/bin/pint --test
@@ -68,15 +72,19 @@ jobs:
           extensions: sockets
           coverage: none
 
-      - name: Cache Composer dependencies
+      - name: Get composer cache directory
+        id: composer-cache
+        run: echo "dir=$(composer config cache-files-dir)" >> "$GITHUB_OUTPUT"
+
+      - name: Cache composer dependencies
         uses: actions/cache@v4
         with:
-          path: vendor
-          key: composer-${{ matrix.php }}-${{ hashFiles('composer.lock') }}
+          path: ${{ steps.composer-cache.outputs.dir }}
+          key: composer-${{ matrix.php }}-${{ hashFiles('composer.json') }}
           restore-keys: |
             composer-${{ matrix.php }}-
 
-      - run: composer install --no-interaction --prefer-dist --optimize-autoloader
+      - run: composer update --prefer-stable --prefer-dist --no-interaction
 
       - name: Build assets
         run: npm run build
