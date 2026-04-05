@@ -6,25 +6,13 @@ return [
 
     /*
     |--------------------------------------------------------------------------
-    | Collections
-    |--------------------------------------------------------------------------
-    |
-    | The collection handles that the Content Translator fieldtype should be
-    | auto-injected into. Only entries in these collections will have the
-    | translation UI available in the control panel.
-    |
-    */
-
-    'collections' => [],
-
-    /*
-    |--------------------------------------------------------------------------
     | Exclude Blueprints
     |--------------------------------------------------------------------------
     |
-    | Specific blueprints (in dot notation: "collection.blueprint") that should
-    | be excluded from automatic fieldtype injection, even if their collection
-    | is listed above.
+    | Blueprint patterns (dot notation: "collection.blueprint") to exclude from
+    | automatic fieldtype injection and action visibility.
+    |
+    | Supports wildcard patterns, e.g. "pages.*" to exclude an entire collection.
     |
     */
 

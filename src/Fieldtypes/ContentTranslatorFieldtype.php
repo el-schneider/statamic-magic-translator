@@ -17,8 +17,8 @@ use Throwable;
  * to the Vue component rendered in the entry's sidebar.
  *
  * This fieldtype is never manually added by editors — it is injected via the
- * EntryBlueprintFound listener in ServiceProvider when the entry belongs to a
- * configured collection.
+ * EntryBlueprintFound listener in ServiceProvider unless the blueprint is
+ * excluded by configuration.
  *
  * The `preload()` method is the main integration point: it collects per-site
  * localization metadata (existence, last_translated_at, staleness) and returns

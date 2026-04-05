@@ -37,36 +37,35 @@ function makeNonSuperUser(string $id = 'regular-user', array $permissions = []):
 
 // ── visibleTo ─────────────────────────────────────────────────────────────────
 
-it('is visible for an entry in a configured collection with multiple sites', function () {
-    config(['statamic.content-translator.collections' => ['articles']]);
-
+it('is visible for an entry with multiple sites', function () {
     test()->createTestCollection('articles', ['en', 'fr']);
+    test()->createTestBlueprint('articles', 'default');
     $entry = test()->createTestEntry(collection: 'articles', site: 'en');
 
     expect(makeAction()->visibleTo($entry))->toBeTrue();
 });
 
-it('is not visible for an entry in an unconfigured collection', function () {
-    config(['statamic.content-translator.collections' => ['news']]);
+it('is not visible for an excluded exact blueprint', function () {
+    config(['statamic.content-translator.exclude_blueprints' => ['articles.default']]);
 
     test()->createTestCollection('articles', ['en', 'fr']);
+    test()->createTestBlueprint('articles', 'default');
     $entry = test()->createTestEntry(collection: 'articles', site: 'en');
 
     expect(makeAction()->visibleTo($entry))->toBeFalse();
 });
 
-it('is not visible when collections config is empty', function () {
-    config(['statamic.content-translator.collections' => []]);
+it('is not visible for an excluded wildcard blueprint pattern', function () {
+    config(['statamic.content-translator.exclude_blueprints' => ['articles.*']]);
 
     test()->createTestCollection('articles', ['en', 'fr']);
+    test()->createTestBlueprint('articles', 'default');
     $entry = test()->createTestEntry(collection: 'articles', site: 'en');
 
     expect(makeAction()->visibleTo($entry))->toBeFalse();
 });
 
 it('is not visible for a single-site setup', function () {
-    config(['statamic.content-translator.collections' => ['articles']]);
-
     // Reduce to a single site only.
     Site::setSites([
         'en' => [
@@ -83,8 +82,6 @@ it('is not visible for a single-site setup', function () {
 });
 
 it('is not visible for non-Entry items', function () {
-    config(['statamic.content-translator.collections' => ['articles']]);
-
     // Pass a plain object (not an Entry instance).
     expect(makeAction()->visibleTo(new stdClass()))->toBeFalse();
 });

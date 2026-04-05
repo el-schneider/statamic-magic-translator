@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace ElSchneider\ContentTranslator\StatamicActions;
 
+use ElSchneider\ContentTranslator\Support\BlueprintExclusions;
 use Statamic\Actions\Action;
 use Statamic\Contracts\Entries\Entry;
 use Statamic\Facades\Site;
@@ -39,13 +40,11 @@ final class TranslateEntryAction extends Action
             return false;
         }
 
-        $configuredCollections = (array) config('statamic.content-translator.collections', []);
-
-        if (! in_array($item->collectionHandle(), $configuredCollections, strict: true)) {
+        if (Site::all()->count() <= 1) {
             return false;
         }
 
-        return Site::all()->count() > 1;
+        return ! BlueprintExclusions::contains($item->collectionHandle(), $item->blueprint()->handle());
     }
 
     public function authorize($user, $item): bool
