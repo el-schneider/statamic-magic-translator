@@ -14,6 +14,7 @@ use ElSchneider\MagicTranslator\Support\TranslationLogger;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Routing\Controller;
+use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Str;
 use Statamic\Facades\Blink;
@@ -39,6 +40,11 @@ final class TranslationController extends Controller
      * Cache key prefix for job status entries.
      */
     private const CACHE_PREFIX = 'magic-translator:job:';
+
+    /**
+     * Running jobs with older heartbeats are considered stale failures.
+     */
+    private const STALE_RUNNING_SECONDS = 600;
 
     /**
      * Validate the request, verify the entry and user, then dispatch one
@@ -160,6 +166,7 @@ final class TranslationController extends Controller
                         'id' => $jobId,
                         'target_site' => $targetSite,
                         'status' => 'pending',
+                        'heartbeat_at' => now()->toIso8601String(),
                         'error' => null,
                     ],
                     self::CACHE_TTL,
@@ -362,15 +369,45 @@ final class TranslationController extends Controller
                 return [
                     'id' => $jobId,
                     'target_site' => null,
-                    'status' => 'unknown',
+                    'status' => 'failed',
+                    'error' => [
+                        'code' => 'job_expired',
+                        'message' => 'Translation job status expired.',
+                        'retryable' => false,
+                    ],
                 ];
             }
 
             $result = [
                 'id' => is_string($data['id'] ?? null) ? $data['id'] : $jobId,
                 'target_site' => is_string($data['target_site'] ?? null) ? $data['target_site'] : null,
-                'status' => is_string($data['status']) ? $data['status'] : 'unknown',
+                'status' => is_string($data['status']) ? $data['status'] : 'failed',
             ];
+
+            if ($result['status'] === 'running') {
+                $heartbeat = null;
+
+                if (is_string($data['heartbeat_at'] ?? null)) {
+                    try {
+                        $heartbeat = Carbon::parse($data['heartbeat_at']);
+                    } catch (Throwable) {
+                        $heartbeat = null;
+                    }
+                }
+
+                if ($heartbeat === null || $heartbeat->lt(now()->subSeconds(self::STALE_RUNNING_SECONDS))) {
+                    return [
+                        'id' => $result['id'],
+                        'target_site' => $result['target_site'],
+                        'status' => 'failed',
+                        'error' => [
+                            'code' => 'job_stale',
+                            'message' => 'Translation job is no longer responding.',
+                            'retryable' => false,
+                        ],
+                    ];
+                }
+            }
 
             if ($result['status'] === 'failed') {
                 if (is_array($data['error'] ?? null)) {

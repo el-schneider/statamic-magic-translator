@@ -19,6 +19,7 @@ import { markCurrent } from '../../core/api'
 import { getMarkedHandles, markSiteCurrent, subscribeMarked } from '../../core/markCurrentStore'
 import {
   getSession,
+  resumeSessionIfStuck,
   retryLocale as retryLocaleInStore,
   sessionKey,
   startTranslation,
@@ -285,6 +286,7 @@ onMounted(() => {
   const existing = getSession(translationSessionKey.value)
   applySessionSnapshot(existing)
   subscribeToSession()
+  resumeSessionIfStuck(translationSessionKey.value)
 
   if (!existing || !existing.isTranslating) {
     syncSelectedLocales()
