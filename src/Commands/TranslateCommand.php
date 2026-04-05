@@ -4,13 +4,16 @@ declare(strict_types=1);
 
 namespace ElSchneider\ContentTranslator\Commands;
 
+use ElSchneider\ContentTranslator\Actions\TranslateEntry;
 use ElSchneider\ContentTranslator\Console\FilterCriteria;
 use ElSchneider\ContentTranslator\Console\PlanAction;
+use ElSchneider\ContentTranslator\Console\PlanItem;
 use ElSchneider\ContentTranslator\Console\TranslationPlan;
 use ElSchneider\ContentTranslator\Console\TranslationPlanner;
 use Illuminate\Console\Command;
 use InvalidArgumentException;
 use Statamic\Console\RunsInPlease;
+use Throwable;
 
 final class TranslateCommand extends Command
 {
@@ -73,7 +76,7 @@ final class TranslateCommand extends Command
             return 0;
         }
 
-        return 0;
+        return $this->executeSync($plan->processable(), app(TranslateEntry::class));
     }
 
     private function buildCriteria(): FilterCriteria
@@ -164,5 +167,97 @@ final class TranslateCommand extends Command
         $effective = count($plan->processable());
         $this->line("Effective work: {$effective} translations");
         $this->newLine();
+    }
+
+    /**
+     * @param  PlanItem[]  $items
+     */
+    private function executeSync(array $items, TranslateEntry $action): int
+    {
+        $options = $this->buildExecutionOptions();
+
+        $progressBar = $this->output->createProgressBar(count($items));
+        $progressBar->setFormat(' %current%/%max% [%bar%] %message%');
+        $progressBar->setMessage('starting…');
+        $progressBar->start();
+
+        $succeeded = 0;
+        $failures = [];
+
+        foreach ($items as $item) {
+            $progressBar->setMessage(sprintf(
+                'translating "%s" → %s',
+                $this->truncate($item->entryTitle, 40),
+                $item->targetSite,
+            ));
+
+            try {
+                $action->handle(
+                    $item->entryId,
+                    $item->targetSite,
+                    $item->sourceSite,
+                    $options,
+                );
+                $succeeded++;
+            } catch (Throwable $e) {
+                $failures[] = [$item, $e];
+            }
+
+            $progressBar->advance();
+        }
+
+        $progressBar->finish();
+        $this->newLine(2);
+        $this->printSummary($succeeded, $failures);
+
+        return $failures === [] ? 0 : 1;
+    }
+
+    /**
+     * @return array<string, bool>
+     */
+    private function buildExecutionOptions(): array
+    {
+        return [
+            'overwrite' => true,
+            'generate_slug' => (bool) $this->option('generate-slug'),
+        ];
+    }
+
+    /**
+     * @param  array<int, array{0: PlanItem, 1: Throwable}>  $failures
+     */
+    private function printSummary(int $succeeded, array $failures): void
+    {
+        $this->line('<info>Translation summary</info>');
+        $this->line(str_repeat('─', 47));
+        $this->line(sprintf('✓ Succeeded:   %d', $succeeded));
+        $this->line(sprintf('✗ Failed:       %d', count($failures)));
+        $this->line(str_repeat('─', 47));
+
+        if ($failures === []) {
+            return;
+        }
+
+        $this->newLine();
+        $this->line('<comment>Failures:</comment>');
+
+        foreach ($failures as [$item, $e]) {
+            $this->line(sprintf(
+                '  %s → %s  %s: %s',
+                $item->entryId,
+                $item->targetSite,
+                class_basename($e),
+                $e->getMessage(),
+            ));
+        }
+
+        $this->newLine();
+        $this->comment('See storage/logs/laravel.log for full stack traces.');
+    }
+
+    private function truncate(string $value, int $max): string
+    {
+        return mb_strlen($value) > $max ? mb_substr($value, 0, $max - 1).'…' : $value;
     }
 }
