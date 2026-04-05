@@ -13,7 +13,6 @@
  */
 import { Button } from '@statamic/cms/ui'
 import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
-import { markCurrent } from '../../core/api'
 import {
   injectBadges,
   injectTranslateButton,
@@ -22,7 +21,7 @@ import {
   wasPreviouslyInjected,
   wasTranslateButtonPreviouslyInjected,
 } from '../../core/injection'
-import { getMarkedHandles, markSiteCurrent, subscribeMarked } from '../../core/markCurrentStore'
+import { getMarkedHandles, subscribeMarked } from '../../core/markCurrentStore'
 import type { FieldtypePreload } from '../../core/types'
 
 declare function __(key: string, replacements?: Record<string, string | number>): string
@@ -65,7 +64,6 @@ const targetSites = computed(() => sites.value.filter((s) => s.handle !== curren
 const hasTargets = computed(() => targetSites.value.length > 0)
 
 const markedCurrentHandles = ref<Set<string>>(entryId.value ? getMarkedHandles(entryId.value) : new Set())
-const markCurrentPending = ref<Set<string>>(new Set())
 
 const effectiveSites = computed(() =>
   sites.value.map((site) =>
@@ -139,39 +137,6 @@ function tryInject(): void {
   }
 }
 
-async function handleMarkCurrentRequest(event: Event): Promise<void> {
-  const detail = (event as CustomEvent).detail
-  if (!detail?.siteHandle || !entryId.value) return
-
-  const siteHandle = String(detail.siteHandle)
-  if (markCurrentPending.value.has(siteHandle)) return
-
-  const site = sites.value.find((s) => s.handle === siteHandle)
-  const siteName = site?.name ?? siteHandle
-
-  const message = __('magic-translator::messages.mark_current_confirm', { site: siteName })
-  if (!window.confirm(message)) return
-
-  markCurrentPending.value = new Set([...markCurrentPending.value, siteHandle])
-
-  try {
-    const response = await markCurrent(entryId.value, siteHandle)
-    if (response.success) {
-      markSiteCurrent(entryId.value, siteHandle)
-      return
-    }
-
-    window.alert(response.error?.message ?? __('magic-translator::messages.mark_current_failed'))
-  } catch (error) {
-    console.error('[magic-translator] mark-current failed:', error)
-    window.alert(__('magic-translator::messages.mark_current_failed'))
-  } finally {
-    const next = new Set(markCurrentPending.value)
-    next.delete(siteHandle)
-    markCurrentPending.value = next
-  }
-}
-
 watch(
   effectiveSites,
   () => {
@@ -202,7 +167,6 @@ onMounted(() => {
     tryInject()
   })
   observer.observe(document.body, { childList: true, subtree: true })
-  window.addEventListener('magic-translator:request-mark-current', handleMarkCurrentRequest)
 
   const id = entryId.value
   if (id !== null) {
@@ -214,7 +178,6 @@ onMounted(() => {
 
 onBeforeUnmount(() => {
   observer?.disconnect()
-  window.removeEventListener('magic-translator:request-mark-current', handleMarkCurrentRequest)
   unsubscribeMarked?.()
   removeBadges()
   removeTranslateButtons()
