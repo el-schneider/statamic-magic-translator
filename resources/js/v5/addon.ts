@@ -12,14 +12,6 @@
  */
 import type { Axios } from 'axios'
 import {
-  getSession,
-  retryLocale as retryLocaleInStore,
-  sessionKey,
-  startTranslation,
-  subscribe,
-  type TranslationSession,
-} from '../core/store'
-import {
   injectBadges,
   injectTranslateButton,
   removeBadges,
@@ -27,6 +19,14 @@ import {
   wasPreviouslyInjected,
   wasTranslateButtonPreviouslyInjected,
 } from '../core/injection'
+import {
+  getSession,
+  retryLocale as retryLocaleInStore,
+  sessionKey,
+  startTranslation,
+  subscribe,
+  type TranslationSession,
+} from '../core/store'
 import type { FieldtypePreload, LocaleJobState, SiteDescriptor, SiteMeta } from '../core/types'
 
 declare global {
@@ -683,10 +683,20 @@ const TranslatorFieldtype = {
         return
       }
 
+      // Pick the default source, preferring origin but falling back to the
+      // current site if the user has no access to origin. `sites` is already
+      // filtered server-side to the user's accessible sites.
+      const accessibleHandles = new Set(self.sites.map((s) => s.handle))
+      const defaultSource =
+        (self.originSite && accessibleHandles.has(self.originSite) ? self.originSite : null) ??
+        (self.currentSite && accessibleHandles.has(self.currentSite) ? self.currentSite : null) ??
+        self.sites[0]?.handle ??
+        ''
+
       const dialog = Statamic.$components.append('content-translator-dialog', {
         props: {
           entryId: self.entryId,
-          sourceSite: self.originSite ?? self.currentSite ?? self.sites[0]?.handle ?? '',
+          sourceSite: defaultSource,
           sites: self.sites,
         },
       })
