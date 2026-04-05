@@ -1,5 +1,11 @@
 # Translation Dialog — Collection Sites + Authorization Fix
 
+> **Status: implemented** (2026-04-05). Commits f0f993a → 616738e. See
+> `docs/research/auth-research-brief.md` for the research this plan was
+> built on.
+
+
+
 ## Problem
 
 The translation dialog currently ignores two things:
