@@ -5,9 +5,11 @@ declare(strict_types=1);
 namespace ElSchneider\ContentTranslator\Console;
 
 use ElSchneider\ContentTranslator\Support\BlueprintExclusions;
+use Illuminate\Support\Carbon;
 use Statamic\Contracts\Entries\Entry as EntryContract;
 use Statamic\Facades\Collection as CollectionFacade;
 use Statamic\Facades\Entry as EntryFacade;
+use Throwable;
 
 final class TranslationPlanner
 {
@@ -102,7 +104,7 @@ final class TranslationPlanner
         $source = $this->resolveSourceSite($entry, $filters);
 
         if ($filters->targetSites !== []) {
-            return array_values(array_intersect($filters->targetSites, $collectionSites));
+            return $filters->targetSites;
         }
 
         return array_values(array_filter(
@@ -126,16 +128,106 @@ final class TranslationPlanner
     {
         $source = $this->resolveSourceSite($entry, $filters);
         $title = (string) ($entry->get('title') ?? $entry->id());
+        $collection = $entry->collectionHandle();
 
+        if (! in_array($targetSite, $entry->collection()->sites()->all(), true)) {
+            return $this->item(
+                entry: $entry,
+                source: $source,
+                targetSite: $targetSite,
+                title: $title,
+                collection: $collection,
+                action: PlanAction::SkipUnsupported,
+                reason: "collection does not support site {$targetSite}",
+            );
+        }
+
+        $target = $entry->in($targetSite);
+
+        if ($target === null) {
+            return $this->item(
+                entry: $entry,
+                source: $source,
+                targetSite: $targetSite,
+                title: $title,
+                collection: $collection,
+                action: PlanAction::Translate,
+                reason: 'target localization missing',
+            );
+        }
+
+        if ($filters->overwrite) {
+            return $this->item(
+                entry: $entry,
+                source: $source,
+                targetSite: $targetSite,
+                title: $title,
+                collection: $collection,
+                action: PlanAction::Overwrite,
+                reason: '--overwrite set',
+            );
+        }
+
+        if ($filters->includeStale && $this->isStale($entry, $target)) {
+            return $this->item(
+                entry: $entry,
+                source: $source,
+                targetSite: $targetSite,
+                title: $title,
+                collection: $collection,
+                action: PlanAction::Stale,
+                reason: 'source updated after last translation',
+            );
+        }
+
+        return $this->item(
+            entry: $entry,
+            source: $source,
+            targetSite: $targetSite,
+            title: $title,
+            collection: $collection,
+            action: PlanAction::SkipExists,
+            reason: 'target localization already exists',
+        );
+    }
+
+    private function item(
+        EntryContract $entry,
+        string $source,
+        string $targetSite,
+        string $title,
+        string $collection,
+        PlanAction $action,
+        string $reason,
+    ): PlanItem {
         return new PlanItem(
             entryId: $entry->id(),
             entryTitle: $title,
-            collection: $entry->collectionHandle(),
+            collection: $collection,
             sourceSite: $source,
             targetSite: $targetSite,
-            action: PlanAction::Translate,
-            reason: 'target localization missing',
+            action: $action,
+            reason: $reason,
         );
+    }
+
+    private function isStale(EntryContract $sourceEntry, EntryContract $targetEntry): bool
+    {
+        $meta = $targetEntry->get('content_translator');
+
+        if (! is_array($meta) || ! isset($meta['last_translated_at'])) {
+            return true;
+        }
+
+        try {
+            $lastTranslatedAt = Carbon::parse($meta['last_translated_at']);
+        } catch (Throwable) {
+            return true;
+        }
+
+        $sourceModifiedAt = $sourceEntry->lastModified();
+
+        return $sourceModifiedAt !== null && $sourceModifiedAt->greaterThan($lastTranslatedAt);
     }
 
     private function assertKnownHandles(FilterCriteria $filters): void {}
