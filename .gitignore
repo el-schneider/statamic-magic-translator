@@ -9,4 +9,5 @@ worktrees
 # Agent scratch dirs — never commit
 /docs/plans/
 /docs/research/
+/docs/todo.md
 /research.md
