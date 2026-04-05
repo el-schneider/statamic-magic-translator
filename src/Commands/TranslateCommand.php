@@ -63,6 +63,16 @@ final class TranslateCommand extends Command
             return 0;
         }
 
+        if (! $this->confirmExecution()) {
+            if (! $this->option('no-interaction') && ! $this->input->isInteractive()) {
+                return 2;
+            }
+
+            $this->info('Aborted.');
+
+            return 0;
+        }
+
         return 0;
     }
 
@@ -94,6 +104,21 @@ final class TranslateCommand extends Command
             array_map(static fn ($v) => is_string($v) ? mb_trim($v) : '', $arr),
             static fn (string $v): bool => $v !== '',
         ));
+    }
+
+    private function confirmExecution(): bool
+    {
+        if ($this->option('no-interaction')) {
+            return true;
+        }
+
+        if (! $this->input->isInteractive()) {
+            $this->error('Refusing to run non-interactively without -n / --no-interaction.');
+
+            return false;
+        }
+
+        return $this->confirm('Proceed?', false);
     }
 
     private function printPlan(TranslationPlan $plan, FilterCriteria $criteria): void
