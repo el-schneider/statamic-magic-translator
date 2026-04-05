@@ -133,7 +133,7 @@ it('skips existing localization when overwrite is false', function () {
 
 // ── Metadata ──────────────────────────────────────────────────────────────────
 
-it('sets last_translated_at on the magic_translator field', function () {
+it('sets last_translated_at and source_content_hash on the magic_translator field', function () {
     ['entry' => $entry, 'action' => $action] = setUpTranslationTest();
 
     $before = now()->subSecond(); // subtract 1s to avoid equal-timestamp edge case
@@ -145,6 +145,8 @@ it('sets last_translated_at on the magic_translator field', function () {
 
     expect($meta)->toBeArray();
     expect($meta)->toHaveKey('last_translated_at');
+    expect($meta)->toHaveKey('source_content_hash');
+    expect($meta['source_content_hash'])->toStartWith('v1:sha256:');
 
     $timestamp = Carbon\Carbon::parse($meta['last_translated_at']);
     expect($timestamp->gte($before))->toBeTrue();

@@ -13,6 +13,7 @@ use ElSchneider\MagicTranslator\Reassembly\ContentReassembler;
 use ElSchneider\MagicTranslator\Services\TranslationServiceFactory;
 use ElSchneider\MagicTranslator\StatamicActions\TranslateEntryAction;
 use ElSchneider\MagicTranslator\Support\BlueprintExclusions;
+use ElSchneider\MagicTranslator\Support\SourceHashCache;
 use Illuminate\Support\Facades\Event;
 use Statamic\Events\EntryBlueprintFound;
 use Statamic\Events\EntrySaving;
@@ -50,6 +51,7 @@ final class ServiceProvider extends AddonServiceProvider
         $this->app->singleton(BardParser::class);
         $this->app->singleton(ContentExtractor::class);
         $this->app->singleton(ContentReassembler::class);
+        $this->app->singleton(SourceHashCache::class);
 
         // Bind the TranslationService contract to the configured implementation.
         // Tests can swap this binding via app()->instance(TranslationService::class, $mock).
