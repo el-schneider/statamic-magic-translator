@@ -79,3 +79,4 @@ Check first: `pgrep -f 'queue:listen'` — only start one if none is running.
 ## Gotchas
 
 - In tests, `Entry::blueprint()->handle()` may resolve to the collection handle unless an explicit blueprint is created first. Create the blueprint when asserting exact `exclude_blueprints` matches.
+- `npx tsc --noEmit` can crash with `RangeError: Maximum call stack size exceeded` in this workspace (Node 22 + current include set). Use `node --stack_size=16384 ./node_modules/typescript/bin/tsc --noEmit` to inspect actual TS errors.

@@ -11,9 +11,14 @@
  * delegates to `Vue.component()` under the hood.
  */
 import type { Axios } from 'axios'
-import { triggerTranslation } from '../core/api'
-import { normalizeApiError } from '../core/errors'
-import type { NormalizedError } from '../core/errors'
+import {
+  getSession,
+  retryLocale as retryLocaleInStore,
+  sessionKey,
+  startTranslation,
+  subscribe,
+  type TranslationSession,
+} from '../core/store'
 import {
   injectBadges,
   injectTranslateButton,
@@ -22,8 +27,7 @@ import {
   wasPreviouslyInjected,
   wasTranslateButtonPreviouslyInjected,
 } from '../core/injection'
-import { pollJobs } from '../core/polling'
-import type { FieldtypePreload, LocaleJobState, SiteDescriptor, SiteMeta, TranslationJob } from '../core/types'
+import type { FieldtypePreload, LocaleJobState, SiteDescriptor, SiteMeta } from '../core/types'
 
 declare global {
   const Statamic: {
@@ -69,9 +73,8 @@ interface DialogData {
   selectedLocales: string[]
   generateSlug: boolean
   overwrite: boolean
-  localeState: Record<string, LocaleJobState>
-  isTranslating: boolean
-  stopPollingFn: (() => void) | null
+  session: TranslationSession | null
+  unsubscribeFn: (() => void) | null
 }
 
 const TranslationDialog = {
@@ -94,9 +97,8 @@ const TranslationDialog = {
       selectedLocales: [],
       generateSlug: false,
       overwrite: false,
-      localeState: {},
-      isTranslating: false,
-      stopPollingFn: null,
+      session: null,
+      unsubscribeFn: null,
     }
   },
 
@@ -128,29 +130,47 @@ const TranslationDialog = {
       return self.sites.filter((s) => s.handle !== self.selectedSource)
     },
 
+    translationSessionKey(): string {
+      const self = this as unknown as { allEntryIds: string[] }
+      return sessionKey(self.allEntryIds)
+    },
+
+    localeState(): Record<string, LocaleJobState> {
+      const self = this as unknown as { session: TranslationSession | null }
+      return self.session?.localeState ?? {}
+    },
+
+    isTranslating(): boolean {
+      const self = this as unknown as { session: TranslationSession | null }
+      return self.session?.isTranslating ?? false
+    },
+
     allDone(): boolean {
-      const self = this as unknown as {
-        isTranslating: boolean
-        selectedLocales: string[]
-        localeState: Record<string, LocaleJobState>
-      }
-      return (
-        self.isTranslating &&
-        self.selectedLocales.every((handle) => {
-          const state = self.localeState[handle]
-          return Boolean(state) && state.completedCount >= state.totalCount
-        })
-      )
+      const self = this as unknown as { session: TranslationSession | null }
+      return self.session?.isComplete ?? false
     },
 
     hasFailed(): boolean {
-      const self = this as unknown as { localeState: Record<string, LocaleJobState> }
-      return Object.values(self.localeState).some((s) => s.status === 'failed')
+      const self = this as unknown as { session: TranslationSession | null }
+      return self.session?.hasFailed ?? false
     },
   },
 
   created() {
-    ;(this as unknown as { syncSelectedLocales: () => void }).syncSelectedLocales()
+    const self = this as unknown as {
+      translationSessionKey: string
+      applySessionSnapshot: (session: TranslationSession | null) => void
+      subscribeToSession: () => void
+      syncSelectedLocales: () => void
+    }
+
+    self.applySessionSnapshot(getSession(self.translationSessionKey))
+    self.subscribeToSession()
+
+    const existing = getSession(self.translationSessionKey)
+    if (!existing || !existing.isTranslating) {
+      self.syncSelectedLocales()
+    }
   },
 
   watch: {
@@ -181,8 +201,8 @@ const TranslationDialog = {
   },
 
   beforeDestroy() {
-    const self = this as unknown as { stopPollingFn: (() => void) | null }
-    if (self.stopPollingFn) self.stopPollingFn()
+    const self = this as unknown as { unsubscribeFn: (() => void) | null }
+    self.unsubscribeFn?.()
   },
 
   methods: {
@@ -216,51 +236,41 @@ const TranslationDialog = {
         .map((site) => site.handle)
     },
 
-    cancel() {
+    applySessionSnapshot(session: TranslationSession | null) {
       const self = this as unknown as {
-        stopPollingFn: (() => void) | null
-        $emit: (event: string) => void
+        session: TranslationSession | null
+        selectedSource: string
+        selectedLocales: string[]
+        generateSlug: boolean
+        overwrite: boolean
       }
-      if (self.stopPollingFn) self.stopPollingFn()
-      self.$emit('close')
+
+      self.session = session
+
+      if (!session) return
+
+      self.selectedSource = session.sourceSite
+      self.selectedLocales = [...session.selectedLocales]
+      self.generateSlug = session.options.generateSlug
+      self.overwrite = session.options.overwrite
     },
 
-    applyJobSnapshot(jobs: TranslationJob[]) {
+    subscribeToSession() {
       const self = this as unknown as {
-        localeState: Record<string, LocaleJobState>
-        $set: (obj: object, key: string, val: unknown) => void
+        translationSessionKey: string
+        unsubscribeFn: (() => void) | null
+        applySessionSnapshot: (session: TranslationSession | null) => void
       }
 
-      for (const [handle, state] of Object.entries(self.localeState)) {
-        const relatedJobs = jobs.filter((job) => state.jobIds.includes(job.id))
-        if (relatedJobs.length === 0) continue
+      self.unsubscribeFn?.()
+      self.unsubscribeFn = subscribe(self.translationSessionKey, (session) => {
+        self.applySessionSnapshot(session)
+      })
+    },
 
-        const completedCount = relatedJobs.filter((job) => job.status === 'completed').length
-        const failedJobs = relatedJobs.filter((job) => job.status === 'failed')
-        const terminalCount = completedCount + failedJobs.length
-        const hasRunning = relatedJobs.some((job) => job.status === 'running')
-        const hasPending = relatedJobs.some((job) => job.status === 'pending')
-        const normalizedFailedJob = failedJobs[0] ? normalizeApiError(failedJobs[0].error) : null
-
-        let nextStatus: LocaleJobState['status'] = 'pending'
-        if (failedJobs.length > 0) {
-          nextStatus = 'failed'
-        } else if (terminalCount === relatedJobs.length) {
-          nextStatus = 'completed'
-        } else if (hasRunning) {
-          nextStatus = 'running'
-        } else if (hasPending) {
-          nextStatus = 'pending'
-        }
-
-        self.$set(self.localeState, handle, {
-          ...state,
-          status: nextStatus,
-          error: normalizedFailedJob?.message ?? null,
-          errorCode: normalizedFailedJob?.code ?? null,
-          completedCount: terminalCount,
-        })
-      }
+    cancel() {
+      const self = this as unknown as { $emit: (event: string) => void }
+      self.$emit('close')
     },
 
     async translate() {
@@ -271,172 +281,27 @@ const TranslationDialog = {
         selectedSource: string
         generateSlug: boolean
         overwrite: boolean
-        localeState: Record<string, LocaleJobState>
-        stopPollingFn: (() => void) | null
-        $set: (obj: object, key: string, val: unknown) => void
-        isBulk: boolean
       }
 
       if (!self.selectedLocales.length || self.isTranslating) return
-      self.isTranslating = true
 
-      const totalEntries = self.allEntryIds.length
-
-      // Initialise per-locale state
-      for (const handle of self.selectedLocales) {
-        self.$set(self.localeState, handle, {
-          status: 'pending',
-          error: null,
-          errorCode: null,
-          completedCount: 0,
-          totalCount: totalEntries,
-          jobIds: [],
-        } as LocaleJobState)
-      }
-
-      const allJobIds: string[] = []
-
-      try {
-        for (const entryId of self.allEntryIds) {
-          const result = await triggerTranslation({
-            entryId,
-            sourceSite: self.selectedSource,
-            targetSites: self.selectedLocales,
-            options: {
-              generateSlug: self.generateSlug,
-              overwrite: self.overwrite,
-            },
-          })
-
-          if (!result.success) {
-            const normalized = normalizeApiError(result.error ?? t('error_trigger_failed'))
-
-            for (const handle of self.selectedLocales) {
-              if (self.localeState[handle]) {
-                self.$set(self.localeState, handle, {
-                  ...self.localeState[handle],
-                  status: 'failed',
-                  error: normalized.message,
-                  errorCode: normalized.code,
-                  completedCount: Math.min(
-                    self.localeState[handle].completedCount + 1,
-                    self.localeState[handle].totalCount,
-                  ),
-                })
-              }
-            }
-            continue
-          }
-
-          for (const job of result.jobs) {
-            allJobIds.push(job.id)
-            const handle = job.target_site
-            const existing = self.localeState[handle]
-            if (existing) {
-              self.$set(self.localeState, handle, {
-                ...existing,
-                jobIds: [...existing.jobIds, job.id],
-                status: 'pending',
-              })
-            }
-          }
-        }
-      } catch (err) {
-        console.error('[content-translator] dispatch error:', err)
-        const normalized = normalizeApiError(err)
-
-        for (const handle of self.selectedLocales) {
-          if (self.localeState[handle]) {
-            self.$set(self.localeState, handle, {
-              ...self.localeState[handle],
-              status: 'failed',
-              error: normalized.message,
-              errorCode: normalized.code,
-            })
-          }
-        }
-        self.isTranslating = false
-        return
-      }
-
-      if (allJobIds.length === 0) {
-        self.isTranslating = false
-        return
-      }
-
-      // Start polling
-      self.stopPollingFn = pollJobs(allJobIds, (jobs) => {
-        ;(self as unknown as { applyJobSnapshot: (jobs: TranslationJob[]) => void }).applyJobSnapshot(jobs)
+      await startTranslation({
+        entryIds: self.allEntryIds,
+        sourceSite: self.selectedSource,
+        selectedLocales: self.selectedLocales,
+        options: {
+          generateSlug: self.generateSlug,
+          overwrite: self.overwrite,
+        },
       })
     },
 
     async retryLocale(handle: string) {
       const self = this as unknown as {
-        localeState: Record<string, LocaleJobState>
-        allEntryIds: string[]
-        selectedSource: string
-        generateSlug: boolean
-        stopPollingFn: (() => void) | null
-        $set: (obj: object, key: string, val: unknown) => void
+        translationSessionKey: string
       }
 
-      if (!self.localeState[handle]) return
-
-      self.$set(self.localeState, handle, {
-        ...self.localeState[handle],
-        status: 'pending',
-        error: null,
-        errorCode: null,
-        completedCount: 0,
-        jobIds: [],
-      })
-
-      const newJobIds: string[] = []
-      let lastError: NormalizedError | null = null
-
-      for (const entryId of self.allEntryIds) {
-        try {
-          const result = await triggerTranslation({
-            entryId,
-            sourceSite: self.selectedSource,
-            targetSites: [handle],
-            options: { generateSlug: self.generateSlug, overwrite: true },
-          })
-          if (result.success) {
-            for (const job of result.jobs) newJobIds.push(job.id)
-          } else {
-            lastError = normalizeApiError(result.error ?? t('error_trigger_failed'))
-          }
-        } catch (err) {
-          console.error('[content-translator] retry error:', err)
-          lastError = normalizeApiError(err)
-        }
-      }
-
-      if (newJobIds.length === 0) {
-        if (self.localeState[handle]) {
-          self.$set(self.localeState, handle, {
-            ...self.localeState[handle],
-            status: 'failed',
-            error: lastError?.message ?? t('translation_failed'),
-            errorCode: lastError?.code ?? 'unexpected_error',
-          })
-        }
-        return
-      }
-
-      self.$set(self.localeState, handle, {
-        ...self.localeState[handle],
-        jobIds: newJobIds,
-      })
-
-      self.stopPollingFn?.()
-      const existingIds = Object.values(self.localeState).flatMap((s) => s.jobIds)
-      const merged = [...new Set([...existingIds, ...newJobIds])]
-
-      self.stopPollingFn = pollJobs(merged, (jobs) => {
-        ;(self as unknown as { applyJobSnapshot: (jobs: TranslationJob[]) => void }).applyJobSnapshot(jobs)
-      })
+      await retryLocaleInStore(self.translationSessionKey, handle)
     },
   },
 

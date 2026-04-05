@@ -14,12 +14,16 @@
  *  5. Dialog self-closes (emits 'close') when all jobs complete, or user cancels.
  */
 import { Badge, Button, Card, Checkbox, Icon, Label, Modal, ModalClose, Select, Separator } from '@statamic/cms/ui'
-import { computed, onBeforeUnmount, reactive, ref, watch } from 'vue'
-import { pollJobs } from '../../core/polling'
-import { triggerTranslation } from '../../core/api'
-import { normalizeApiError } from '../../core/errors'
-import type { NormalizedError } from '../../core/errors'
-import type { LocaleJobState, SiteMeta, SiteDescriptor, TranslationJob } from '../../core/types'
+import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
+import {
+  getSession,
+  retryLocale as retryLocaleInStore,
+  sessionKey,
+  startTranslation,
+  subscribe,
+  type TranslationSession,
+} from '../../core/store'
+import type { LocaleJobState, SiteMeta, SiteDescriptor } from '../../core/types'
 
 declare function __(key: string, replacements?: Record<string, string | number>): string
 
@@ -100,9 +104,13 @@ const selectedLocales = ref<string[]>([])
 
 const generateSlug = ref(false)
 const overwrite = ref(false)
+const session = ref<TranslationSession | null>(null)
+const translationSessionKey = computed(() => sessionKey(allEntryIds.value))
 
-/** Whether a translation dispatch is in progress. */
-const isTranslating = ref(false)
+const localeState = computed<Record<string, LocaleJobState>>(() => session.value?.localeState ?? {})
+const isTranslating = computed(() => session.value?.isTranslating ?? false)
+
+let unsubscribeSession: (() => void) | null = null
 
 watch(selectedSource, () => {
   if (isTranslating.value) return
@@ -116,28 +124,28 @@ watch(overwrite, (enabled) => {
   selectedLocales.value = selectedLocales.value.filter((handle) => !blocked.has(handle))
 })
 
-syncSelectedLocales()
+function applySessionSnapshot(nextSession: TranslationSession | null): void {
+  session.value = nextSession
+  if (!nextSession) return
 
-/** Per-locale job tracking. */
-const localeState = reactive<Record<string, LocaleJobState>>({})
+  selectedSource.value = nextSession.sourceSite
+  selectedLocales.value = [...nextSession.selectedLocales]
+  generateSlug.value = nextSession.options.generateSlug
+  overwrite.value = nextSession.options.overwrite
+}
 
-/** Stop function returned by pollJobs — called on unmount / cancel. */
-let stopPolling: (() => void) | null = null
+function subscribeToSession(): void {
+  unsubscribeSession?.()
+  unsubscribeSession = subscribe(translationSessionKey.value, (nextSession) => {
+    applySessionSnapshot(nextSession)
+  })
+}
 
 // ── Computed status ───────────────────────────────────────────────────────────
 
-/** True when every selected locale has reached a terminal state. */
-const allDone = computed(
-  () =>
-    isTranslating.value &&
-    selectedLocales.value.every((handle) => {
-      const state = localeState[handle]
-      return Boolean(state) && state.completedCount >= state.totalCount
-    }),
-)
+const allDone = computed(() => session.value?.isComplete ?? false)
 
-/** True when at least one locale has failed. */
-const hasFailed = computed(() => Object.values(localeState).some((s) => s.status === 'failed'))
+const hasFailed = computed(() => session.value?.hasFailed ?? false)
 
 // ── Select options ────────────────────────────────────────────────────────────
 
@@ -156,43 +164,7 @@ function toggleLocale(handle: string, checked: boolean): void {
 // ── Actions ───────────────────────────────────────────────────────────────────
 
 function cancel(): void {
-  stopPolling?.()
   emit('close')
-}
-
-function applyJobSnapshot(jobs: TranslationJob[]): void {
-  for (const [handle, state] of Object.entries(localeState)) {
-    const relatedJobs = jobs.filter((job) => state.jobIds.includes(job.id))
-
-    if (relatedJobs.length === 0) continue
-
-    const completedCount = relatedJobs.filter((job) => job.status === 'completed').length
-    const failedJobs = relatedJobs.filter((job) => job.status === 'failed')
-    const terminalCount = completedCount + failedJobs.length
-    const hasRunning = relatedJobs.some((job) => job.status === 'running')
-    const hasPending = relatedJobs.some((job) => job.status === 'pending')
-
-    let nextStatus: LocaleJobState['status'] = 'pending'
-    const normalizedFailedJob = failedJobs[0] ? normalizeApiError(failedJobs[0].error) : null
-
-    if (failedJobs.length > 0) {
-      nextStatus = 'failed'
-    } else if (terminalCount === relatedJobs.length) {
-      nextStatus = 'completed'
-    } else if (hasRunning) {
-      nextStatus = 'running'
-    } else if (hasPending) {
-      nextStatus = 'pending'
-    }
-
-    localeState[handle] = {
-      ...state,
-      status: nextStatus,
-      error: normalizedFailedJob?.message ?? null,
-      errorCode: normalizedFailedJob?.code ?? null,
-      completedCount: terminalCount,
-    }
-  }
 }
 
 /**
@@ -205,93 +177,14 @@ function applyJobSnapshot(jobs: TranslationJob[]): void {
 async function translate(): Promise<void> {
   if (!selectedLocales.value.length || isTranslating.value) return
 
-  isTranslating.value = true
-  const totalEntries = allEntryIds.value.length
-
-  // Initialise per-locale state
-  for (const handle of selectedLocales.value) {
-    localeState[handle] = {
-      status: 'pending',
-      error: null,
-      errorCode: null,
-      completedCount: 0,
-      totalCount: totalEntries,
-      jobIds: [],
-    }
-  }
-
-  const allJobIds: string[] = []
-
-  try {
-    for (const entryId of allEntryIds.value) {
-      const result = await triggerTranslation({
-        entryId,
-        sourceSite: selectedSource.value,
-        targetSites: selectedLocales.value,
-        options: {
-          generateSlug: generateSlug.value,
-          overwrite: overwrite.value,
-        },
-      })
-
-      if (!result.success) {
-        console.error('[content-translator] trigger failed:', result.error)
-        const normalized = normalizeApiError(result.error ?? t('error_trigger_failed'))
-
-        // Mark affected locales as failed
-        for (const handle of selectedLocales.value) {
-          if (localeState[handle]) {
-            localeState[handle] = {
-              ...localeState[handle]!,
-              status: 'failed',
-              error: normalized.message,
-              errorCode: normalized.code,
-              completedCount: Math.min(localeState[handle]!.completedCount + 1, localeState[handle]!.totalCount),
-            }
-          }
-        }
-        continue
-      }
-
-      for (const job of result.jobs) {
-        allJobIds.push(job.id)
-        const handle = job.target_site
-        if (localeState[handle]) {
-          localeState[handle] = {
-            ...localeState[handle]!,
-            jobIds: [...localeState[handle]!.jobIds, job.id],
-            status: 'pending',
-          }
-        }
-      }
-    }
-  } catch (err) {
-    console.error('[content-translator] dispatch error:', err)
-    const normalized = normalizeApiError(err)
-
-    // Mark everything as failed
-    for (const handle of selectedLocales.value) {
-      if (localeState[handle]) {
-        localeState[handle] = {
-          ...localeState[handle]!,
-          status: 'failed',
-          error: normalized.message,
-          errorCode: normalized.code,
-        }
-      }
-    }
-    isTranslating.value = false
-    return
-  }
-
-  if (allJobIds.length === 0) {
-    isTranslating.value = false
-    return
-  }
-
-  // Start polling
-  stopPolling = pollJobs(allJobIds, (jobs) => {
-    applyJobSnapshot(jobs)
+  await startTranslation({
+    entryIds: allEntryIds.value,
+    sourceSite: selectedSource.value,
+    selectedLocales: selectedLocales.value,
+    options: {
+      generateSlug: generateSlug.value,
+      overwrite: overwrite.value,
+    },
   })
 }
 
@@ -299,73 +192,23 @@ async function translate(): Promise<void> {
  * Retry a failed locale by re-dispatching jobs for it.
  */
 async function retryLocale(handle: string): Promise<void> {
-  if (!localeState[handle]) return
-  localeState[handle] = {
-    ...localeState[handle]!,
-    status: 'pending',
-    error: null,
-    errorCode: null,
-    completedCount: 0,
-    jobIds: [],
-  }
-
-  const newJobIds: string[] = []
-  let lastError: NormalizedError | null = null
-
-  for (const entryId of allEntryIds.value) {
-    try {
-      const result = await triggerTranslation({
-        entryId,
-        sourceSite: selectedSource.value,
-        targetSites: [handle],
-        options: {
-          generateSlug: generateSlug.value,
-          overwrite: true, // retry always overwrites
-        },
-      })
-      if (result.success) {
-        for (const job of result.jobs) {
-          newJobIds.push(job.id)
-        }
-      } else {
-        lastError = normalizeApiError(result.error ?? t('error_trigger_failed'))
-      }
-    } catch (err) {
-      console.error('[content-translator] retry error:', err)
-      lastError = normalizeApiError(err)
-    }
-  }
-
-  if (newJobIds.length === 0) {
-    if (localeState[handle]) {
-      localeState[handle] = {
-        ...localeState[handle]!,
-        status: 'failed',
-        error: lastError?.message ?? t('translation_failed'),
-        errorCode: lastError?.code ?? 'unexpected_error',
-      }
-    }
-    return
-  }
-
-  localeState[handle] = {
-    ...localeState[handle]!,
-    jobIds: newJobIds,
-  }
-
-  // Merge new job IDs into existing poll
-  stopPolling?.()
-  const existingIds = Object.values(localeState).flatMap((s) => s.jobIds)
-  const merged = [...new Set([...existingIds, ...newJobIds])]
-  stopPolling = pollJobs(merged, (jobs) => {
-    applyJobSnapshot(jobs)
-  })
+  await retryLocaleInStore(translationSessionKey.value, handle)
 }
 
 // ── Lifecycle ─────────────────────────────────────────────────────────────────
 
+onMounted(() => {
+  const existing = getSession(translationSessionKey.value)
+  applySessionSnapshot(existing)
+  subscribeToSession()
+
+  if (!existing || !existing.isTranslating) {
+    syncSelectedLocales()
+  }
+})
+
 onBeforeUnmount(() => {
-  stopPolling?.()
+  unsubscribeSession?.()
 })
 </script>
 
