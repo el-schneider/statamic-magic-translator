@@ -2,9 +2,9 @@
 
 declare(strict_types=1);
 
-use ElSchneider\ContentTranslator\Exceptions\ProviderAuthException;
-use ElSchneider\ContentTranslator\Exceptions\ProviderRateLimitedException;
-use ElSchneider\ContentTranslator\Support\TranslationLogger;
+use ElSchneider\MagicTranslator\Exceptions\ProviderAuthException;
+use ElSchneider\MagicTranslator\Exceptions\ProviderRateLimitedException;
+use ElSchneider\MagicTranslator\Support\TranslationLogger;
 use Illuminate\Support\Facades\Log;
 use Tests\TestCase;
 

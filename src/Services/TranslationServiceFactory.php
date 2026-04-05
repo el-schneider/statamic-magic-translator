@@ -2,16 +2,16 @@
 
 declare(strict_types=1);
 
-namespace ElSchneider\ContentTranslator\Services;
+namespace ElSchneider\MagicTranslator\Services;
 
-use ElSchneider\ContentTranslator\Contracts\TranslationService;
-use ElSchneider\ContentTranslator\Exceptions\TranslationConfigException;
+use ElSchneider\MagicTranslator\Contracts\TranslationService;
+use ElSchneider\MagicTranslator\Exceptions\TranslationConfigException;
 
 final class TranslationServiceFactory
 {
     public function make(): TranslationService
     {
-        $service = config('statamic.content-translator.service');
+        $service = config('statamic.magic-translator.service');
 
         return match ($service) {
             'prism' => app(PrismTranslationService::class),

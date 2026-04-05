@@ -2,7 +2,7 @@
 
 declare(strict_types=1);
 
-use ElSchneider\ContentTranslator\Support\AccessibleSites;
+use ElSchneider\MagicTranslator\Support\AccessibleSites;
 use Statamic\Facades\Site;
 use Tests\StatamicTestHelpers;
 use Tests\TestCase;

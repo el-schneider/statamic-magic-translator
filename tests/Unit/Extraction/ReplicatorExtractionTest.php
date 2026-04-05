@@ -2,8 +2,8 @@
 
 declare(strict_types=1);
 
-use ElSchneider\ContentTranslator\Data\TranslationFormat;
-use ElSchneider\ContentTranslator\Extraction\ContentExtractor;
+use ElSchneider\MagicTranslator\Data\TranslationFormat;
+use ElSchneider\MagicTranslator\Extraction\ContentExtractor;
 
 beforeEach(function () {
     $this->extractor = new ContentExtractor;

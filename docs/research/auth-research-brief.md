@@ -1,4 +1,4 @@
-The research brief is written to `/Users/vvjlis/dev/packages/statamic/statamic-content-translator/statamic-content-translator/docs/research/auth-research-brief.md`. Here's a summary of the key findings:
+The research brief is written to `/Users/vvjlis/dev/packages/statamic/statamic-magic-translator/statamic-magic-translator/docs/research/auth-research-brief.md`. Here's a summary of the key findings:
 
 ---
 
@@ -14,7 +14,7 @@ The research brief is written to `/Users/vvjlis/dev/packages/statamic/statamic-c
 1. **`TranslateEntryAction::visibleTo()`** — hides only on `Site::all()->count() <= 1`, not filtered by user access
 2. **`TranslateEntryAction::authorize()`** — only checks source-site access, not target-site
 3. **`TranslationController::trigger()`** — same gap as above at the API layer
-4. **`ContentTranslatorFieldtype::preload()`** — returns all `Site::all()` unfiltered
+4. **`MagicTranslatorFieldtype::preload()`** — returns all `Site::all()` unfiltered
 5. **`TranslatorFieldtype.vue`** — button shows when `targetSites.length > 0` using unfiltered sites
 6. **`TranslationDialog.vue`** — checkboxes allow selecting inaccessible locales
 7. **`TranslateEntryAction::run()`** — passes all `Site::all()` to the bulk-action JS callback

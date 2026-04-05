@@ -2,7 +2,7 @@
 
 declare(strict_types=1);
 
-namespace ElSchneider\ContentTranslator\Data;
+namespace ElSchneider\MagicTranslator\Data;
 
 final readonly class TranslationUnit
 {

@@ -2,7 +2,7 @@
 
 > **For Claude:** REQUIRED SUB-SKILL: Use superpowers:executing-plans to implement this plan task-by-task.
 
-**Goal:** Add a flexible `statamic:content-translator:translate` artisan command that supports initial bulk translation, CI/cron automation, and surgical re-translation through a rich filter vocabulary.
+**Goal:** Add a flexible `statamic:magic-translator:translate` artisan command that supports initial bulk translation, CI/cron automation, and surgical re-translation through a rich filter vocabulary.
 
 **Architecture:** Single command file in `src/Commands/` (auto-loaded by Statamic's `AddonServiceProvider::bootCommands()`). Filter → plan resolution extracted to a testable `TranslationPlanner` in `src/Console/`. Command orchestrates: parse options → build plan → print preview → confirm → execute (sync or async dispatch) → report. Reuses existing `TranslateEntry` action, `TranslateEntryJob`, `BlueprintExclusions`, and `TranslationLogger`.
 
@@ -38,8 +38,8 @@ Create `tests/Unit/Console/PlanItemTest.php`:
 
 declare(strict_types=1);
 
-use ElSchneider\ContentTranslator\Console\PlanAction;
-use ElSchneider\ContentTranslator\Console\PlanItem;
+use ElSchneider\MagicTranslator\Console\PlanAction;
+use ElSchneider\MagicTranslator\Console\PlanItem;
 
 it('constructs a PlanItem with all fields', function () {
     $item = new PlanItem(
@@ -81,7 +81,7 @@ it('exposes willProcess() semantics per action', function () {
 ```bash
 ./vendor/bin/pest --filter=PlanItemTest
 ```
-Expected: FAIL with "Class ElSchneider\ContentTranslator\Console\PlanAction not found"
+Expected: FAIL with "Class ElSchneider\MagicTranslator\Console\PlanAction not found"
 
 **Step 3: Create the enum**
 
@@ -92,7 +92,7 @@ Create `src/Console/PlanAction.php`:
 
 declare(strict_types=1);
 
-namespace ElSchneider\ContentTranslator\Console;
+namespace ElSchneider\MagicTranslator\Console;
 
 enum PlanAction: string
 {
@@ -121,7 +121,7 @@ Create `src/Console/PlanItem.php`:
 
 declare(strict_types=1);
 
-namespace ElSchneider\ContentTranslator\Console;
+namespace ElSchneider\MagicTranslator\Console;
 
 final readonly class PlanItem
 {
@@ -173,9 +173,9 @@ Create `tests/Unit/Console/TranslationPlanTest.php`:
 
 declare(strict_types=1);
 
-use ElSchneider\ContentTranslator\Console\PlanAction;
-use ElSchneider\ContentTranslator\Console\PlanItem;
-use ElSchneider\ContentTranslator\Console\TranslationPlan;
+use ElSchneider\MagicTranslator\Console\PlanAction;
+use ElSchneider\MagicTranslator\Console\PlanItem;
+use ElSchneider\MagicTranslator\Console\TranslationPlan;
 
 function makeItem(PlanAction $action, string $id = 'e', string $site = 'de'): PlanItem
 {
@@ -266,7 +266,7 @@ Create `src/Console/TranslationPlan.php`:
 
 declare(strict_types=1);
 
-namespace ElSchneider\ContentTranslator\Console;
+namespace ElSchneider\MagicTranslator\Console;
 
 /**
  * Immutable collection of PlanItems with summary helpers.
@@ -374,7 +374,7 @@ Create `tests/Unit/Console/FilterCriteriaTest.php`:
 
 declare(strict_types=1);
 
-use ElSchneider\ContentTranslator\Console\FilterCriteria;
+use ElSchneider\MagicTranslator\Console\FilterCriteria;
 
 it('constructs with all fields', function () {
     $criteria = new FilterCriteria(
@@ -430,7 +430,7 @@ Create `src/Console/FilterCriteria.php`:
 
 declare(strict_types=1);
 
-namespace ElSchneider\ContentTranslator\Console;
+namespace ElSchneider\MagicTranslator\Console;
 
 /**
  * Immutable input to TranslationPlanner.
@@ -499,9 +499,9 @@ Create `tests/Feature/Console/TranslationPlannerTest.php`:
 
 declare(strict_types=1);
 
-use ElSchneider\ContentTranslator\Console\FilterCriteria;
-use ElSchneider\ContentTranslator\Console\PlanAction;
-use ElSchneider\ContentTranslator\Console\TranslationPlanner;
+use ElSchneider\MagicTranslator\Console\FilterCriteria;
+use ElSchneider\MagicTranslator\Console\PlanAction;
+use ElSchneider\MagicTranslator\Console\TranslationPlanner;
 use Statamic\Facades\Entry;
 use Tests\StatamicTestHelpers;
 
@@ -601,9 +601,9 @@ Create `src/Console/TranslationPlanner.php`:
 
 declare(strict_types=1);
 
-namespace ElSchneider\ContentTranslator\Console;
+namespace ElSchneider\MagicTranslator\Console;
 
-use ElSchneider\ContentTranslator\Support\BlueprintExclusions;
+use ElSchneider\MagicTranslator\Support\BlueprintExclusions;
 use InvalidArgumentException;
 use Statamic\Contracts\Entries\Entry as EntryContract;
 use Statamic\Facades\Collection as CollectionFacade;
@@ -777,7 +777,7 @@ it('filters by --blueprint handle', function () {
 });
 
 it('respects config exclude_blueprints', function () {
-    config(['statamic.content-translator.exclude_blueprints' => ['articles.*']]);
+    config(['statamic.magic-translator.exclude_blueprints' => ['articles.*']]);
 
     $this->createTestCollection('articles', ['en', 'de']);
     $this->createTestCollection('pages', ['en', 'de']);
@@ -939,7 +939,7 @@ it('skips pair when target localization already exists (safe default)', function
     // Create an existing 'de' localization.
     $en->makeLocalization('de')->data([
         'title' => 'Hallo',
-        'content_translator' => ['last_translated_at' => now()->toIso8601String()],
+        'magic_translator' => ['last_translated_at' => now()->toIso8601String()],
     ])->save();
 
     $planner = app(TranslationPlanner::class);
@@ -960,7 +960,7 @@ it('includes stale targets when --include-stale is set', function () {
     // Target was translated a while ago, then the source was updated.
     $en->makeLocalization('de')->data([
         'title' => 'Hallo',
-        'content_translator' => ['last_translated_at' => now()->subDays(7)->toIso8601String()],
+        'magic_translator' => ['last_translated_at' => now()->subDays(7)->toIso8601String()],
     ])->save();
 
     // Touch the source so its lastModified() is after the target's translated_at.
@@ -986,7 +986,7 @@ it('keeps SkipExists when target is fresh even with --include-stale', function (
     // Target translated AFTER the source was written → not stale.
     $en->makeLocalization('de')->data([
         'title' => 'Hallo',
-        'content_translator' => ['last_translated_at' => now()->addDay()->toIso8601String()],
+        'magic_translator' => ['last_translated_at' => now()->addDay()->toIso8601String()],
     ])->save();
 
     $planner = app(TranslationPlanner::class);
@@ -1101,7 +1101,7 @@ private function item(
 
 private function isStale(EntryContract $sourceEntry, EntryContract $targetEntry): bool
 {
-    $meta = $targetEntry->get('content_translator');
+    $meta = $targetEntry->get('magic_translator');
     if (! is_array($meta) || ! isset($meta['last_translated_at'])) {
         // No record of when it was translated → treat as stale (conservative for CI).
         return true;
@@ -1261,13 +1261,13 @@ use Tests\StatamicTestHelpers;
 uses(StatamicTestHelpers::class);
 
 it('errors out when no filter is provided', function () {
-    $this->artisan('statamic:content-translator:translate')
+    $this->artisan('statamic:magic-translator:translate')
         ->expectsOutputToContain('at least one filter')
         ->assertExitCode(2);
 });
 
 it('errors on unknown collection handle', function () {
-    $this->artisan('statamic:content-translator:translate', [
+    $this->artisan('statamic:magic-translator:translate', [
         '--collection' => ['nonexistent'],
         '--to' => ['de'],
     ])
@@ -1280,7 +1280,7 @@ it('prints plan summary on --dry-run and exits 0 without executing', function ()
     $this->createTestBlueprint('articles');
     $this->createTestEntry(collection: 'articles', site: 'en');
 
-    $this->artisan('statamic:content-translator:translate', [
+    $this->artisan('statamic:magic-translator:translate', [
         '--to' => ['de'],
         '--dry-run' => true,
     ])
@@ -1293,7 +1293,7 @@ it('prints plan summary on --dry-run and exits 0 without executing', function ()
 it('prints empty plan when no entries match filter', function () {
     $this->createTestCollection('articles', ['en', 'de']);
 
-    $this->artisan('statamic:content-translator:translate', [
+    $this->artisan('statamic:magic-translator:translate', [
         '--to' => ['de'],
         '--dry-run' => true,
     ])
@@ -1307,7 +1307,7 @@ it('prints empty plan when no entries match filter', function () {
 ```bash
 ./vendor/bin/pest --filter=TranslateCommandTest
 ```
-Expected: FAIL with "Command 'statamic:content-translator:translate' is not defined."
+Expected: FAIL with "Command 'statamic:magic-translator:translate' is not defined."
 
 **Step 3: Implement command skeleton**
 
@@ -1318,12 +1318,12 @@ Create `src/Commands/TranslateCommand.php`:
 
 declare(strict_types=1);
 
-namespace ElSchneider\ContentTranslator\Commands;
+namespace ElSchneider\MagicTranslator\Commands;
 
-use ElSchneider\ContentTranslator\Console\FilterCriteria;
-use ElSchneider\ContentTranslator\Console\PlanAction;
-use ElSchneider\ContentTranslator\Console\TranslationPlan;
-use ElSchneider\ContentTranslator\Console\TranslationPlanner;
+use ElSchneider\MagicTranslator\Console\FilterCriteria;
+use ElSchneider\MagicTranslator\Console\PlanAction;
+use ElSchneider\MagicTranslator\Console\TranslationPlan;
+use ElSchneider\MagicTranslator\Console\TranslationPlanner;
 use Illuminate\Console\Command;
 use InvalidArgumentException;
 use Statamic\Console\RunsInPlease;
@@ -1332,7 +1332,7 @@ final class TranslateCommand extends Command
 {
     use RunsInPlease;
 
-    protected $signature = 'statamic:content-translator:translate
+    protected $signature = 'statamic:magic-translator:translate
                             {--to=*             : Target site handle (repeatable). Default: all sites each entry supports (minus source)}
                             {--from=            : Source site handle (default: entry origin)}
                             {--collection=*     : Filter by collection handle (repeatable)}
@@ -1417,7 +1417,7 @@ final class TranslateCommand extends Command
     private function printPlan(TranslationPlan $plan, FilterCriteria $criteria): void
     {
         $this->newLine();
-        $this->line('<info>Content Translator — translation plan</info>');
+        $this->line('<info>Magic Translator — translation plan</info>');
         $this->line(str_repeat('─', 61));
 
         $filtersLine = sprintf(
@@ -1489,7 +1489,7 @@ it('aborts gracefully when user answers no at confirm prompt', function () {
     $this->createTestBlueprint('articles');
     $this->createTestEntry(collection: 'articles', site: 'en');
 
-    $this->artisan('statamic:content-translator:translate', [
+    $this->artisan('statamic:magic-translator:translate', [
         '--to' => ['de'],
     ])
         ->expectsConfirmation('Proceed?', 'no')
@@ -1504,7 +1504,7 @@ it('proceeds past confirm with --no-interaction', function () {
 
     // Intercept execution so this test stays focused on the confirm path.
     // For now we just expect exit 0 after the plan; sync execution is tested next.
-    $this->artisan('statamic:content-translator:translate', [
+    $this->artisan('statamic:magic-translator:translate', [
         '--to' => ['de'],
         '--no-interaction' => true,
     ])
@@ -1597,9 +1597,9 @@ git commit -m "feat: add interactive confirm prompt with non-TTY safety"
 Append to `tests/Feature/Commands/TranslateCommandTest.php`:
 
 ```php
-use ElSchneider\ContentTranslator\Actions\TranslateEntry;
-use ElSchneider\ContentTranslator\Contracts\TranslationService;
-use ElSchneider\ContentTranslator\Data\TranslationUnit;
+use ElSchneider\MagicTranslator\Actions\TranslateEntry;
+use ElSchneider\MagicTranslator\Contracts\TranslationService;
+use ElSchneider\MagicTranslator\Data\TranslationUnit;
 use Statamic\Facades\Entry;
 
 function bindPrefixService(string $prefix = 'DE: '): void
@@ -1620,7 +1620,7 @@ it('executes sync translation and reports success summary', function () {
     $this->createTestBlueprint('articles');
     $en = $this->createTestEntry(collection: 'articles', site: 'en');
 
-    $this->artisan('statamic:content-translator:translate', [
+    $this->artisan('statamic:magic-translator:translate', [
         '--to' => ['de'],
         '--no-interaction' => true,
     ])
@@ -1644,7 +1644,7 @@ it('reports partial failure and exits 1 when a translation throws', function () 
     $this->createTestBlueprint('articles');
     $this->createTestEntry(collection: 'articles', site: 'en');
 
-    $this->artisan('statamic:content-translator:translate', [
+    $this->artisan('statamic:magic-translator:translate', [
         '--to' => ['de'],
         '--no-interaction' => true,
     ])
@@ -1667,8 +1667,8 @@ In `src/Commands/TranslateCommand.php`:
 
 Add imports at the top:
 ```php
-use ElSchneider\ContentTranslator\Actions\TranslateEntry;
-use ElSchneider\ContentTranslator\Console\PlanItem;
+use ElSchneider\MagicTranslator\Actions\TranslateEntry;
+use ElSchneider\MagicTranslator\Console\PlanItem;
 use Throwable;
 ```
 
@@ -1801,7 +1801,7 @@ git commit -m "feat: add sync execution with progress bar, summary, and exit cod
 Append to `tests/Feature/Commands/TranslateCommandTest.php`:
 
 ```php
-use ElSchneider\ContentTranslator\Jobs\TranslateEntryJob;
+use ElSchneider\MagicTranslator\Jobs\TranslateEntryJob;
 use Illuminate\Support\Facades\Queue;
 
 it('dispatches a job per processable pair when --dispatch-jobs is set', function () {
@@ -1811,7 +1811,7 @@ it('dispatches a job per processable pair when --dispatch-jobs is set', function
     $this->createTestBlueprint('articles');
     $this->createTestEntry(collection: 'articles', site: 'en');
 
-    $this->artisan('statamic:content-translator:translate', [
+    $this->artisan('statamic:magic-translator:translate', [
         '--to' => ['de', 'fr'],
         '--dispatch-jobs' => true,
         '--no-interaction' => true,
@@ -1827,7 +1827,7 @@ it('dispatches zero jobs when plan is empty', function () {
 
     $this->createTestCollection('articles', ['en', 'de']);
 
-    $this->artisan('statamic:content-translator:translate', [
+    $this->artisan('statamic:magic-translator:translate', [
         '--to' => ['de'],
         '--dispatch-jobs' => true,
         '--no-interaction' => true,
@@ -1852,7 +1852,7 @@ In `src/Commands/TranslateCommand.php`:
 
 Add the import:
 ```php
-use ElSchneider\ContentTranslator\Jobs\TranslateEntryJob;
+use ElSchneider\MagicTranslator\Jobs\TranslateEntryJob;
 ```
 
 Replace the single `return $this->executeSync(...)` call with a branch:
@@ -1887,7 +1887,7 @@ private function dispatchJobs(array $items): int
     }
 
     $this->info(sprintf('Dispatched %d job%s to the queue.', $count, $count === 1 ? '' : 's'));
-    $this->comment('Track status: GET /cp/content-translator/status or run `php artisan queue:work`.');
+    $this->comment('Track status: GET /cp/magic-translator/status or run `php artisan queue:work`.');
 
     return 0;
 }
@@ -1927,7 +1927,7 @@ Open `README.md` and add this section (place it after any CP usage section, befo
 The addon ships with a flexible artisan command for bulk and automated translation:
 
 \`\`\`bash
-php please statamic:content-translator:translate [options]
+php please statamic:magic-translator:translate [options]
 \`\`\`
 
 **Requires at least one filter** (`--to`, `--collection`, `--entry`, or `--blueprint`).
@@ -1937,25 +1937,25 @@ php please statamic:content-translator:translate [options]
 Preview what would be translated for a collection (safe, no changes):
 
 \`\`\`bash
-php please statamic:content-translator:translate --collection=pages --to=de --dry-run
+php please statamic:magic-translator:translate --collection=pages --to=de --dry-run
 \`\`\`
 
 Translate all missing `pages` entries into German and French, async:
 
 \`\`\`bash
-php please statamic:content-translator:translate --collection=pages --to=de --to=fr --dispatch-jobs -n
+php please statamic:magic-translator:translate --collection=pages --to=de --to=fr --dispatch-jobs -n
 \`\`\`
 
 Re-translate stale entries (source updated after last translation) for CI/cron:
 
 \`\`\`bash
-php please statamic:content-translator:translate --collection=pages --include-stale --dispatch-jobs -n
+php please statamic:magic-translator:translate --collection=pages --include-stale --dispatch-jobs -n
 \`\`\`
 
 Translate one specific entry to every site its collection supports:
 
 \`\`\`bash
-php please statamic:content-translator:translate --entry=abc-123
+php please statamic:magic-translator:translate --entry=abc-123
 \`\`\`
 
 ### Options
@@ -1990,7 +1990,7 @@ Open `CHANGELOG.md` and add at the top of the unreleased section:
 ```markdown
 ### Added
 
-- **Artisan command `statamic:content-translator:translate`** — flexible CLI tool for bulk, CI-driven, and surgical translation. Supports filtering by collection, entry ID, blueprint, and target sites; dry-run preview; interactive confirmation with `-n` bypass; sync with progress bar or async queue dispatch via `--dispatch-jobs`; `--include-stale` for CI/cron, `--overwrite` nuclear option.
+- **Artisan command `statamic:magic-translator:translate`** — flexible CLI tool for bulk, CI-driven, and surgical translation. Supports filtering by collection, entry ID, blueprint, and target sites; dry-run preview; interactive confirmation with `-n` bypass; sync with progress bar or async queue dispatch via `--dispatch-jobs`; `--include-stale` for CI/cron, `--overwrite` nuclear option.
 ```
 
 **Step 3: Run the full test suite**
@@ -2010,12 +2010,12 @@ Expected: all tests green.
 
 Detect sandbox layout:
 ```bash
-ls ../statamic-content-translator-test/artisan 2>/dev/null && echo "sibling" || echo "nested"
+ls ../statamic-magic-translator-test/artisan 2>/dev/null && echo "sibling" || echo "nested"
 ```
 
 If sibling, run against it:
 ```bash
-php ../statamic-content-translator-test/artisan statamic:content-translator:translate --collection=pages --to=de --dry-run
+php ../statamic-magic-translator-test/artisan statamic:magic-translator:translate --collection=pages --to=de --dry-run
 ```
 
 Verify the output matches the expected plan format: header, filter line, source/mode lines, breakdown, "Dry run — no changes made."
@@ -2024,7 +2024,7 @@ Verify the output matches the expected plan format: header, filter line, source/
 
 ```bash
 git add README.md CHANGELOG.md
-git commit -m "docs: document statamic:content-translator:translate artisan command"
+git commit -m "docs: document statamic:magic-translator:translate artisan command"
 ```
 
 **Step 7: Final verification**
@@ -2049,6 +2049,6 @@ Both should be green.
 ## Out of Scope
 
 - `--json` machine-readable output (add in follow-up if needed)
-- Writing failure details to a dedicated log file (`storage/logs/content-translator-{ts}.log`) — current implementation relies on the existing `TranslationLogger` + Laravel log. Add if power users request it.
-- Status-polling await mode for async dispatch (command exits after dispatch; users poll via the existing `/cp/content-translator/status` endpoint).
+- Writing failure details to a dedicated log file (`storage/logs/magic-translator-{ts}.log`) — current implementation relies on the existing `TranslationLogger` + Laravel log. Add if power users request it.
+- Status-polling await mode for async dispatch (command exits after dispatch; users poll via the existing `/cp/magic-translator/status` endpoint).
 - Support for translating terms, globals, assets, or nav — entry-only, matches the CP.

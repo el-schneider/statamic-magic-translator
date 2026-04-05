@@ -2,9 +2,9 @@
 
 declare(strict_types=1);
 
-use ElSchneider\ContentTranslator\Contracts\TranslationService;
-use ElSchneider\ContentTranslator\Exceptions\ProviderRateLimitedException;
-use ElSchneider\ContentTranslator\Jobs\TranslateEntryJob;
+use ElSchneider\MagicTranslator\Contracts\TranslationService;
+use ElSchneider\MagicTranslator\Exceptions\ProviderRateLimitedException;
+use ElSchneider\MagicTranslator\Jobs\TranslateEntryJob;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\Queue;
 use Tests\StatamicTestHelpers;
@@ -38,7 +38,7 @@ function triggerPayload(string $entryId, array $targetSites = ['fr']): array
 
 it('requires authentication to trigger a translation', function () {
     // No actingAs() call — unauthenticated JSON request.
-    $response = $this->postJson(cpUrl('content-translator/translate'), [
+    $response = $this->postJson(cpUrl('magic-translator/translate'), [
         'entry_id' => 'some-id',
         'target_sites' => ['fr'],
     ]);
@@ -48,7 +48,7 @@ it('requires authentication to trigger a translation', function () {
 });
 
 it('requires authentication to check job status', function () {
-    $response = $this->getJson(cpUrl('content-translator/status'), [
+    $response = $this->getJson(cpUrl('magic-translator/status'), [
         'jobs' => ['some-job-id'],
     ]);
 
@@ -92,7 +92,7 @@ it('forbids users who cannot edit the specific entry', function () {
         'author' => [$author->id()],
     ]);
 
-    $response = $this->postJson(cpUrl('content-translator/translate'), [
+    $response = $this->postJson(cpUrl('magic-translator/translate'), [
         'entry_id' => $entry->id(),
         'target_sites' => ['fr'],
     ]);
@@ -127,7 +127,7 @@ it('forbids target sites the user cannot access', function () {
     ]);
     $this->loginUser($user);
 
-    $response = $this->postJson(cpUrl('content-translator/translate'), [
+    $response = $this->postJson(cpUrl('magic-translator/translate'), [
         'entry_id' => $entry->id(),
         'target_sites' => ['fr', 'de'], // de is not accessible
     ]);
@@ -162,7 +162,7 @@ it('forbids a source_site the user cannot access', function () {
     ]);
     $this->loginUser($user);
 
-    $response = $this->postJson(cpUrl('content-translator/translate'), [
+    $response = $this->postJson(cpUrl('magic-translator/translate'), [
         'entry_id' => $entry->id(),
         'source_site' => 'en',
         'target_sites' => ['fr'],
@@ -185,7 +185,7 @@ it('returns 404 when entry has no localization in source_site', function () {
     $this->loginUser(); // super
 
     // Entry only exists in en; attempt to translate from fr.
-    $response = $this->postJson(cpUrl('content-translator/translate'), [
+    $response = $this->postJson(cpUrl('magic-translator/translate'), [
         'entry_id' => $entry->id(),
         'source_site' => 'fr',
         'target_sites' => ['en'],
@@ -218,7 +218,7 @@ it('allows dispatch when user has access to all requested target sites', functio
     ]);
     $this->loginUser($user);
 
-    $response = $this->postJson(cpUrl('content-translator/translate'), [
+    $response = $this->postJson(cpUrl('magic-translator/translate'), [
         'entry_id' => $entry->id(),
         'target_sites' => ['fr', 'de'],
     ]);
@@ -234,7 +234,7 @@ it('allows dispatch when user has access to all requested target sites', functio
 it('returns 422 when entry_id is missing', function () {
     $this->loginUser();
 
-    $response = $this->postJson(cpUrl('content-translator/translate'), [
+    $response = $this->postJson(cpUrl('magic-translator/translate'), [
         'target_sites' => ['fr'],
     ]);
 
@@ -245,7 +245,7 @@ it('returns 422 when entry_id is missing', function () {
 it('returns 422 when target_sites is missing', function () {
     $this->loginUser();
 
-    $response = $this->postJson(cpUrl('content-translator/translate'), [
+    $response = $this->postJson(cpUrl('magic-translator/translate'), [
         'entry_id' => 'some-id',
     ]);
 
@@ -256,7 +256,7 @@ it('returns 422 when target_sites is missing', function () {
 it('returns 422 when target_sites is not an array', function () {
     $this->loginUser();
 
-    $response = $this->postJson(cpUrl('content-translator/translate'), [
+    $response = $this->postJson(cpUrl('magic-translator/translate'), [
         'entry_id' => 'some-id',
         'target_sites' => 'fr',
     ]);
@@ -272,7 +272,7 @@ it('returns 422 when options.generate_slug is not a boolean', function () {
     $this->createTestBlueprint('articles');
     $entry = $this->createTestEntry('articles');
 
-    $response = $this->postJson(cpUrl('content-translator/translate'), [
+    $response = $this->postJson(cpUrl('magic-translator/translate'), [
         'entry_id' => $entry->id(),
         'target_sites' => ['fr'],
         'options' => ['generate_slug' => 'not-a-bool'],
@@ -287,7 +287,7 @@ it('returns 422 when options.generate_slug is not a boolean', function () {
 it('returns 404 when the entry does not exist', function () {
     $this->loginUser();
 
-    $response = $this->postJson(cpUrl('content-translator/translate'), [
+    $response = $this->postJson(cpUrl('magic-translator/translate'), [
         'entry_id' => 'nonexistent-entry-id',
         'target_sites' => ['fr'],
     ]);
@@ -319,7 +319,7 @@ it('returns a structured error envelope when dispatch throws a domain exception'
     $this->createTestBlueprint('articles');
     $entry = $this->createTestEntry('articles');
 
-    $response = $this->postJson(cpUrl('content-translator/translate'), [
+    $response = $this->postJson(cpUrl('magic-translator/translate'), [
         'entry_id' => $entry->id(),
         'target_sites' => ['fr'],
     ]);
@@ -330,7 +330,7 @@ it('returns a structured error envelope when dispatch throws a domain exception'
             'error' => [
                 'code' => 'provider_rate_limited',
                 'message' => 'Translation service rate limit exceeded. Please try again later.',
-                'message_key' => 'content-translator::messages.error_provider_rate_limited',
+                'message_key' => 'magic-translator::messages.error_provider_rate_limited',
                 'retryable' => true,
             ],
         ]);
@@ -346,7 +346,7 @@ it('dispatches a TranslateEntryJob for each target site', function () {
     $this->createTestBlueprint('articles');
     $entry = $this->createTestEntry('articles');
 
-    $response = $this->postJson(cpUrl('content-translator/translate'), [
+    $response = $this->postJson(cpUrl('magic-translator/translate'), [
         'entry_id' => $entry->id(),
         'target_sites' => ['fr'],
     ]);
@@ -372,7 +372,7 @@ it('dispatches one job per target site', function () {
     $this->createTestBlueprint('articles');
     $entry = $this->createTestEntry('articles');
 
-    $response = $this->postJson(cpUrl('content-translator/translate'), [
+    $response = $this->postJson(cpUrl('magic-translator/translate'), [
         'entry_id' => $entry->id(),
         'target_sites' => ['fr', 'de'],
     ]);
@@ -391,7 +391,7 @@ it('returns a job entry for every target site in the response', function () {
     $this->createTestBlueprint('articles');
     $entry = $this->createTestEntry('articles');
 
-    $response = $this->postJson(cpUrl('content-translator/translate'), [
+    $response = $this->postJson(cpUrl('magic-translator/translate'), [
         'entry_id' => $entry->id(),
         'target_sites' => ['fr'],
     ]);
@@ -416,7 +416,7 @@ it('stores a pending cache entry for each dispatched job', function () {
     $this->createTestBlueprint('articles');
     $entry = $this->createTestEntry('articles');
 
-    $response = $this->postJson(cpUrl('content-translator/translate'), [
+    $response = $this->postJson(cpUrl('magic-translator/translate'), [
         'entry_id' => $entry->id(),
         'target_sites' => ['fr'],
     ]);
@@ -425,7 +425,7 @@ it('stores a pending cache entry for each dispatched job', function () {
 
     $jobId = $response->json('jobs.0.id');
 
-    $cached = Cache::get("content-translator:job:{$jobId}");
+    $cached = Cache::get("magic-translator:job:{$jobId}");
 
     expect($cached)->not->toBeNull();
     expect($cached['status'])->toBe('pending');
@@ -440,7 +440,7 @@ it('passes source_site and options through to the dispatched job', function () {
     $this->createTestBlueprint('articles');
     $entry = $this->createTestEntry('articles');
 
-    $response = $this->postJson(cpUrl('content-translator/translate'), [
+    $response = $this->postJson(cpUrl('magic-translator/translate'), [
         'entry_id' => $entry->id(),
         'source_site' => 'en',
         'target_sites' => ['fr'],
@@ -464,14 +464,14 @@ it('returns pending status for a freshly dispatched job', function () {
     $this->createTestBlueprint('articles');
     $entry = $this->createTestEntry('articles');
 
-    $triggerResponse = $this->postJson(cpUrl('content-translator/translate'), [
+    $triggerResponse = $this->postJson(cpUrl('magic-translator/translate'), [
         'entry_id' => $entry->id(),
         'target_sites' => ['fr'],
     ]);
 
     $jobId = $triggerResponse->json('jobs.0.id');
 
-    $statusResponse = $this->getJson(cpUrl('content-translator/status').'?'.http_build_query(['jobs' => [$jobId]]));
+    $statusResponse = $this->getJson(cpUrl('magic-translator/status').'?'.http_build_query(['jobs' => [$jobId]]));
 
     $statusResponse->assertStatus(200);
 
@@ -487,14 +487,14 @@ it('returns completed status for a finished job', function () {
 
     $jobId = 'test-completed-job-id';
 
-    Cache::put("content-translator:job:{$jobId}", [
+    Cache::put("magic-translator:job:{$jobId}", [
         'id' => $jobId,
         'target_site' => 'fr',
         'status' => 'completed',
         'error' => null,
     ], 600);
 
-    $response = $this->getJson(cpUrl('content-translator/status').'?'.http_build_query(['jobs' => [$jobId]]));
+    $response = $this->getJson(cpUrl('magic-translator/status').'?'.http_build_query(['jobs' => [$jobId]]));
 
     $response->assertStatus(200);
 
@@ -509,19 +509,19 @@ it('returns failed status with a structured error object for a failed job', func
 
     $jobId = 'test-failed-job-id';
 
-    Cache::put("content-translator:job:{$jobId}", [
+    Cache::put("magic-translator:job:{$jobId}", [
         'id' => $jobId,
         'target_site' => 'fr',
         'status' => 'failed',
         'error' => [
             'code' => 'provider_unavailable',
             'message' => 'Translation service is temporarily unavailable. Please try again later.',
-            'message_key' => 'content-translator::messages.error_provider_unavailable',
+            'message_key' => 'magic-translator::messages.error_provider_unavailable',
             'retryable' => true,
         ],
     ], 600);
 
-    $response = $this->getJson(cpUrl('content-translator/status').'?'.http_build_query(['jobs' => [$jobId]]));
+    $response = $this->getJson(cpUrl('magic-translator/status').'?'.http_build_query(['jobs' => [$jobId]]));
 
     $response->assertStatus(200);
 
@@ -530,7 +530,7 @@ it('returns failed status with a structured error object for a failed job', func
     expect($jobs[0]['error'])->toBe([
         'code' => 'provider_unavailable',
         'message' => 'Translation service is temporarily unavailable. Please try again later.',
-        'message_key' => 'content-translator::messages.error_provider_unavailable',
+        'message_key' => 'magic-translator::messages.error_provider_unavailable',
         'retryable' => true,
     ]);
 });
@@ -540,14 +540,14 @@ it('wraps legacy string job errors into a structured error object', function () 
 
     $jobId = 'legacy-failed-job-id';
 
-    Cache::put("content-translator:job:{$jobId}", [
+    Cache::put("magic-translator:job:{$jobId}", [
         'id' => $jobId,
         'target_site' => 'fr',
         'status' => 'failed',
         'error' => 'Translation API unavailable.',
     ], 600);
 
-    $response = $this->getJson(cpUrl('content-translator/status').'?'.http_build_query(['jobs' => [$jobId]]));
+    $response = $this->getJson(cpUrl('magic-translator/status').'?'.http_build_query(['jobs' => [$jobId]]));
 
     $response->assertStatus(200);
 
@@ -563,7 +563,7 @@ it('wraps legacy string job errors into a structured error object', function () 
 it('returns unknown status for an expired or invalid job id', function () {
     $this->loginUser();
 
-    $response = $this->getJson(cpUrl('content-translator/status').'?'.http_build_query(['jobs' => ['expired-job-id']]));
+    $response = $this->getJson(cpUrl('magic-translator/status').'?'.http_build_query(['jobs' => ['expired-job-id']]));
 
     $response->assertStatus(200);
 
@@ -579,11 +579,11 @@ it('handles malformed cache payloads without failing', function () {
 
     // Simulate a stale/incomplete payload, e.g. after pending status expired
     // before the worker started and repopulated only the status field.
-    Cache::put("content-translator:job:{$jobId}", [
+    Cache::put("magic-translator:job:{$jobId}", [
         'status' => 'running',
     ], 600);
 
-    $response = $this->getJson(cpUrl('content-translator/status').'?'.http_build_query(['jobs' => [$jobId]]));
+    $response = $this->getJson(cpUrl('magic-translator/status').'?'.http_build_query(['jobs' => [$jobId]]));
 
     $response->assertStatus(200);
 
@@ -600,14 +600,14 @@ it('returns statuses for multiple jobs in one request', function () {
     $failedId = 'job-failed';
     $unknownId = 'job-unknown';
 
-    Cache::put("content-translator:job:{$completedId}", [
+    Cache::put("magic-translator:job:{$completedId}", [
         'id' => $completedId,
         'target_site' => 'fr',
         'status' => 'completed',
         'error' => null,
     ], 600);
 
-    Cache::put("content-translator:job:{$failedId}", [
+    Cache::put("magic-translator:job:{$failedId}", [
         'id' => $failedId,
         'target_site' => 'de',
         'status' => 'failed',
@@ -619,7 +619,7 @@ it('returns statuses for multiple jobs in one request', function () {
     ], 600);
 
     $queryString = http_build_query(['jobs' => [$completedId, $failedId, $unknownId]]);
-    $response = $this->getJson(cpUrl('content-translator/status').'?'.$queryString);
+    $response = $this->getJson(cpUrl('magic-translator/status').'?'.$queryString);
 
     $response->assertStatus(200);
 
@@ -638,7 +638,7 @@ it('returns statuses for multiple jobs in one request', function () {
 it('returns 422 when status request is missing jobs parameter', function () {
     $this->loginUser();
 
-    $response = $this->getJson(cpUrl('content-translator/status'));
+    $response = $this->getJson(cpUrl('magic-translator/status'));
 
     $response->assertStatus(422)
         ->assertJsonValidationErrors(['jobs']);
@@ -651,7 +651,7 @@ it('job updates cache to running then completed when executed synchronously', fu
 
     $jobId = 'sync-job-test';
 
-    Cache::put("content-translator:job:{$jobId}", [
+    Cache::put("magic-translator:job:{$jobId}", [
         'id' => $jobId,
         'target_site' => 'fr',
         'status' => 'pending',
@@ -665,7 +665,7 @@ it('job updates cache to running then completed when executed synchronously', fu
     $job = new TranslateEntryJob($entry->id(), 'fr', null, [], $jobId);
     app()->call([$job, 'handle']);
 
-    $cached = Cache::get("content-translator:job:{$jobId}");
+    $cached = Cache::get("magic-translator:job:{$jobId}");
     expect($cached['status'])->toBe('completed');
 });
 
@@ -674,7 +674,7 @@ it('clears stale cache errors when a retried job later succeeds', function () {
 
     $jobId = 'retry-success-job-id';
 
-    Cache::put("content-translator:job:{$jobId}", [
+    Cache::put("magic-translator:job:{$jobId}", [
         'id' => $jobId,
         'target_site' => 'fr',
         'status' => 'failed',
@@ -688,7 +688,7 @@ it('clears stale cache errors when a retried job later succeeds', function () {
     $job = new TranslateEntryJob($entry->id(), 'fr', null, [], $jobId);
     app()->call([$job, 'handle']);
 
-    $cached = Cache::get("content-translator:job:{$jobId}");
+    $cached = Cache::get("magic-translator:job:{$jobId}");
     expect($cached['status'])->toBe('completed');
     expect($cached['error'] ?? null)->toBeNull();
 });
@@ -708,7 +708,7 @@ it('job updates cache to failed when translation throws', function () {
 
     $jobId = 'fail-job-test';
 
-    Cache::put("content-translator:job:{$jobId}", [
+    Cache::put("magic-translator:job:{$jobId}", [
         'id' => $jobId,
         'target_site' => 'fr',
         'status' => 'pending',
@@ -723,7 +723,7 @@ it('job updates cache to failed when translation throws', function () {
 
     expect(fn () => app()->call([$job, 'handle']))->toThrow(RuntimeException::class);
 
-    $cached = Cache::get("content-translator:job:{$jobId}");
+    $cached = Cache::get("magic-translator:job:{$jobId}");
     expect($cached['status'])->toBe('failed');
     expect($cached['error'])->toBe([
         'code' => 'unexpected_error',
@@ -739,7 +739,7 @@ function use_fake_translation_service_for_job_test(): void
     $mock = Mockery::mock(TranslationService::class);
     $mock->shouldReceive('translate')->andReturnUsing(
         fn (array $units) => array_map(
-            fn (ElSchneider\ContentTranslator\Data\TranslationUnit $u) => $u->withTranslation('FR: '.$u->text),
+            fn (ElSchneider\MagicTranslator\Data\TranslationUnit $u) => $u->withTranslation('FR: '.$u->text),
             $units,
         ),
     );

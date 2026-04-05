@@ -2,7 +2,7 @@
 
 declare(strict_types=1);
 
-use ElSchneider\ContentTranslator\Console\FilterCriteria;
+use ElSchneider\MagicTranslator\Console\FilterCriteria;
 
 it('constructs with all fields', function () {
     $criteria = new FilterCriteria(

@@ -39,7 +39,7 @@ Create explicit domain exceptions under `src/Exceptions/`.
 
 ### Base class
 
-`ContentTranslatorException extends RuntimeException`
+`MagicTranslatorException extends RuntimeException`
 
 Required metadata:
 
@@ -91,7 +91,7 @@ Normalize controller JSON errors:
   "error": {
     "code": "provider_auth_failed",
     "message": "Translation service authentication failed.",
-    "message_key": "content-translator::messages.error_provider_auth_failed",
+    "message_key": "magic-translator::messages.error_provider_auth_failed",
     "retryable": false
   }
 }

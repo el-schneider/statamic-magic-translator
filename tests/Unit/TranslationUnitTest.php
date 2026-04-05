@@ -2,8 +2,8 @@
 
 declare(strict_types=1);
 
-use ElSchneider\ContentTranslator\Data\TranslationFormat;
-use ElSchneider\ContentTranslator\Data\TranslationUnit;
+use ElSchneider\MagicTranslator\Data\TranslationFormat;
+use ElSchneider\MagicTranslator\Data\TranslationUnit;
 
 it('can set translated text immutably', function () {
     $unit = new TranslationUnit(path: 'title', text: 'Hello', format: TranslationFormat::Plain);

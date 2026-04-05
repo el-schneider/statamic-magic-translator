@@ -2,10 +2,10 @@
 
 declare(strict_types=1);
 
-use ElSchneider\ContentTranslator\Data\TranslationFormat;
-use ElSchneider\ContentTranslator\Data\TranslationUnit;
-use ElSchneider\ContentTranslator\Extraction\ContentExtractor;
-use ElSchneider\ContentTranslator\Reassembly\ContentReassembler;
+use ElSchneider\MagicTranslator\Data\TranslationFormat;
+use ElSchneider\MagicTranslator\Data\TranslationUnit;
+use ElSchneider\MagicTranslator\Extraction\ContentExtractor;
+use ElSchneider\MagicTranslator\Reassembly\ContentReassembler;
 
 beforeEach(function () {
     $this->reassembler = new ContentReassembler;

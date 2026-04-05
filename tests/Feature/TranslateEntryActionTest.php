@@ -2,7 +2,7 @@
 
 declare(strict_types=1);
 
-use ElSchneider\ContentTranslator\StatamicActions\TranslateEntryAction;
+use ElSchneider\MagicTranslator\StatamicActions\TranslateEntryAction;
 use Statamic\Facades\Role;
 use Statamic\Facades\Site;
 use Statamic\Facades\User;
@@ -48,7 +48,7 @@ it('is visible for an entry with multiple sites', function () {
 
 it('is not visible for an excluded exact blueprint', function () {
     test()->loginUser();
-    config(['statamic.content-translator.exclude_blueprints' => ['articles.default']]);
+    config(['statamic.magic-translator.exclude_blueprints' => ['articles.default']]);
 
     test()->createTestCollection('articles', ['en', 'fr']);
     test()->createTestBlueprint('articles', 'default');
@@ -59,7 +59,7 @@ it('is not visible for an excluded exact blueprint', function () {
 
 it('is not visible for an excluded wildcard blueprint pattern', function () {
     test()->loginUser();
-    config(['statamic.content-translator.exclude_blueprints' => ['articles.*']]);
+    config(['statamic.magic-translator.exclude_blueprints' => ['articles.*']]);
 
     test()->createTestCollection('articles', ['en', 'fr']);
     test()->createTestBlueprint('articles', 'default');

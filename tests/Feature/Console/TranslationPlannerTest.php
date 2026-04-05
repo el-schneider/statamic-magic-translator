@@ -2,9 +2,9 @@
 
 declare(strict_types=1);
 
-use ElSchneider\ContentTranslator\Console\FilterCriteria;
-use ElSchneider\ContentTranslator\Console\PlanAction;
-use ElSchneider\ContentTranslator\Console\TranslationPlanner;
+use ElSchneider\MagicTranslator\Console\FilterCriteria;
+use ElSchneider\MagicTranslator\Console\PlanAction;
+use ElSchneider\MagicTranslator\Console\TranslationPlanner;
 use Tests\StatamicTestHelpers;
 
 uses(StatamicTestHelpers::class);
@@ -107,7 +107,7 @@ it('filters by --blueprint handle', function () {
 });
 
 it('respects config exclude_blueprints', function () {
-    config(['statamic.content-translator.exclude_blueprints' => ['articles.*']]);
+    config(['statamic.magic-translator.exclude_blueprints' => ['articles.*']]);
 
     $this->createTestCollection('articles', ['en', 'fr']);
     $this->createTestCollection('pages', ['en', 'fr']);
@@ -147,7 +147,7 @@ it('skips pair when target localization already exists (safe default)', function
 
     $en->makeLocalization('fr')->data([
         'title' => 'Hallo',
-        'content_translator' => ['last_translated_at' => now()->toIso8601String()],
+        'magic_translator' => ['last_translated_at' => now()->toIso8601String()],
     ])->save();
 
     $planner = app(TranslationPlanner::class);
@@ -167,7 +167,7 @@ it('includes stale targets when --include-stale is set', function () {
 
     $en->makeLocalization('fr')->data([
         'title' => 'Hallo',
-        'content_translator' => ['last_translated_at' => now()->subDays(7)->toIso8601String()],
+        'magic_translator' => ['last_translated_at' => now()->subDays(7)->toIso8601String()],
     ])->save();
 
     touch($en->path(), now()->timestamp);
@@ -191,7 +191,7 @@ it('keeps SkipExists when target is fresh even with --include-stale', function (
 
     $en->makeLocalization('fr')->data([
         'title' => 'Hallo',
-        'content_translator' => ['last_translated_at' => now()->addDay()->toIso8601String()],
+        'magic_translator' => ['last_translated_at' => now()->addDay()->toIso8601String()],
     ])->save();
 
     $planner = app(TranslationPlanner::class);

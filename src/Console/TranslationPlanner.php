@@ -2,9 +2,9 @@
 
 declare(strict_types=1);
 
-namespace ElSchneider\ContentTranslator\Console;
+namespace ElSchneider\MagicTranslator\Console;
 
-use ElSchneider\ContentTranslator\Support\BlueprintExclusions;
+use ElSchneider\MagicTranslator\Support\BlueprintExclusions;
 use Illuminate\Support\Carbon;
 use InvalidArgumentException;
 use Statamic\Contracts\Entries\Entry as EntryContract;
@@ -215,7 +215,7 @@ final class TranslationPlanner
 
     private function isStale(EntryContract $sourceEntry, EntryContract $targetEntry): bool
     {
-        $meta = $targetEntry->get('content_translator');
+        $meta = $targetEntry->get('magic_translator');
 
         if (! is_array($meta) || ! isset($meta['last_translated_at'])) {
             return true;

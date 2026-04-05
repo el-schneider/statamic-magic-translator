@@ -9,7 +9,7 @@ uses(StatamicTestHelpers::class);
 
 // ── Blueprint injection ───────────────────────────────────────────────────────
 
-it('injects content_translator field into entry blueprints by default', function () {
+it('injects magic_translator field into entry blueprints by default', function () {
     test()->createTestCollection('articles', ['en', 'fr']);
     $blueprint = test()->createTestBlueprint('articles', 'default');
     $entry = test()->createTestEntry(collection: 'articles', site: 'en');
@@ -18,7 +18,7 @@ it('injects content_translator field into entry blueprints by default', function
     $event = new EntryBlueprintFound($blueprint, $entry);
     event($event);
 
-    expect($event->blueprint->hasField('content_translator'))->toBeTrue();
+    expect($event->blueprint->hasField('magic_translator'))->toBeTrue();
 });
 
 it('injects the field with the correct configuration', function () {
@@ -29,19 +29,19 @@ it('injects the field with the correct configuration', function () {
     $event = new EntryBlueprintFound($blueprint, $entry);
     event($event);
 
-    $field = $event->blueprint->field('content_translator');
+    $field = $event->blueprint->field('magic_translator');
 
     expect($field)->not->toBeNull();
-    expect($field->type())->toBe('content_translator');
+    expect($field->type())->toBe('magic_translator');
     expect($field->get('visibility'))->toBe('computed');
     expect($field->get('localizable'))->toBeTrue();
-    expect($field->get('display'))->toBe('Content Translator');
+    expect($field->get('display'))->toBe('Magic Translator');
     expect($field->get('listable'))->toBe('hidden');
 });
 
 it('excludes exact blueprints listed in exclude_blueprints config', function () {
     config([
-        'statamic.content-translator.exclude_blueprints' => ['articles.default'],
+        'statamic.magic-translator.exclude_blueprints' => ['articles.default'],
     ]);
 
     test()->createTestCollection('articles', ['en', 'fr']);
@@ -51,12 +51,12 @@ it('excludes exact blueprints listed in exclude_blueprints config', function () 
     $event = new EntryBlueprintFound($blueprint, $entry);
     event($event);
 
-    expect($event->blueprint->hasField('content_translator'))->toBeFalse();
+    expect($event->blueprint->hasField('magic_translator'))->toBeFalse();
 });
 
 it('excludes wildcard blueprint patterns in exclude_blueprints config', function () {
     config([
-        'statamic.content-translator.exclude_blueprints' => ['articles.*'],
+        'statamic.magic-translator.exclude_blueprints' => ['articles.*'],
     ]);
 
     test()->createTestCollection('articles', ['en', 'fr']);
@@ -66,12 +66,12 @@ it('excludes wildcard blueprint patterns in exclude_blueprints config', function
     $event = new EntryBlueprintFound($blueprint, $entry);
     event($event);
 
-    expect($event->blueprint->hasField('content_translator'))->toBeFalse();
+    expect($event->blueprint->hasField('magic_translator'))->toBeFalse();
 });
 
 it('injects into a non-excluded blueprint', function () {
     config([
-        'statamic.content-translator.exclude_blueprints' => ['articles.special'],
+        'statamic.magic-translator.exclude_blueprints' => ['articles.special'],
     ]);
 
     test()->createTestCollection('articles', ['en', 'fr']);
@@ -81,7 +81,7 @@ it('injects into a non-excluded blueprint', function () {
     $event = new EntryBlueprintFound($blueprint, $entry);
     event($event);
 
-    expect($event->blueprint->hasField('content_translator'))->toBeTrue();
+    expect($event->blueprint->hasField('magic_translator'))->toBeTrue();
 });
 
 it('skips injection when the event has no entry', function () {
@@ -92,5 +92,5 @@ it('skips injection when the event has no entry', function () {
     $event = new EntryBlueprintFound($blueprint, null);
     event($event);
 
-    expect($event->blueprint->hasField('content_translator'))->toBeFalse();
+    expect($event->blueprint->hasField('magic_translator'))->toBeFalse();
 });

@@ -2,7 +2,7 @@
 
 declare(strict_types=1);
 
-namespace ElSchneider\ContentTranslator\Reassembly;
+namespace ElSchneider\MagicTranslator\Reassembly;
 
 /**
  * Parses an HTML-tagged string (as produced by BardSerializer) back into a

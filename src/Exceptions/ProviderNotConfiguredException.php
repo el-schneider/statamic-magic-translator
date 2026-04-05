@@ -2,9 +2,9 @@
 
 declare(strict_types=1);
 
-namespace ElSchneider\ContentTranslator\Exceptions;
+namespace ElSchneider\MagicTranslator\Exceptions;
 
-final class ProviderNotConfiguredException extends ContentTranslatorException
+final class ProviderNotConfiguredException extends MagicTranslatorException
 {
     public function errorCode(): string
     {
@@ -13,7 +13,7 @@ final class ProviderNotConfiguredException extends ContentTranslatorException
 
     public function messageKey(): string
     {
-        return 'content-translator::messages.error_'.$this->errorCode();
+        return 'magic-translator::messages.error_'.$this->errorCode();
     }
 
     public function retryable(): bool

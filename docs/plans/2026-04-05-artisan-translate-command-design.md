@@ -1,4 +1,4 @@
-# Design: Artisan `content-translator:translate` Command
+# Design: Artisan `magic-translator:translate` Command
 
 **Date:** 2026-04-05
 **Status:** Design approved, ready for implementation
@@ -17,7 +17,7 @@ One general-purpose command with a rich filter vocabulary, safe-by-default behav
 ## Command Signature
 
 ```bash
-please statamic:content-translator:translate
+please statamic:magic-translator:translate
     {--to=*             : Target site handle (repeatable). Default: all sites each entry supports (minus source)}
     {--from=            : Source site handle (default: entry's origin)}
     {--collection=*     : Filter by collection handle (repeatable)}
@@ -32,7 +32,7 @@ please statamic:content-translator:translate
 
 Standard Laravel/Symfony `-n` / `--no-interaction` is honored automatically (skips the scope-confirm prompt).
 
-**Signature prefix** — `statamic:content-translator:translate`, matching `statamic:auto-alt:generate` (`statamic:{addon-slug}:{verb}` convention).
+**Signature prefix** — `statamic:magic-translator:translate`, matching `statamic:auto-alt:generate` (`statamic:{addon-slug}:{verb}` convention).
 
 **Uses `RunsInPlease` trait** → invokable via both `php artisan` and `php please`.
 
@@ -55,7 +55,7 @@ Missing target localizations are **always created** when they pass the filters. 
 2. Else if `--collection=*` provided → query entries across those collections.
 3. Else → query all entries in all collections.
 4. Apply `--blueprint=*` filter (narrows by `entry->blueprint()->handle()`).
-5. Apply blueprint exclusions from `content-translator.php` config (same rules as CP).
+5. Apply blueprint exclusions from `magic-translator.php` config (same rules as CP).
 
 **Source site resolution:**
 
@@ -83,9 +83,9 @@ Missing target localizations are **always created** when they pass the filters. 
 Default flow always builds + prints the plan first, then prompts.
 
 ```
-$ please statamic:content-translator:translate --collection=pages --to=de --to=fr
+$ please statamic:magic-translator:translate --collection=pages --to=de --to=fr
 
-Content Translator — translation plan
+Magic Translator — translation plan
 ─────────────────────────────────────────────────────────────
 Filters:       collection=pages, blueprint=*, to=[de,fr]
 Source site:   default (auto)
@@ -132,7 +132,7 @@ Failures:
   entry-def456 → fr  ProviderResponseInvalidException: schema mismatch
   entry-ghi789 → de  TranslationDispatchException: missing origin
   ...
-Full details written to: storage/logs/content-translator-{timestamp}.log
+Full details written to: storage/logs/magic-translator-{timestamp}.log
 ```
 
 **Async mode (`--dispatch-jobs`):**
@@ -144,7 +144,7 @@ Full details written to: storage/logs/content-translator-{timestamp}.log
 Example:
 ```
 Dispatched 83 jobs to queue "default".
-Track status: GET /cp/content-translator/status?jobs[]=...
+Track status: GET /cp/magic-translator/status?jobs[]=...
 Or run: php artisan queue:work
 ```
 
@@ -173,7 +173,7 @@ src/Console/PlanAction.php             # ~15 lines — enum: Translate, SkipExis
 - `TranslateEntry::handle($entryId, $targetSite, $sourceSite, $options)` — sync execution.
 - `TranslateEntryJob::dispatch(...)` — async execution.
 - `BlueprintExclusions::contains(...)` — same exclusion rules as CP.
-- `content-translator.php` — queue config, exclusion patterns.
+- `magic-translator.php` — queue config, exclusion patterns.
 - `TranslationLogger` — append failure details.
 
 **Planner contract (sketch):**

@@ -2,60 +2,60 @@
 
 declare(strict_types=1);
 
-use ElSchneider\ContentTranslator\Data\TranslationFormat;
-use ElSchneider\ContentTranslator\Data\TranslationUnit;
-use ElSchneider\ContentTranslator\Services\PromptResolver;
+use ElSchneider\MagicTranslator\Data\TranslationFormat;
+use ElSchneider\MagicTranslator\Data\TranslationUnit;
+use ElSchneider\MagicTranslator\Services\PromptResolver;
 
 uses(Tests\TestCase::class);
 
 it('resolves default system prompt view name', function () {
-    config(['statamic.content-translator.prism.prompts.system' => 'content-translator::prompts.system']);
+    config(['statamic.magic-translator.prism.prompts.system' => 'magic-translator::prompts.system']);
 
     $resolver = app(PromptResolver::class);
 
-    expect($resolver->resolveViewName('system', 'fr'))->toBe('content-translator::prompts.system');
+    expect($resolver->resolveViewName('system', 'fr'))->toBe('magic-translator::prompts.system');
 });
 
 it('resolves language-specific override when it exists', function () {
     config([
-        'statamic.content-translator.prism.prompts.system' => 'content-translator::prompts.system',
-        'statamic.content-translator.prism.prompts.overrides' => [
-            'ja' => ['system' => 'content-translator::prompts.system-ja'],
+        'statamic.magic-translator.prism.prompts.system' => 'magic-translator::prompts.system',
+        'statamic.magic-translator.prism.prompts.overrides' => [
+            'ja' => ['system' => 'magic-translator::prompts.system-ja'],
         ],
     ]);
 
     $resolver = app(PromptResolver::class);
 
-    expect($resolver->resolveViewName('system', 'ja'))->toBe('content-translator::prompts.system-ja');
+    expect($resolver->resolveViewName('system', 'ja'))->toBe('magic-translator::prompts.system-ja');
 });
 
 it('falls back to default when no override exists for locale', function () {
     config([
-        'statamic.content-translator.prism.prompts.system' => 'content-translator::prompts.system',
-        'statamic.content-translator.prism.prompts.overrides' => [
-            'ja' => ['system' => 'content-translator::prompts.system-ja'],
+        'statamic.magic-translator.prism.prompts.system' => 'magic-translator::prompts.system',
+        'statamic.magic-translator.prism.prompts.overrides' => [
+            'ja' => ['system' => 'magic-translator::prompts.system-ja'],
         ],
     ]);
 
     $resolver = app(PromptResolver::class);
 
     // 'de' has no override, should fall back to default
-    expect($resolver->resolveViewName('system', 'de'))->toBe('content-translator::prompts.system');
+    expect($resolver->resolveViewName('system', 'de'))->toBe('magic-translator::prompts.system');
 });
 
 it('falls back to default when override exists for locale but not for prompt type', function () {
     config([
-        'statamic.content-translator.prism.prompts.system' => 'content-translator::prompts.system',
-        'statamic.content-translator.prism.prompts.user' => 'content-translator::prompts.user',
-        'statamic.content-translator.prism.prompts.overrides' => [
-            'ja' => ['system' => 'content-translator::prompts.system-ja'],
+        'statamic.magic-translator.prism.prompts.system' => 'magic-translator::prompts.system',
+        'statamic.magic-translator.prism.prompts.user' => 'magic-translator::prompts.user',
+        'statamic.magic-translator.prism.prompts.overrides' => [
+            'ja' => ['system' => 'magic-translator::prompts.system-ja'],
         ],
     ]);
 
     $resolver = app(PromptResolver::class);
 
     // 'ja' has override for 'system' but not for 'user'
-    expect($resolver->resolveViewName('user', 'ja'))->toBe('content-translator::prompts.user');
+    expect($resolver->resolveViewName('user', 'ja'))->toBe('magic-translator::prompts.user');
 });
 
 it('renders system view with locale name variables', function () {

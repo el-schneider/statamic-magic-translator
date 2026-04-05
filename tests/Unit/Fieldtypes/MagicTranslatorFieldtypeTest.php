@@ -2,7 +2,7 @@
 
 declare(strict_types=1);
 
-use ElSchneider\ContentTranslator\Fieldtypes\ContentTranslatorFieldtype;
+use ElSchneider\MagicTranslator\Fieldtypes\MagicTranslatorFieldtype;
 use Statamic\Fields\Field;
 use Tests\StatamicTestHelpers;
 use Tests\TestCase;
@@ -14,14 +14,14 @@ uses(StatamicTestHelpers::class);
 
 // ── Handle ────────────────────────────────────────────────────────────────────
 
-it('has the handle content_translator', function () {
-    expect(ContentTranslatorFieldtype::handle())->toBe('content_translator');
+it('has the handle magic_translator', function () {
+    expect(MagicTranslatorFieldtype::handle())->toBe('magic_translator');
 });
 
 // ── Selectable ────────────────────────────────────────────────────────────────
 
 it('is not selectable in the blueprint editor', function () {
-    $fieldtype = new ContentTranslatorFieldtype;
+    $fieldtype = new MagicTranslatorFieldtype;
 
     expect($fieldtype->selectable())->toBeFalse();
 });
@@ -29,7 +29,7 @@ it('is not selectable in the blueprint editor', function () {
 // ── preProcess / process passthrough ─────────────────────────────────────────
 
 it('preProcess returns data unchanged', function () {
-    $fieldtype = new ContentTranslatorFieldtype;
+    $fieldtype = new MagicTranslatorFieldtype;
 
     expect($fieldtype->preProcess('hello'))->toBe('hello');
     expect($fieldtype->preProcess(null))->toBeNull();
@@ -37,7 +37,7 @@ it('preProcess returns data unchanged', function () {
 });
 
 it('process returns data unchanged', function () {
-    $fieldtype = new ContentTranslatorFieldtype;
+    $fieldtype = new MagicTranslatorFieldtype;
 
     expect($fieldtype->process('hello'))->toBe('hello');
     expect($fieldtype->process(null))->toBeNull();
@@ -47,10 +47,10 @@ it('process returns data unchanged', function () {
 // ── preload — no entry (blueprint editor context) ─────────────────────────────
 
 it('preload returns empty structure when no parent entry is set', function () {
-    $fieldtype = new ContentTranslatorFieldtype;
+    $fieldtype = new MagicTranslatorFieldtype;
 
     // Attach a field that has no parent (null).
-    $field = new Field('content_translator', ['type' => 'content_translator']);
+    $field = new Field('magic_translator', ['type' => 'magic_translator']);
     $fieldtype->setField($field);
 
     $result = $fieldtype->preload();
@@ -77,8 +77,8 @@ it('preload returns current_site and is_origin true for a root entry', function 
     $this->createTestBlueprint('articles');
     $entry = $this->createTestEntry(collection: 'articles', site: 'en');
 
-    $fieldtype = new ContentTranslatorFieldtype;
-    $field = (new Field('content_translator', ['type' => 'content_translator']))
+    $fieldtype = new MagicTranslatorFieldtype;
+    $field = (new Field('magic_translator', ['type' => 'magic_translator']))
         ->setParent($entry);
     $fieldtype->setField($field);
 
@@ -94,8 +94,8 @@ it('preload returns a sites array with all configured sites', function () {
     $this->createTestBlueprint('articles');
     $entry = $this->createTestEntry(collection: 'articles', site: 'en');
 
-    $fieldtype = new ContentTranslatorFieldtype;
-    $field = (new Field('content_translator', ['type' => 'content_translator']))
+    $fieldtype = new MagicTranslatorFieldtype;
+    $field = (new Field('magic_translator', ['type' => 'magic_translator']))
         ->setParent($entry);
     $fieldtype->setField($field);
 
@@ -115,8 +115,8 @@ it('preload marks a site as existing when a localization exists', function () {
     $frLocalization = $entry->makeLocalization('fr');
     $frLocalization->save();
 
-    $fieldtype = new ContentTranslatorFieldtype;
-    $field = (new Field('content_translator', ['type' => 'content_translator']))
+    $fieldtype = new MagicTranslatorFieldtype;
+    $field = (new Field('magic_translator', ['type' => 'magic_translator']))
         ->setParent($entry);
     $fieldtype->setField($field);
 
@@ -135,11 +135,11 @@ it('preload reports last_translated_at from the localization metadata', function
     $translatedAt = '2024-06-01T12:00:00+00:00';
 
     $frLocalization = $entry->makeLocalization('fr');
-    $frLocalization->set('content_translator', ['last_translated_at' => $translatedAt]);
+    $frLocalization->set('magic_translator', ['last_translated_at' => $translatedAt]);
     $frLocalization->save();
 
-    $fieldtype = new ContentTranslatorFieldtype;
-    $field = (new Field('content_translator', ['type' => 'content_translator']))
+    $fieldtype = new MagicTranslatorFieldtype;
+    $field = (new Field('magic_translator', ['type' => 'magic_translator']))
         ->setParent($entry);
     $fieldtype->setField($field);
 
@@ -156,11 +156,11 @@ it('preload handles malformed last_translated_at metadata without crashing', fun
     $entry = $this->createTestEntry(collection: 'articles', site: 'en');
 
     $frLocalization = $entry->makeLocalization('fr');
-    $frLocalization->set('content_translator', ['last_translated_at' => 'not-a-date']);
+    $frLocalization->set('magic_translator', ['last_translated_at' => 'not-a-date']);
     $frLocalization->save();
 
-    $fieldtype = new ContentTranslatorFieldtype;
-    $field = (new Field('content_translator', ['type' => 'content_translator']))
+    $fieldtype = new MagicTranslatorFieldtype;
+    $field = (new Field('magic_translator', ['type' => 'magic_translator']))
         ->setParent($entry);
     $fieldtype->setField($field);
 
@@ -181,15 +181,15 @@ it('preload marks a localization as stale when origin was modified after last tr
     $oldTranslatedAt = now()->subHour()->toIso8601String();
 
     $frLocalization = $entry->makeLocalization('fr');
-    $frLocalization->set('content_translator', ['last_translated_at' => $oldTranslatedAt]);
+    $frLocalization->set('magic_translator', ['last_translated_at' => $oldTranslatedAt]);
     $frLocalization->save();
 
     // Now simulate the origin being updated after translation.
     $entry->set('updated_at', now()->timestamp);
     $entry->save();
 
-    $fieldtype = new ContentTranslatorFieldtype;
-    $field = (new Field('content_translator', ['type' => 'content_translator']))
+    $fieldtype = new MagicTranslatorFieldtype;
+    $field = (new Field('magic_translator', ['type' => 'magic_translator']))
         ->setParent($entry);
     $fieldtype->setField($field);
 
@@ -213,11 +213,11 @@ it('preload marks a fresh translation as not stale', function () {
     $recentTranslation = now()->toIso8601String();
 
     $frLocalization = $entry->makeLocalization('fr');
-    $frLocalization->set('content_translator', ['last_translated_at' => $recentTranslation]);
+    $frLocalization->set('magic_translator', ['last_translated_at' => $recentTranslation]);
     $frLocalization->save();
 
-    $fieldtype = new ContentTranslatorFieldtype;
-    $field = (new Field('content_translator', ['type' => 'content_translator']))
+    $fieldtype = new MagicTranslatorFieldtype;
+    $field = (new Field('magic_translator', ['type' => 'magic_translator']))
         ->setParent($entry);
     $fieldtype->setField($field);
 
@@ -242,8 +242,8 @@ it('preload returns only sites the user can access for editing', function () {
     ]);
     $this->loginUser($user);
 
-    $fieldtype = new ContentTranslatorFieldtype;
-    $field = (new Field('content_translator', ['type' => 'content_translator']))
+    $fieldtype = new MagicTranslatorFieldtype;
+    $field = (new Field('magic_translator', ['type' => 'magic_translator']))
         ->setParent($entry);
     $fieldtype->setField($field);
 
@@ -264,8 +264,8 @@ it('preload returns empty sites when user lacks edit permission for the collecti
     ]);
     $this->loginUser($user);
 
-    $fieldtype = new ContentTranslatorFieldtype;
-    $field = (new Field('content_translator', ['type' => 'content_translator']))
+    $fieldtype = new MagicTranslatorFieldtype;
+    $field = (new Field('magic_translator', ['type' => 'magic_translator']))
         ->setParent($entry);
     $fieldtype->setField($field);
 
@@ -287,8 +287,8 @@ it('preload returns only collection sites, ignoring unrelated Statamic sites', f
     $entry = $this->createTestEntry(collection: 'articles', site: 'en');
     $this->loginUser(); // super
 
-    $fieldtype = new ContentTranslatorFieldtype;
-    $field = (new Field('content_translator', ['type' => 'content_translator']))
+    $fieldtype = new MagicTranslatorFieldtype;
+    $field = (new Field('magic_translator', ['type' => 'magic_translator']))
         ->setParent($entry);
     $fieldtype->setField($field);
 
@@ -310,8 +310,8 @@ it('preload returns is_origin false for a localized entry', function () {
     // Reload from stache so origin relationship is resolved.
     $frEntry = Statamic\Facades\Entry::find($frLocalization->id());
 
-    $fieldtype = new ContentTranslatorFieldtype;
-    $field = (new Field('content_translator', ['type' => 'content_translator']))
+    $fieldtype = new MagicTranslatorFieldtype;
+    $field = (new Field('magic_translator', ['type' => 'magic_translator']))
         ->setParent($frEntry);
     $fieldtype->setField($field);
 

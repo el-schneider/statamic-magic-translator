@@ -10,13 +10,13 @@ use DeepL\TextResult;
 use DeepL\TooManyRequestsException;
 use DeepL\TranslateTextOptions;
 use DeepL\Translator;
-use ElSchneider\ContentTranslator\Data\TranslationFormat;
-use ElSchneider\ContentTranslator\Data\TranslationUnit;
-use ElSchneider\ContentTranslator\Exceptions\ProviderAuthException;
-use ElSchneider\ContentTranslator\Exceptions\ProviderRateLimitedException;
-use ElSchneider\ContentTranslator\Exceptions\ProviderResponseInvalidException;
-use ElSchneider\ContentTranslator\Exceptions\ProviderUnavailableException;
-use ElSchneider\ContentTranslator\Services\DeepLTranslationService;
+use ElSchneider\MagicTranslator\Data\TranslationFormat;
+use ElSchneider\MagicTranslator\Data\TranslationUnit;
+use ElSchneider\MagicTranslator\Exceptions\ProviderAuthException;
+use ElSchneider\MagicTranslator\Exceptions\ProviderRateLimitedException;
+use ElSchneider\MagicTranslator\Exceptions\ProviderResponseInvalidException;
+use ElSchneider\MagicTranslator\Exceptions\ProviderUnavailableException;
+use ElSchneider\MagicTranslator\Services\DeepLTranslationService;
 
 uses(Tests\TestCase::class);
 
@@ -318,7 +318,7 @@ it('passes tag_handling xml option to the translator', function () {
 // ─── Formality ────────────────────────────────────────────────────────────────
 
 it('passes formality from config to the translator', function () {
-    config(['statamic.content-translator.deepl.formality' => 'more']);
+    config(['statamic.magic-translator.deepl.formality' => 'more']);
 
     $capturedOptions = null;
 
@@ -340,7 +340,7 @@ it('passes formality from config to the translator', function () {
 });
 
 it('uses default formality when config is set to default', function () {
-    config(['statamic.content-translator.deepl.formality' => 'default']);
+    config(['statamic.magic-translator.deepl.formality' => 'default']);
 
     $capturedOptions = null;
 
@@ -364,8 +364,8 @@ it('uses default formality when config is set to default', function () {
 
 it('applies per-language formality override for the target locale', function () {
     config([
-        'statamic.content-translator.deepl.formality' => 'default',
-        'statamic.content-translator.deepl.overrides' => [
+        'statamic.magic-translator.deepl.formality' => 'default',
+        'statamic.magic-translator.deepl.overrides' => [
             'de' => ['formality' => 'prefer_more'],
         ],
     ]);
@@ -390,8 +390,8 @@ it('applies per-language formality override for the target locale', function () 
 
 it('uses global formality when no per-language override is set', function () {
     config([
-        'statamic.content-translator.deepl.formality' => 'less',
-        'statamic.content-translator.deepl.overrides' => [
+        'statamic.magic-translator.deepl.formality' => 'less',
+        'statamic.magic-translator.deepl.overrides' => [
             'de' => ['formality' => 'more'],
         ],
     ]);
@@ -417,8 +417,8 @@ it('uses global formality when no per-language override is set', function () {
 
 it('matches override by base language code ignoring regional variant', function () {
     config([
-        'statamic.content-translator.deepl.formality' => 'default',
-        'statamic.content-translator.deepl.overrides' => [
+        'statamic.magic-translator.deepl.formality' => 'default',
+        'statamic.magic-translator.deepl.overrides' => [
             'de' => ['formality' => 'more'],
         ],
     ]);
@@ -553,7 +553,7 @@ it('handles statamic underscore locale format (en_US)', function () {
 // ─── Chunking ─────────────────────────────────────────────────────────────────
 
 it('sends one request when max_units_per_request is null', function () {
-    config(['statamic.content-translator.max_units_per_request' => null]);
+    config(['statamic.magic-translator.max_units_per_request' => null]);
 
     $translator = Mockery::mock(Translator::class);
     $translator->shouldReceive('translateText')
@@ -577,7 +577,7 @@ it('sends one request when max_units_per_request is null', function () {
 });
 
 it('chunks requests when max_units_per_request is set', function () {
-    config(['statamic.content-translator.max_units_per_request' => 2]);
+    config(['statamic.magic-translator.max_units_per_request' => 2]);
 
     $callCount = 0;
 
@@ -611,7 +611,7 @@ it('chunks requests when max_units_per_request is set', function () {
 });
 
 it('chunks correctly when unit count is not evenly divisible by chunk size', function () {
-    config(['statamic.content-translator.max_units_per_request' => 2]);
+    config(['statamic.magic-translator.max_units_per_request' => 2]);
 
     $callCount = 0;
 
@@ -641,7 +641,7 @@ it('chunks correctly when unit count is not evenly divisible by chunk size', fun
 });
 
 it('ids restart from 0 in each chunk', function () {
-    config(['statamic.content-translator.max_units_per_request' => 2]);
+    config(['statamic.magic-translator.max_units_per_request' => 2]);
 
     $capturedTexts = [];
 

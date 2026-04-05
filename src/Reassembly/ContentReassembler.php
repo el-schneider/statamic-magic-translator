@@ -2,10 +2,10 @@
 
 declare(strict_types=1);
 
-namespace ElSchneider\ContentTranslator\Reassembly;
+namespace ElSchneider\MagicTranslator\Reassembly;
 
-use ElSchneider\ContentTranslator\Data\TranslationFormat;
-use ElSchneider\ContentTranslator\Data\TranslationUnit;
+use ElSchneider\MagicTranslator\Data\TranslationFormat;
+use ElSchneider\MagicTranslator\Data\TranslationUnit;
 
 /**
  * Reassembles translated TranslationUnit objects back into the original

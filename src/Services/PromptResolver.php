@@ -2,10 +2,10 @@
 
 declare(strict_types=1);
 
-namespace ElSchneider\ContentTranslator\Services;
+namespace ElSchneider\MagicTranslator\Services;
 
-use ElSchneider\ContentTranslator\Data\TranslationFormat;
-use ElSchneider\ContentTranslator\Data\TranslationUnit;
+use ElSchneider\MagicTranslator\Data\TranslationFormat;
+use ElSchneider\MagicTranslator\Data\TranslationUnit;
 use Statamic\Facades\Site;
 
 final class PromptResolver
@@ -16,13 +16,13 @@ final class PromptResolver
      */
     public function resolveViewName(string $type, string $targetLocale): string
     {
-        $overrides = config("statamic.content-translator.prism.prompts.overrides.{$targetLocale}", []);
+        $overrides = config("statamic.magic-translator.prism.prompts.overrides.{$targetLocale}", []);
 
         if (isset($overrides[$type])) {
             return $overrides[$type];
         }
 
-        return config("statamic.content-translator.prism.prompts.{$type}");
+        return config("statamic.magic-translator.prism.prompts.{$type}");
     }
 
     /**

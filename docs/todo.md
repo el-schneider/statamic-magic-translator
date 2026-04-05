@@ -124,7 +124,7 @@ Tests: `tests/Unit/Support/AccessibleSitesTest.php` — matrix:
 
 ### Phase 2 — Fieldtype preload
 
-**`src/Fieldtypes/ContentTranslatorFieldtype.php`**
+**`src/Fieldtypes/MagicTranslatorFieldtype.php`**
 
 - In `preload()`, after resolving `$entry` and `$rootEntry`, compute `$user = User::current()` and `$allowedHandles = AccessibleSites::forCollection($user, $entry->collection())`.
 - Filter `Site::all()` by `$allowedHandles` before the `map()` that builds `sitesData`.
@@ -132,7 +132,7 @@ Tests: `tests/Unit/Support/AccessibleSitesTest.php` — matrix:
 - **Decision:** filter strictly. If the user has no accessible sites in the collection, return `sites: []` and the component already handles that via `hasTargets`.
 - Blueprint-editor fallback (no entry) stays on `Site::all()` — no auth context.
 
-Tests: extend `tests/Unit/Fieldtypes/ContentTranslatorFieldtypeTest.php`:
+Tests: extend `tests/Unit/Fieldtypes/MagicTranslatorFieldtypeTest.php`:
 - super user sees all collection sites
 - restricted user sees only accessible subset
 - user with no access to any collection site sees empty list
@@ -195,7 +195,7 @@ Tests: `tests/Feature/Http/TranslationControllerTest.php`:
 
 ### Phase 5 — Frontend: add user context to preload
 
-**`src/Fieldtypes/ContentTranslatorFieldtype.php`** — extend preload payload:
+**`src/Fieldtypes/MagicTranslatorFieldtype.php`** — extend preload payload:
 
 ```php
 return [
@@ -230,7 +230,7 @@ Confirm during implementation by grepping for `TranslationDialog` and `Translato
 
 ## Test matrix (manual browser verification)
 
-Sandboxes: `statamic-content-translator-test.test` (v5) and `statamic-content-translator-test-v6.test` (v6), login `agent@agent.md` / `agent`.
+Sandboxes: `statamic-magic-translator-test.test` (v5) and `statamic-magic-translator-test-v6.test` (v6), login `agent@agent.md` / `agent`.
 
 Create a test user role with:
 - `access default site` ✓
@@ -246,7 +246,7 @@ Expected dialog behavior for a `pages` entry in `default`:
 - If user is stripped of `edit pages entries`, button does not render.
 - If user is stripped of `access german site`, `german` hidden (targets empty → button hidden).
 
-POST to `/cp/content-translator/translate` with `target_sites: ["french"]` → 403.
+POST to `/cp/magic-translator/translate` with `target_sites: ["french"]` → 403.
 
 ---
 

@@ -47,7 +47,7 @@ export function pollJobs(
 
       if (allTerminal || attempts >= maxAttempts) return
     } catch (err) {
-      console.error('[content-translator] polling error:', err)
+      console.error('[magic-translator] polling error:', err)
     }
 
     // Adaptive backoff: double the interval after the first 10 fast attempts

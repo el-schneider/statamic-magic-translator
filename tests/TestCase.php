@@ -4,7 +4,7 @@ declare(strict_types=1);
 
 namespace Tests;
 
-use ElSchneider\ContentTranslator\ServiceProvider;
+use ElSchneider\MagicTranslator\ServiceProvider;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Prism\Prism\PrismServiceProvider;
 use Statamic\Facades\Site;

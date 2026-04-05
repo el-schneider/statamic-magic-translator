@@ -1,4 +1,4 @@
-# Content Translator Implementation Plan
+# Magic Translator Implementation Plan
 
 > **For Claude:** REQUIRED SUB-SKILL: Use superpowers:executing-plans to implement this plan task-by-task.
 
@@ -8,7 +8,7 @@
 
 **Tech Stack:** PHP 8.2+, Laravel 11/12, Statamic 5/6, Pest, Prism (`prism-php/prism`), DeepL SDK (`deeplcom/deepl-php`), Vue 2/3, TypeScript, Vite.
 
-**Design doc:** `docs/plans/2026-04-02-content-translator-design.md`
+**Design doc:** `docs/plans/2026-04-02-magic-translator-design.md`
 
 ---
 
@@ -16,7 +16,7 @@
 
 **Files:**
 - Modify: `composer.json`
-- Create: `config/content-translator.php`
+- Create: `config/magic-translator.php`
 - Create: `tests/TestCase.php`
 - Create: `tests/Pest.php`
 - Create: `tests/StatamicTestHelpers.php`
@@ -42,7 +42,7 @@ Add `prism-php/prism` and `deeplcom/deepl-php` to require. Reference auto-alt-te
 
 **Step 2: Create the config file**
 
-Create `config/content-translator.php` with the full config structure from the design doc — collections, exclude_blueprints, service selection, prism config, deepl config, queue, max_units_per_request, log_completions.
+Create `config/magic-translator.php` with the full config structure from the design doc — collections, exclude_blueprints, service selection, prism config, deepl config, queue, max_units_per_request, log_completions.
 
 **Step 3: Create test infrastructure**
 
@@ -661,9 +661,9 @@ git commit -m "feat: content reassembler with bard, replicator, grid, table supp
 **Step 1: Create the contract**
 
 ```php
-namespace ElSchneider\ContentTranslator\Contracts;
+namespace ElSchneider\MagicTranslator\Contracts;
 
-use ElSchneider\ContentTranslator\Data\TranslationUnit;
+use ElSchneider\MagicTranslator\Data\TranslationUnit;
 
 interface TranslationService
 {
@@ -676,19 +676,19 @@ interface TranslationService
 
 ```php
 it('creates prism service when configured', function () {
-    config(['content-translator.service' => 'prism']);
+    config(['magic-translator.service' => 'prism']);
     $service = app(TranslationServiceFactory::class)->make();
     expect($service)->toBeInstanceOf(PrismTranslationService::class);
 });
 
 it('creates deepl service when configured', function () {
-    config(['content-translator.service' => 'deepl']);
+    config(['magic-translator.service' => 'deepl']);
     $service = app(TranslationServiceFactory::class)->make();
     expect($service)->toBeInstanceOf(DeepLTranslationService::class);
 });
 
 it('throws for unknown service', function () {
-    config(['content-translator.service' => 'unknown']);
+    config(['magic-translator.service' => 'unknown']);
     app(TranslationServiceFactory::class)->make();
 })->throws(InvalidArgumentException::class);
 ```
@@ -923,7 +923,7 @@ git commit -m "feat: translate entry job with event dispatching and retry suppor
 
 ```php
 it('merges config', function () {
-    expect(config('content-translator.service'))->toBe('prism');
+    expect(config('magic-translator.service'))->toBe('prism');
 });
 
 it('registers translation service as singleton', function () {
@@ -931,8 +931,8 @@ it('registers translation service as singleton', function () {
 });
 
 it('injects fieldtype into configured collection blueprints', function () {
-    // Setup: create a collection in config('content-translator.collections')
-    // Assert: blueprint has content_translator field
+    // Setup: create a collection in config('magic-translator.collections')
+    // Assert: blueprint has magic_translator field
 });
 
 it('excludes blueprints in exclude_blueprints config', function () { ... });
@@ -976,7 +976,7 @@ it('dispatches translation jobs for selected locales', function () {
     Queue::fake();
     $this->loginUser();
     // POST with entry_id, target_sites, options
-    $response = $this->postJson('/cp/content-translator/translate', [
+    $response = $this->postJson('/cp/magic-translator/translate', [
         'entry_id' => $entry->id(),
         'source_site' => 'en',
         'target_sites' => ['fr', 'de'],
@@ -995,7 +995,7 @@ it('validates target sites exist', function () { ... });
 // Status endpoint
 it('returns job statuses', function () {
     // Setup: create cache entries simulating job progress
-    $response = $this->getJson('/cp/content-translator/status', [
+    $response = $this->getJson('/cp/magic-translator/status', [
         'jobs' => ['job-id-1', 'job-id-2'],
     ]);
     $response->assertOk();
@@ -1012,8 +1012,8 @@ Two endpoints:
 **Step 3: Create routes file**
 
 ```php
-Route::post('content-translator/translate', [TranslationController::class, 'trigger']);
-Route::get('content-translator/status', [TranslationController::class, 'status']);
+Route::post('magic-translator/translate', [TranslationController::class, 'trigger']);
+Route::get('magic-translator/status', [TranslationController::class, 'status']);
 ```
 
 **Step 4: Run tests, verify pass**
@@ -1048,7 +1048,7 @@ final class TranslateEntryAction extends Action
 {
     public static function title(): string
     {
-        return __('content-translator::messages.translate_action');
+        return __('magic-translator::messages.translate_action');
     }
 
     public function run($items, $values): array
@@ -1062,7 +1062,7 @@ final class TranslateEntryAction extends Action
     {
         return $item instanceof Entry
             && $item->collection()
-            && in_array($item->collection()->handle(), config('content-translator.collections', []))
+            && in_array($item->collection()->handle(), config('magic-translator.collections', []))
             && \Statamic\Facades\Site::all()->count() > 1;
     }
 
@@ -1086,14 +1086,14 @@ git commit -m "feat: statamic bulk action for entry translation"
 ## Task 17: Fieldtype (PHP)
 
 **Files:**
-- Create: `src/Fieldtypes/ContentTranslatorFieldtype.php`
-- Create: `tests/Unit/Fieldtypes/ContentTranslatorFieldtypeTest.php`
+- Create: `src/Fieldtypes/MagicTranslatorFieldtype.php`
+- Create: `tests/Unit/Fieldtypes/MagicTranslatorFieldtypeTest.php`
 
 **Step 1: Write fieldtype tests**
 
 ```php
 it('has the correct handle', function () {
-    expect(ContentTranslatorFieldtype::handle())->toBe('content_translator');
+    expect(MagicTranslatorFieldtype::handle())->toBe('magic_translator');
 });
 
 it('provides localization status as meta data', function () { ... });
@@ -1103,9 +1103,9 @@ it('is not selectable in blueprint editor', function () { ... });
 **Step 2: Implement fieldtype**
 
 ```php
-final class ContentTranslatorFieldtype extends Fieldtype
+final class MagicTranslatorFieldtype extends Fieldtype
 {
-    protected static $handle = 'content_translator';
+    protected static $handle = 'magic_translator';
 
     protected $selectable = false; // auto-injected, not manually added
 
@@ -1288,7 +1288,7 @@ import TranslatorFieldtype from './components/TranslatorFieldtype.vue';
 import TranslationDialog from './components/TranslationDialog.vue';
 
 Statamic.booting(() => {
-    Statamic.$components.register('content_translator-fieldtype', TranslatorFieldtype);
+    Statamic.$components.register('magic_translator-fieldtype', TranslatorFieldtype);
     Statamic.$components.register('translation-dialog', TranslationDialog);
 
     Statamic.$callbacks.add('openTranslationDialog', (entryIds: string[]) => {
@@ -1324,8 +1324,8 @@ git commit -m "feat: vue components — translation dialog, fieldtype, badge inj
 **Step 1: Install addon in v5 sandbox**
 
 ```bash
-cd ../statamic-content-translator-test
-composer require el-schneider/statamic-content-translator --dev
+cd ../statamic-magic-translator-test
+composer require el-schneider/statamic-magic-translator --dev
 ```
 
 Configure multi-site, add collections to config, create test entries.
@@ -1419,7 +1419,7 @@ As a developer, I can configure DeepL as the translation service with per-langua
 As a developer, I can configure any Prism-supported LLM provider, customize prompts via publishable Blade views, and set per-language prompt overrides.
 
 **US-10: Zero-Config Blueprint Setup**
-As a developer, I add collection handles to `content-translator.collections` config and the fieldtype auto-injects into all blueprints. I can exclude specific blueprints via `exclude_blueprints` dot notation.
+As a developer, I add collection handles to `magic-translator.collections` config and the fieldtype auto-injects into all blueprints. I can exclude specific blueprints via `exclude_blueprints` dot notation.
 
 **US-11: Retry on Failure**
 As an editor, when a translation fails (rate limit, API error), I see the error inline in the dialog with a Retry button. The job also retries automatically with backoff.

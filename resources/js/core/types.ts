@@ -1,7 +1,7 @@
 import type { NormalizedError } from './errors'
 
 /**
- * Core TypeScript types for the Content Translator addon.
+ * Core TypeScript types for the Magic Translator addon.
  *
  * These types are shared between the v5 and v6 entry points and the core
  * API / polling / injection helpers.
@@ -20,7 +20,7 @@ export interface SiteMeta {
 }
 
 /**
- * Full meta payload returned by ContentTranslatorFieldtype::preload().
+ * Full meta payload returned by MagicTranslatorFieldtype::preload().
  */
 export interface FieldtypePreload {
   entry_id: string | null
@@ -58,7 +58,7 @@ export interface TranslationJob {
 }
 
 /**
- * Payload sent to POST /cp/content-translator/translate.
+ * Payload sent to POST /cp/magic-translator/translate.
  */
 export interface TranslationRequest {
   entryId: string | string[]

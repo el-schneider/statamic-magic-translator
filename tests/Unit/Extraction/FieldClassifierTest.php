@@ -2,8 +2,8 @@
 
 declare(strict_types=1);
 
-use ElSchneider\ContentTranslator\Extraction\FieldClassifier;
-use ElSchneider\ContentTranslator\Extraction\FieldTier;
+use ElSchneider\MagicTranslator\Extraction\FieldClassifier;
+use ElSchneider\MagicTranslator\Extraction\FieldTier;
 
 dataset('tier1 types', ['text', 'textarea', 'markdown', 'link']);
 dataset('tier2 types', ['replicator', 'grid', 'table']);

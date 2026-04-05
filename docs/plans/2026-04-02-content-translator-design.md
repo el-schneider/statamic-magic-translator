@@ -1,4 +1,4 @@
-# Statamic Content Translator — Design Document
+# Statamic Magic Translator — Design Document
 
 ## Overview
 
@@ -145,11 +145,11 @@ Prompt content lives in **Blade views** (multi-line prose, composable with `@inc
     'provider' => env('CONTENT_TRANSLATOR_PROVIDER', 'anthropic'),
     'model' => env('CONTENT_TRANSLATOR_MODEL', 'claude-sonnet-4-20250514'),
     'prompts' => [
-        'system' => 'content-translator::prompts.system',
-        'user' => 'content-translator::prompts.user',
+        'system' => 'magic-translator::prompts.system',
+        'user' => 'magic-translator::prompts.user',
         'overrides' => [
-            'ja' => ['system' => 'content-translator::prompts.system-ja'],
-            'de' => ['system' => 'content-translator::prompts.system-de'],
+            'ja' => ['system' => 'magic-translator::prompts.system-ja'],
+            'de' => ['system' => 'magic-translator::prompts.system-de'],
         ],
     ],
 ],
@@ -172,7 +172,7 @@ Language-specific override exists → use it. Otherwise → fall back to default
 {{-- resources/views/prompts/system.blade.php --}}
 You are a professional translator. Translate accurately from {{ $sourceLocaleName }} to {{ $targetLocaleName }}.
 
-@include('content-translator::prompts.partials.tag-rules')
+@include('magic-translator::prompts.partials.tag-rules')
 
 Preserve the exact structure of the input. Do not add explanations or commentary.
 ```
@@ -183,7 +183,7 @@ The input contains HTML formatting tags (<b>, <i>, <a>, <span>, etc.) and struct
 You MUST preserve all tags exactly as they appear. Do not translate tag attributes. Do not add or remove tags.
 ```
 
-Users publish and override via `php artisan vendor:publish --tag=content-translator-views`.
+Users publish and override via `php artisan vendor:publish --tag=magic-translator-views`.
 
 ### Format-Aware Prompt Rules
 
@@ -226,7 +226,7 @@ The job:
 4. Runs Phase 2 (translate via configured service)
 5. Runs Phase 3 (reassemble)
 6. Saves the localized entry with translated data
-7. Sets `last_translated_at` on the localized entry's `content_translator` field
+7. Sets `last_translated_at` on the localized entry's `magic_translator` field
 8. Optionally regenerates slug from translated title
 9. Reports status (success/failure) for polling
 
@@ -269,19 +269,19 @@ Event::listen(EntryBlueprintFound::class, function ($event) {
     $collection = $event->entry?->collection()?->handle();
     $blueprint = $event->blueprint->handle();
 
-    if (! in_array($collection, config('content-translator.collections', []))) {
+    if (! in_array($collection, config('magic-translator.collections', []))) {
         return;
     }
 
-    if (in_array("{$collection}.{$blueprint}", config('content-translator.exclude_blueprints', []))) {
+    if (in_array("{$collection}.{$blueprint}", config('magic-translator.exclude_blueprints', []))) {
         return;
     }
 
-    $event->blueprint->ensureFieldInSection('content_translator', [
-        'type' => 'content_translator',
+    $event->blueprint->ensureFieldInSection('magic_translator', [
+        'type' => 'magic_translator',
         'visibility' => 'computed',  // prevents CP from overwriting our data on save
         'localizable' => true,       // each localization stores its own translation metadata
-        'display' => 'Content Translator',
+        'display' => 'Magic Translator',
         'listable' => 'hidden',
     ], 'sidebar');
 });
@@ -290,12 +290,12 @@ Event::listen(EntryBlueprintFound::class, function ($event) {
 The fieldtype renders a "Translate" button and serves as the data store for translation metadata:
 
 ```yaml
-content_translator:
+magic_translator:
   last_translated_at: '2026-04-02T10:00:00Z'
   # phase 2: per-field translation ledger goes here too
 ```
 
-`visibility: 'computed'` ensures the CP save pipeline never overwrites our stored metadata. The translation job writes timestamps via `$entry->set('content_translator', [...])` directly.
+`visibility: 'computed'` ensures the CP save pipeline never overwrites our stored metadata. The translation job writes timestamps via `$entry->set('magic_translator', [...])` directly.
 
 The Vue component ignores the stored value for its UI (it reads localization state from the publish container). Users see a button, not data.
 
@@ -408,8 +408,8 @@ The `core/` layer handles all business logic. Version-specific entry points are 
 
 Backend exposes trigger + check endpoints (same pattern as auto-alt-text):
 
-- `POST /cp/content-translator/translate` — dispatches job(s), returns job IDs.
-- `GET /cp/content-translator/status?jobs[]=...` — returns per-job status for polling.
+- `POST /cp/magic-translator/translate` — dispatches job(s), returns job IDs.
+- `GET /cp/magic-translator/status?jobs[]=...` — returns per-job status for polling.
 
 Frontend polls at ~1s intervals with backoff. Configurable timeout.
 
@@ -445,7 +445,7 @@ Uses Statamic's `callback` return mechanism to open the shared dialog from JS.
 ## Config Overview
 
 ```php
-// config/content-translator.php
+// config/magic-translator.php
 
 return [
     /*
@@ -454,7 +454,7 @@ return [
     |--------------------------------------------------------------------------
     |
     | Collections whose entries should be translatable. The addon auto-injects
-    | the content_translator fieldtype into all blueprints of these collections.
+    | the magic_translator fieldtype into all blueprints of these collections.
     |
     */
     'collections' => [
@@ -483,10 +483,10 @@ return [
         'provider' => env('CONTENT_TRANSLATOR_PROVIDER', 'anthropic'),
         'model' => env('CONTENT_TRANSLATOR_MODEL', 'claude-sonnet-4-20250514'),
         'prompts' => [
-            'system' => 'content-translator::prompts.system',
-            'user' => 'content-translator::prompts.user',
+            'system' => 'magic-translator::prompts.system',
+            'user' => 'magic-translator::prompts.user',
             'overrides' => [
-                // 'ja' => ['system' => 'content-translator::prompts.system-ja'],
+                // 'ja' => ['system' => 'magic-translator::prompts.system-ja'],
             ],
         ],
     ],
@@ -508,7 +508,7 @@ return [
 
     'log_completions' => true,
 
-    // Translation metadata is stored in the content_translator fieldtype's value.
+    // Translation metadata is stored in the magic_translator fieldtype's value.
     // No separate timestamp field needed.
 ];
 ```

@@ -1,5 +1,5 @@
 /**
- * Content Translator — Statamic v5 entry point (Vue 2 / Options API).
+ * Magic Translator — Statamic v5 entry point (Vue 2 / Options API).
  *
  * Vue 2 SFCs are NOT used here — components are defined as plain TypeScript
  * objects whose `template` strings are compiled at runtime by the Vue 2
@@ -61,7 +61,7 @@ declare global {
 }
 
 function t(key: string, replacements: Record<string, string | number> = {}): string {
-  return __('content-translator::messages.' + key, replacements)
+  return __('magic-translator::messages.' + key, replacements)
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -78,7 +78,7 @@ interface DialogData {
 }
 
 const TranslationDialog = {
-  name: 'ContentTranslatorDialog',
+  name: 'MagicTranslatorDialog',
 
   props: {
     /** Single entry ID (single-entry mode). */
@@ -207,7 +207,7 @@ const TranslationDialog = {
 
   methods: {
     t(key: string, replacements: Record<string, string | number> = {}): string {
-      return __('content-translator::messages.' + key, replacements)
+      return __('magic-translator::messages.' + key, replacements)
     },
 
     hasExistingTranslation(site: SiteMeta | SiteDescriptor): boolean {
@@ -534,7 +534,7 @@ interface FieldtypeData {
 }
 
 const TranslatorFieldtype = {
-  name: 'ContentTranslatorFieldtype',
+  name: 'MagicTranslatorFieldtype',
 
   // Statamic injects `storeName` into all fieldtype components so they can
   // read data from the Vuex publish store if needed.
@@ -629,7 +629,7 @@ const TranslatorFieldtype = {
 
   methods: {
     t(key: string, replacements: Record<string, string | number> = {}): string {
-      return __('content-translator::messages.' + key, replacements)
+      return __('magic-translator::messages.' + key, replacements)
     },
 
     hideFieldLabelChrome() {
@@ -699,7 +699,7 @@ const TranslatorFieldtype = {
       }
 
       if (!self.entryId) {
-        console.warn('[content-translator] Cannot open dialog: entry_id not available.')
+        console.warn('[magic-translator] Cannot open dialog: entry_id not available.')
         return
       }
 
@@ -713,7 +713,7 @@ const TranslatorFieldtype = {
         self.sites[0]?.handle ??
         ''
 
-      const dialog = Statamic.$components.append('content-translator-dialog', {
+      const dialog = Statamic.$components.append('magic-translator-dialog', {
         props: {
           entryId: self.entryId,
           sourceSite: defaultSource,
@@ -728,7 +728,7 @@ const TranslatorFieldtype = {
   },
 
   template: /* html */ `
-        <div class="content-translator-fieldtype">
+        <div class="magic-translator-fieldtype">
             <template v-if="hasTargets">
                 <button
                     v-if="!buttonInjected"
@@ -768,10 +768,10 @@ const TranslatorFieldtype = {
 
 Statamic.booting(() => {
   // Register the fieldtype (auto-injected into blueprints by ServiceProvider)
-  Statamic.$components.register('content_translator-fieldtype', TranslatorFieldtype)
+  Statamic.$components.register('magic_translator-fieldtype', TranslatorFieldtype)
 
   // Register the dialog component (opened via $components.append)
-  Statamic.$components.register('content-translator-dialog', TranslationDialog)
+  Statamic.$components.register('magic-translator-dialog', TranslationDialog)
 
   // Wire up the bulk-action callback
   // PHP TranslateEntryAction::run() calls: Statamic.$callbacks.call('openTranslationDialog', entryIds, sites)
@@ -781,7 +781,7 @@ Statamic.booting(() => {
 
     if (ids.length === 0) return
 
-    const dialog = Statamic.$components.append('content-translator-dialog', {
+    const dialog = Statamic.$components.append('magic-translator-dialog', {
       props: {
         entryIds: ids,
         sourceSite: siteList[0]?.handle ?? '',

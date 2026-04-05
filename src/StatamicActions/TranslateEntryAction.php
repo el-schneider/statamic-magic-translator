@@ -2,10 +2,10 @@
 
 declare(strict_types=1);
 
-namespace ElSchneider\ContentTranslator\StatamicActions;
+namespace ElSchneider\MagicTranslator\StatamicActions;
 
-use ElSchneider\ContentTranslator\Support\AccessibleSites;
-use ElSchneider\ContentTranslator\Support\BlueprintExclusions;
+use ElSchneider\MagicTranslator\Support\AccessibleSites;
+use ElSchneider\MagicTranslator\Support\BlueprintExclusions;
 use Illuminate\Support\Collection as LaravelCollection;
 use Statamic\Actions\Action;
 use Statamic\Contracts\Auth\User;
@@ -19,7 +19,7 @@ final class TranslateEntryAction extends Action
 
     public static function title(): string
     {
-        return __('content-translator::messages.translate_action');
+        return __('magic-translator::messages.translate_action');
     }
 
     public function run($items, $values): array

@@ -2,7 +2,7 @@
 
 declare(strict_types=1);
 
-use ElSchneider\ContentTranslator\Extraction\BardSerializer;
+use ElSchneider\MagicTranslator\Extraction\BardSerializer;
 
 beforeEach(function () {
     $this->serializer = new BardSerializer;

@@ -2,9 +2,9 @@
 
 declare(strict_types=1);
 
-namespace ElSchneider\ContentTranslator\Fieldtypes;
+namespace ElSchneider\MagicTranslator\Fieldtypes;
 
-use ElSchneider\ContentTranslator\Support\AccessibleSites;
+use ElSchneider\MagicTranslator\Support\AccessibleSites;
 use Illuminate\Support\Carbon;
 use Statamic\Facades\Blink;
 use Statamic\Facades\Site;
@@ -13,7 +13,7 @@ use Statamic\Fields\Fieldtype;
 use Throwable;
 
 /**
- * ContentTranslatorFieldtype
+ * MagicTranslatorFieldtype
  *
  * A special, auto-injected fieldtype that surfaces localization status data
  * to the Vue component rendered in the entry's sidebar.
@@ -27,7 +27,7 @@ use Throwable;
  * it as an array that Statamic forwards to the Vue component as its initial
  * `meta` prop.
  */
-final class ContentTranslatorFieldtype extends Fieldtype
+final class MagicTranslatorFieldtype extends Fieldtype
 {
     /**
      * Prevent editors from manually adding this fieldtype via the blueprint
@@ -78,7 +78,7 @@ final class ContentTranslatorFieldtype extends Fieldtype
      *  3. Iterates all configured sites and, for each:
      *     - Checks whether a localization exists.
      *     - Reads the `last_translated_at` ISO-8601 string from the
-     *       `content_translator` metadata array stored on the localization.
+     *       `magic_translator` metadata array stored on the localization.
      *     - Marks the localization as stale when the origin was modified after
      *       the last translation.
      *
@@ -118,10 +118,10 @@ final class ContentTranslatorFieldtype extends Fieldtype
 
         // Fallback source when localized saves drop computed values.
         if ($entry->hasOrigin()) {
-            $meta = $entry->get('content_translator');
+            $meta = $entry->get('magic_translator');
 
             if ($meta !== null) {
-                Blink::put("content-translator:meta:{$entry->id()}", $meta);
+                Blink::put("magic-translator:meta:{$entry->id()}", $meta);
             }
         }
 
@@ -157,7 +157,7 @@ final class ContentTranslatorFieldtype extends Fieldtype
             $isStale = false;
 
             if ($localization !== null) {
-                $meta = $localization->get('content_translator');
+                $meta = $localization->get('magic_translator');
 
                 if (is_array($meta) && is_string($meta['last_translated_at'] ?? null) && $meta['last_translated_at'] !== '') {
                     $lastTranslatedAt = $meta['last_translated_at'];

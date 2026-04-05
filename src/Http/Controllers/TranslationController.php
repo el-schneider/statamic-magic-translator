@@ -2,12 +2,12 @@
 
 declare(strict_types=1);
 
-namespace ElSchneider\ContentTranslator\Http\Controllers;
+namespace ElSchneider\MagicTranslator\Http\Controllers;
 
-use ElSchneider\ContentTranslator\Exceptions\ContentTranslatorException;
-use ElSchneider\ContentTranslator\Jobs\TranslateEntryJob;
-use ElSchneider\ContentTranslator\Support\AccessibleSites;
-use ElSchneider\ContentTranslator\Support\TranslationLogger;
+use ElSchneider\MagicTranslator\Exceptions\MagicTranslatorException;
+use ElSchneider\MagicTranslator\Jobs\TranslateEntryJob;
+use ElSchneider\MagicTranslator\Support\AccessibleSites;
+use ElSchneider\MagicTranslator\Support\TranslationLogger;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Routing\Controller;
@@ -17,11 +17,11 @@ use Statamic\Facades\Entry;
 use Throwable;
 
 /**
- * HTTP controller for the Content Translator CP endpoints.
+ * HTTP controller for the Magic Translator CP endpoints.
  *
  * Provides two endpoints:
- *  - POST /cp/content-translator/translate  — dispatch translation jobs
- *  - GET  /cp/content-translator/status     — poll job statuses from cache
+ *  - POST /cp/magic-translator/translate  — dispatch translation jobs
+ *  - GET  /cp/magic-translator/status     — poll job statuses from cache
  */
 final class TranslationController extends Controller
 {
@@ -33,7 +33,7 @@ final class TranslationController extends Controller
     /**
      * Cache key prefix for job status entries.
      */
-    private const CACHE_PREFIX = 'content-translator:job:';
+    private const CACHE_PREFIX = 'magic-translator:job:';
 
     /**
      * Validate the request, verify the entry and user, then dispatch one
@@ -174,7 +174,7 @@ final class TranslationController extends Controller
                     'status' => 'pending',
                 ];
             }
-        } catch (ContentTranslatorException $exception) {
+        } catch (MagicTranslatorException $exception) {
             TranslationLogger::error($exception, $this->requestLogContext($request, $validated, $currentTargetSite));
 
             return response()->json([
@@ -269,7 +269,7 @@ final class TranslationController extends Controller
     {
         return [
             'code' => 'unexpected_error',
-            'message' => (string) __('content-translator::messages.error_unexpected'),
+            'message' => (string) __('magic-translator::messages.error_unexpected'),
             'retryable' => false,
         ];
     }

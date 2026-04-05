@@ -1,5 +1,5 @@
 /**
- * HTTP API client for the Content Translator addon.
+ * HTTP API client for the Magic Translator addon.
  *
  * In Statamic v5, uses `Statamic.$axios` (pre-configured Axios instance with
  * CSRF tokens and base URL). In Statamic v6, falls back to native `fetch` with
@@ -24,14 +24,14 @@ interface ApiJob {
   error?: string | NormalizedError
 }
 
-/** Response from POST /cp/content-translator/translate */
+/** Response from POST /cp/magic-translator/translate */
 export interface TriggerResponse {
   success: boolean
   jobs: ApiJob[]
   error?: string | NormalizedError
 }
 
-/** Response from GET /cp/content-translator/status */
+/** Response from GET /cp/magic-translator/status */
 export interface StatusResponse {
   jobs: ApiJob[]
 }
@@ -79,12 +79,12 @@ export async function triggerTranslation(request: TranslationRequest): Promise<T
 
   // v5 — use Statamic.$axios (has baseURL + interceptors already set up)
   if (Statamic.$axios) {
-    const response = await Statamic.$axios.post('/cp/content-translator/translate', payload)
+    const response = await Statamic.$axios.post('/cp/magic-translator/translate', payload)
     return response.data as TriggerResponse
   }
 
   // v6 — fall back to native fetch with XSRF-TOKEN
-  const response = await fetch('/cp/content-translator/translate', {
+  const response = await fetch('/cp/magic-translator/translate', {
     method: 'POST',
     headers: jsonHeaders(),
     body: JSON.stringify(payload),
@@ -113,11 +113,11 @@ export async function triggerTranslation(request: TranslationRequest): Promise<T
  */
 export async function checkStatus(jobIds: string[]): Promise<StatusResponse> {
   const params = jobIds.map((id) => `jobs[]=${encodeURIComponent(id)}`).join('&')
-  const url = `/cp/content-translator/status?${params}`
+  const url = `/cp/magic-translator/status?${params}`
 
   // v5 — use Statamic.$axios
   if (Statamic.$axios) {
-    const response = await Statamic.$axios.get('/cp/content-translator/status', {
+    const response = await Statamic.$axios.get('/cp/magic-translator/status', {
       params: { jobs: jobIds },
     })
     return response.data as StatusResponse

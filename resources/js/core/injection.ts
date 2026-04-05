@@ -40,7 +40,7 @@ const I18N_DEFAULTS: Record<string, string> = {
 }
 
 function t(key: string, replacements: Record<string, string | number> = {}): string {
-  const fullKey = `content-translator::messages.${key}`
+  const fullKey = `magic-translator::messages.${key}`
   let text = I18N_DEFAULTS[key] ?? key
 
   try {

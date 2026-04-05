@@ -2,10 +2,10 @@
 
 declare(strict_types=1);
 
-namespace ElSchneider\ContentTranslator\Extraction;
+namespace ElSchneider\MagicTranslator\Extraction;
 
-use ElSchneider\ContentTranslator\Data\TranslationFormat;
-use ElSchneider\ContentTranslator\Data\TranslationUnit;
+use ElSchneider\MagicTranslator\Data\TranslationFormat;
+use ElSchneider\MagicTranslator\Data\TranslationUnit;
 
 /**
  * Extracts translatable content from entry data into a flat list of

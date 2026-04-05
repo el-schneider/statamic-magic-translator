@@ -2,17 +2,17 @@
 
 declare(strict_types=1);
 
-namespace ElSchneider\ContentTranslator;
+namespace ElSchneider\MagicTranslator;
 
 use DeepL\Translator;
-use ElSchneider\ContentTranslator\Contracts\TranslationService;
-use ElSchneider\ContentTranslator\Extraction\BardSerializer;
-use ElSchneider\ContentTranslator\Extraction\ContentExtractor;
-use ElSchneider\ContentTranslator\Reassembly\BardParser;
-use ElSchneider\ContentTranslator\Reassembly\ContentReassembler;
-use ElSchneider\ContentTranslator\Services\TranslationServiceFactory;
-use ElSchneider\ContentTranslator\StatamicActions\TranslateEntryAction;
-use ElSchneider\ContentTranslator\Support\BlueprintExclusions;
+use ElSchneider\MagicTranslator\Contracts\TranslationService;
+use ElSchneider\MagicTranslator\Extraction\BardSerializer;
+use ElSchneider\MagicTranslator\Extraction\ContentExtractor;
+use ElSchneider\MagicTranslator\Reassembly\BardParser;
+use ElSchneider\MagicTranslator\Reassembly\ContentReassembler;
+use ElSchneider\MagicTranslator\Services\TranslationServiceFactory;
+use ElSchneider\MagicTranslator\StatamicActions\TranslateEntryAction;
+use ElSchneider\MagicTranslator\Support\BlueprintExclusions;
 use Illuminate\Support\Facades\Event;
 use Statamic\Events\EntryBlueprintFound;
 use Statamic\Events\EntrySaving;
@@ -39,7 +39,7 @@ final class ServiceProvider extends AddonServiceProvider
             // Use configured API key; fall back to a non-empty placeholder so
             // the Translator can be constructed even without a key (e.g. in tests
             // that only check service resolution, not actual API calls).
-            $apiKey = config('statamic.content-translator.deepl.api_key') ?: 'placeholder';
+            $apiKey = config('statamic.magic-translator.deepl.api_key') ?: 'placeholder';
 
             return new Translator($apiKey);
         });
@@ -100,25 +100,25 @@ final class ServiceProvider extends AddonServiceProvider
 
     private function registerConfiguration(): void
     {
-        $this->mergeConfigFrom(__DIR__.'/../config/content-translator.php', 'statamic.content-translator');
+        $this->mergeConfigFrom(__DIR__.'/../config/magic-translator.php', 'statamic.magic-translator');
 
         $this->publishes([
-            __DIR__.'/../config/content-translator.php' => config_path('statamic/content-translator.php'),
-        ], 'statamic-content-translator-config');
+            __DIR__.'/../config/magic-translator.php' => config_path('statamic/magic-translator.php'),
+        ], 'statamic-magic-translator-config');
     }
 
     private function registerTranslations(): void
     {
-        $this->loadTranslationsFrom(__DIR__.'/../resources/lang', 'content-translator');
+        $this->loadTranslationsFrom(__DIR__.'/../resources/lang', 'magic-translator');
     }
 
     private function registerViews(): void
     {
-        $this->loadViewsFrom(__DIR__.'/../resources/views', 'content-translator');
+        $this->loadViewsFrom(__DIR__.'/../resources/views', 'magic-translator');
 
         $this->publishes([
-            __DIR__.'/../resources/views' => resource_path('views/vendor/content-translator'),
-        ], 'statamic-content-translator-views');
+            __DIR__.'/../resources/views' => resource_path('views/vendor/magic-translator'),
+        ], 'statamic-magic-translator-views');
     }
 
     private function registerBlueprintInjection(): void
@@ -139,11 +139,11 @@ final class ServiceProvider extends AddonServiceProvider
                 return;
             }
 
-            $event->blueprint->ensureField('content_translator', [
-                'type' => 'content_translator',
+            $event->blueprint->ensureField('magic_translator', [
+                'type' => 'magic_translator',
                 'visibility' => 'computed',
                 'localizable' => true,
-                'display' => 'Content Translator',
+                'display' => 'Magic Translator',
                 'hide_display' => true,
                 'listable' => 'hidden',
             ], 'sidebar');
@@ -151,7 +151,7 @@ final class ServiceProvider extends AddonServiceProvider
     }
 
     /**
-     * Preserve `content_translator` metadata on localized saves.
+     * Preserve `magic_translator` metadata on localized saves.
      */
     private function registerEntrySavingListener(): void
     {
@@ -169,18 +169,18 @@ final class ServiceProvider extends AddonServiceProvider
                 return;
             }
 
-            if ($entry->get('content_translator') !== null) {
+            if ($entry->get('magic_translator') !== null) {
                 return;
             }
 
-            $storedMeta = $entry->getOriginal('content_translator');
+            $storedMeta = $entry->getOriginal('magic_translator');
 
             if ($storedMeta === null) {
-                $storedMeta = Blink::get("content-translator:meta:{$entry->id()}");
+                $storedMeta = Blink::get("magic-translator:meta:{$entry->id()}");
             }
 
             if ($storedMeta !== null) {
-                $entry->set('content_translator', $storedMeta);
+                $entry->set('magic_translator', $storedMeta);
             }
         });
     }

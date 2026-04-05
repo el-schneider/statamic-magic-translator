@@ -2,8 +2,8 @@
 
 declare(strict_types=1);
 
-use ElSchneider\ContentTranslator\Console\PlanAction;
-use ElSchneider\ContentTranslator\Console\PlanItem;
+use ElSchneider\MagicTranslator\Console\PlanAction;
+use ElSchneider\MagicTranslator\Console\PlanItem;
 
 it('constructs a PlanItem with all fields', function () {
     $item = new PlanItem(

@@ -4,9 +4,9 @@ This file provides guidance to coding agents when working with code in this repo
 
 ## Project Overview
 
-**Content Translator** — Translate Statamic content
+**Magic Translator** — Translate Statamic content
 
-Package: `el-schneider/statamic-content-translator`
+Package: `el-schneider/statamic-magic-translator`
 
 ## Sandbox Environments
 
@@ -15,9 +15,9 @@ This addon has companion Statamic sandboxes for testing. They may live as **sibl
 ### Sibling layout (typical)
 
 ```
-../statamic-content-translator/              # ← you are here
-../statamic-content-translator-test/         # Statamic v5 sandbox
-../statamic-content-translator-test-v6/      # Statamic v6 sandbox
+../statamic-magic-translator/              # ← you are here
+../statamic-magic-translator-test/         # Statamic v5 sandbox
+../statamic-magic-translator-test-v6/      # Statamic v6 sandbox
 ```
 
 ### Nested layout (alternative)
@@ -26,7 +26,7 @@ This addon has companion Statamic sandboxes for testing. They may live as **sibl
 ./                              # Statamic sandbox root
 └── addons/
     └── el-schneider/
-        └── statamic-content-translator/     # ← you are here
+        └── statamic-magic-translator/     # ← you are here
 ```
 
 **How to detect:** Check if `../../artisan` or `../../../artisan` exists — if so, you're nested inside a sandbox.
@@ -35,8 +35,8 @@ This addon has companion Statamic sandboxes for testing. They may live as **sibl
 
 | Version | URL                                               |
 | ------- | ------------------------------------------------- |
-| v5      | `http://statamic-content-translator-test.test`    |
-| v6      | `http://statamic-content-translator-test-v6.test` |
+| v5      | `http://statamic-magic-translator-test.test`    |
+| v6      | `http://statamic-magic-translator-test-v6.test` |
 
 **Credentials:** `agent@agent.md` / `agent`
 
@@ -58,7 +58,7 @@ This addon has companion Statamic sandboxes for testing. They may live as **sibl
 
 ### Running Artisan from the Addon Directory
 
-If sibling layout: `php ../statamic-content-translator-test/artisan {command}`
+If sibling layout: `php ../statamic-magic-translator-test/artisan {command}`
 If nested layout: `php ../../artisan {command}` (or `../../../artisan`)
 
 ### Async / Queue Testing
@@ -66,7 +66,7 @@ If nested layout: `php ../../artisan {command}` (or `../../../artisan`)
 Translations dispatched to the queue need a running worker. Before testing async behavior, ensure a queue listener is running in the background for the target sandbox:
 
 ```bash
-php ../statamic-content-translator-test/artisan queue:listen --tries=1 --timeout=0 &
+php ../statamic-magic-translator-test/artisan queue:listen --tries=1 --timeout=0 &
 ```
 
 Check first: `pgrep -f 'queue:listen'` — only start one if none is running.
