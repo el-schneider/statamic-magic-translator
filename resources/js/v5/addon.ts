@@ -307,6 +307,14 @@ const TranslationDialog = {
           self.markedCurrentHandles = [...self.markedCurrentHandles, handle]
         }
 
+        // Notify the fieldtype so its own markedCurrentHandles reflects this
+        // change and the next dialog instance doesn't see stale props.
+        window.dispatchEvent(
+          new CustomEvent('magic-translator:marked-current', {
+            detail: { siteHandle: handle },
+          }),
+        )
+
         Statamic.$toast.success(t('mark_current_success'))
       } catch (error) {
         const message =
@@ -652,6 +660,7 @@ interface FieldtypeData {
   markedCurrentHandles: string[]
   markCurrentPending: string[]
   markCurrentListener: ((event: Event) => void) | null
+  markedCurrentNoticeListener: ((event: Event) => void) | null
 }
 
 const TranslatorFieldtype = {
@@ -677,6 +686,7 @@ const TranslatorFieldtype = {
       markedCurrentHandles: [],
       markCurrentPending: [],
       markCurrentListener: null,
+      markedCurrentNoticeListener: null,
     }
   },
 
@@ -801,17 +811,37 @@ const TranslatorFieldtype = {
     }
 
     window.addEventListener('magic-translator:request-mark-current', self.markCurrentListener)
+
+    const selfForNotice = this as unknown as {
+      markedCurrentNoticeListener: ((event: Event) => void) | null
+      markedCurrentHandles: string[]
+    }
+
+    selfForNotice.markedCurrentNoticeListener = (event: Event) => {
+      const detail = (event as CustomEvent).detail
+      if (!detail?.siteHandle) return
+      const siteHandle = String(detail.siteHandle)
+      if (selfForNotice.markedCurrentHandles.includes(siteHandle)) return
+      selfForNotice.markedCurrentHandles = [...selfForNotice.markedCurrentHandles, siteHandle]
+    }
+
+    window.addEventListener('magic-translator:marked-current', selfForNotice.markedCurrentNoticeListener)
   },
 
   beforeDestroy() {
     const self = this as unknown as {
       observer: MutationObserver | null
       markCurrentListener: ((event: Event) => void) | null
+      markedCurrentNoticeListener: ((event: Event) => void) | null
     }
     self.observer?.disconnect()
     if (self.markCurrentListener) {
       window.removeEventListener('magic-translator:request-mark-current', self.markCurrentListener)
       self.markCurrentListener = null
+    }
+    if (self.markedCurrentNoticeListener) {
+      window.removeEventListener('magic-translator:marked-current', self.markedCurrentNoticeListener)
+      self.markedCurrentNoticeListener = null
     }
     removeBadges()
     removeTranslateButtons()
@@ -886,6 +916,7 @@ const TranslatorFieldtype = {
         currentSite: string | null
         originSite: string | null
         sites: SiteMeta[]
+        effectiveSites: SiteMeta[]
       }
 
       if (!self.entryId) {
@@ -907,7 +938,7 @@ const TranslatorFieldtype = {
         props: {
           entryId: self.entryId,
           sourceSite: defaultSource,
-          sites: self.sites,
+          sites: self.effectiveSites,
         },
       })
 
