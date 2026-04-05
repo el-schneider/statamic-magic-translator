@@ -171,12 +171,14 @@ final class MagicTranslatorFieldtype extends Fieldtype
                 if (is_array($meta)) {
                     $storedHash = $meta['source_content_hash'] ?? null;
 
+                    if (is_string($meta['last_translated_at'] ?? null) && $meta['last_translated_at'] !== '') {
+                        $lastTranslatedAt = $meta['last_translated_at'];
+                    }
+
                     if (is_string($storedHash) && $storedHash !== '' && is_string($currentSourceHash)) {
                         $isStale = $storedHash !== $currentSourceHash;
-                    } elseif (is_string($meta['last_translated_at'] ?? null) && $meta['last_translated_at'] !== '') {
+                    } elseif ($lastTranslatedAt !== null) {
                         // Legacy fallback: timestamps for pre-hash metadata.
-                        $lastTranslatedAt = $meta['last_translated_at'];
-
                         if ($originUpdatedAt !== null) {
                             try {
                                 $translatedAt = Carbon::parse($lastTranslatedAt);
