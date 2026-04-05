@@ -46,6 +46,7 @@ return [
     'time_days_ago' => ':countd ago',
     'last_translated' => 'Last translated: :time',
     'mark_current_button' => 'Mark current',
+    'mark_current_confirm' => 'Mark :site as current?',
     'mark_current_success' => 'Marked as current',
     'mark_current_failed' => 'Failed to mark as current',
 ];

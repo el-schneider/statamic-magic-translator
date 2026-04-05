@@ -12,7 +12,8 @@
  * never succeeded in the current session.
  */
 import { Button } from '@statamic/cms/ui'
-import { computed, onBeforeUnmount, onMounted, ref } from 'vue'
+import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
+import { markCurrent } from '../../core/api'
 import {
   injectBadges,
   injectTranslateButton,
@@ -61,6 +62,17 @@ const entryId = computed(() => props.meta?.entry_id ?? null)
 const targetSites = computed(() => sites.value.filter((s) => s.handle !== currentSite.value))
 
 const hasTargets = computed(() => targetSites.value.length > 0)
+
+const markedCurrentHandles = ref<Set<string>>(new Set())
+const markCurrentPending = ref<Set<string>>(new Set())
+
+const effectiveSites = computed(() =>
+  sites.value.map((site) =>
+    markedCurrentHandles.value.has(site.handle)
+      ? { ...site, is_stale: false, last_translated_at: new Date().toISOString() }
+      : site,
+  ),
+)
 
 // ── Badge injection ───────────────────────────────────────────────────────────
 
@@ -112,12 +124,12 @@ function hasInjectedTranslateButtonInDom(): boolean {
 }
 
 function tryInject(): void {
-  if (injecting || sites.value.length === 0) return
+  if (injecting || effectiveSites.value.length === 0) return
 
   injecting = true
   try {
-    badgeInjected.value = injectBadges(sites.value, 'v6')
-    buttonInjected.value = injectTranslateButton(sites.value, 'v6', {
+    badgeInjected.value = injectBadges(effectiveSites.value, 'v6')
+    buttonInjected.value = injectTranslateButton(effectiveSites.value, 'v6', {
       onClick: openDialog,
       disabled: !hasTargets.value,
     })
@@ -125,6 +137,47 @@ function tryInject(): void {
     injecting = false
   }
 }
+
+async function handleMarkCurrentRequest(event: Event): Promise<void> {
+  const detail = (event as CustomEvent).detail
+  if (!detail?.siteHandle || !entryId.value) return
+
+  const siteHandle = String(detail.siteHandle)
+  if (markCurrentPending.value.has(siteHandle)) return
+
+  const site = sites.value.find((s) => s.handle === siteHandle)
+  const siteName = site?.name ?? siteHandle
+
+  const message = __('magic-translator::messages.mark_current_confirm', { site: siteName })
+  if (!window.confirm(message)) return
+
+  markCurrentPending.value = new Set([...markCurrentPending.value, siteHandle])
+
+  try {
+    const response = await markCurrent(entryId.value, siteHandle)
+    if (response.success) {
+      markedCurrentHandles.value = new Set([...markedCurrentHandles.value, siteHandle])
+      return
+    }
+
+    window.alert(response.error?.message ?? __('magic-translator::messages.mark_current_failed'))
+  } catch (error) {
+    console.error('[magic-translator] mark-current failed:', error)
+    window.alert(__('magic-translator::messages.mark_current_failed'))
+  } finally {
+    const next = new Set(markCurrentPending.value)
+    next.delete(siteHandle)
+    markCurrentPending.value = next
+  }
+}
+
+watch(
+  effectiveSites,
+  () => {
+    tryInject()
+  },
+  { deep: true },
+)
 
 onMounted(() => {
   if (!hasTargets.value) {
@@ -146,10 +199,12 @@ onMounted(() => {
     tryInject()
   })
   observer.observe(document.body, { childList: true, subtree: true })
+  window.addEventListener('magic-translator:request-mark-current', handleMarkCurrentRequest)
 })
 
 onBeforeUnmount(() => {
   observer?.disconnect()
+  window.removeEventListener('magic-translator:request-mark-current', handleMarkCurrentRequest)
   removeBadges()
   removeTranslateButtons()
 })
@@ -204,8 +259,8 @@ function openDialog(): void {
               Fallback locale status list — shown only when badge injection into
               the native Sites panel has not (yet) succeeded.
           -->
-      <div v-if="!badgeInjected && sites.length > 0" class="mt-3 space-y-1">
-        <div v-for="site in sites" :key="site.handle" class="text-xs flex items-center gap-1.5 py-0.5">
+      <div v-if="!badgeInjected && effectiveSites.length > 0" class="mt-3 space-y-1">
+        <div v-for="site in effectiveSites" :key="site.handle" class="text-xs flex items-center gap-1.5 py-0.5">
           <span
             class="little-dot shrink-0"
             :class="{
