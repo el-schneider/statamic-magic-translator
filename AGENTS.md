@@ -75,3 +75,7 @@ Check first: `pgrep -f 'queue:listen'` — only start one if none is running.
 
 - **`vendor/`** — Managed by Composer.
 - **`dist/`** — Built assets. Rebuild, don't hand-edit.
+
+## Gotchas
+
+- In tests, `Entry::blueprint()->handle()` may resolve to the collection handle unless an explicit blueprint is created first. Create the blueprint when asserting exact `exclude_blueprints` matches.

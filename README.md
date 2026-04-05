@@ -27,25 +27,17 @@ php artisan vendor:publish --tag=statamic-content-translator-config
 
 ## Configuration
 
-### 1. Add your collections
+### 1. Exclude blueprints (optional)
 
-Tell the addon which collections should be translatable:
+By default, the addon auto-injects its fieldtype into entry blueprints. Use
+`exclude_blueprints` to opt out specific blueprints or whole collections:
 
 ```php
 // config/content-translator.php
 
-'collections' => [
-    'pages',
-    'blog',
-],
-```
-
-The addon auto-injects its fieldtype into all blueprints of these collections. To exclude specific blueprints:
-
-```php
 'exclude_blueprints' => [
-    'pages.redirect',
-    'blog.link_post',
+    'pages.redirect', // exact blueprint
+    'blog.*',         // all blueprints in a collection
 ],
 ```
 

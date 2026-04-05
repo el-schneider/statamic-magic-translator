@@ -12,6 +12,7 @@ use ElSchneider\ContentTranslator\Reassembly\BardParser;
 use ElSchneider\ContentTranslator\Reassembly\ContentReassembler;
 use ElSchneider\ContentTranslator\Services\TranslationServiceFactory;
 use ElSchneider\ContentTranslator\StatamicActions\TranslateEntryAction;
+use ElSchneider\ContentTranslator\Support\BlueprintExclusions;
 use Illuminate\Support\Facades\Event;
 use Statamic\Events\EntryBlueprintFound;
 use Statamic\Events\EntrySaving;
@@ -126,20 +127,9 @@ final class ServiceProvider extends AddonServiceProvider
             }
 
             $collectionHandle = $entry->collectionHandle();
-            $configuredCollections = config('statamic.content-translator.collections', []);
-
-            // Skip collections that are not configured.
-            if (! in_array($collectionHandle, (array) $configuredCollections, true)) {
-                return;
-            }
-
             $blueprintHandle = $event->blueprint->handle();
-            $excludedBlueprints = config('statamic.content-translator.exclude_blueprints', []);
 
-            // Skip blueprints explicitly excluded in dot notation (collection.blueprint).
-            $blueprintKey = $collectionHandle.'.'.$blueprintHandle;
-
-            if (in_array($blueprintKey, (array) $excludedBlueprints, true)) {
+            if (BlueprintExclusions::contains($collectionHandle, $blueprintHandle)) {
                 return;
             }
 
@@ -167,9 +157,9 @@ final class ServiceProvider extends AddonServiceProvider
             }
 
             $collectionHandle = $entry->collectionHandle();
-            $configuredCollections = config('statamic.content-translator.collections', []);
+            $blueprintHandle = $entry->blueprint()->handle();
 
-            if (! in_array($collectionHandle, (array) $configuredCollections, true)) {
+            if (BlueprintExclusions::contains($collectionHandle, $blueprintHandle)) {
                 return;
             }
 

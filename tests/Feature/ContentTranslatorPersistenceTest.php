@@ -11,8 +11,6 @@ use Tests\StatamicTestHelpers;
 uses(StatamicTestHelpers::class);
 
 it('preserves content_translator metadata when saving localized entry with limited _localized fields', function () {
-    config(['statamic.content-translator.collections' => ['articles']]);
-
     $this->createTestCollection('articles', ['en', 'fr']);
     $this->createTestBlueprint('articles', 'default', [
         ['handle' => 'title', 'field' => ['type' => 'text', 'localizable' => true]],
