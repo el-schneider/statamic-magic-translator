@@ -2,26 +2,26 @@
 
 declare(strict_types=1);
 
-use ElSchneider\ContentTranslator\Exceptions\TranslationConfigException;
-use ElSchneider\ContentTranslator\Services\DeepLTranslationService;
-use ElSchneider\ContentTranslator\Services\PrismTranslationService;
-use ElSchneider\ContentTranslator\Services\TranslationServiceFactory;
+use ElSchneider\MagicTranslator\Exceptions\TranslationConfigException;
+use ElSchneider\MagicTranslator\Services\DeepLTranslationService;
+use ElSchneider\MagicTranslator\Services\PrismTranslationService;
+use ElSchneider\MagicTranslator\Services\TranslationServiceFactory;
 
 uses(Tests\TestCase::class);
 
 it('creates prism service when configured', function () {
-    config(['statamic.content-translator.service' => 'prism']);
+    config(['statamic.magic-translator.service' => 'prism']);
     $service = app(TranslationServiceFactory::class)->make();
     expect($service)->toBeInstanceOf(PrismTranslationService::class);
 });
 
 it('creates deepl service when configured', function () {
-    config(['statamic.content-translator.service' => 'deepl']);
+    config(['statamic.magic-translator.service' => 'deepl']);
     $service = app(TranslationServiceFactory::class)->make();
     expect($service)->toBeInstanceOf(DeepLTranslationService::class);
 });
 
 it('throws for unknown service', function () {
-    config(['statamic.content-translator.service' => 'unknown']);
+    config(['statamic.magic-translator.service' => 'unknown']);
     app(TranslationServiceFactory::class)->make();
 })->throws(TranslationConfigException::class);

@@ -2,13 +2,13 @@
 
 declare(strict_types=1);
 
-use ElSchneider\ContentTranslator\Data\TranslationFormat;
-use ElSchneider\ContentTranslator\Data\TranslationUnit;
-use ElSchneider\ContentTranslator\Exceptions\ProviderAuthException;
-use ElSchneider\ContentTranslator\Exceptions\ProviderRateLimitedException;
-use ElSchneider\ContentTranslator\Exceptions\ProviderResponseInvalidException;
-use ElSchneider\ContentTranslator\Exceptions\ProviderUnavailableException;
-use ElSchneider\ContentTranslator\Services\PrismTranslationService;
+use ElSchneider\MagicTranslator\Data\TranslationFormat;
+use ElSchneider\MagicTranslator\Data\TranslationUnit;
+use ElSchneider\MagicTranslator\Exceptions\ProviderAuthException;
+use ElSchneider\MagicTranslator\Exceptions\ProviderRateLimitedException;
+use ElSchneider\MagicTranslator\Exceptions\ProviderResponseInvalidException;
+use ElSchneider\MagicTranslator\Exceptions\ProviderUnavailableException;
+use ElSchneider\MagicTranslator\Services\PrismTranslationService;
 use Prism\Prism\Enums\FinishReason;
 use Prism\Prism\Exceptions\PrismException;
 use Prism\Prism\Exceptions\PrismRateLimitedException;
@@ -25,13 +25,13 @@ uses(Tests\TestCase::class);
 
 beforeEach(function () {
     config([
-        'statamic.content-translator.prism.provider' => 'anthropic',
-        'statamic.content-translator.prism.model' => 'claude-sonnet-4-20250514',
-        'statamic.content-translator.prism.request_timeout' => 120,
-        'statamic.content-translator.prism.connect_timeout' => 15,
-        'statamic.content-translator.prism.retry_attempts' => 1,
-        'statamic.content-translator.prism.retry_sleep_ms' => 1000,
-        'statamic.content-translator.max_units_per_request' => null,
+        'statamic.magic-translator.prism.provider' => 'anthropic',
+        'statamic.magic-translator.prism.model' => 'claude-sonnet-4-20250514',
+        'statamic.magic-translator.prism.request_timeout' => 120,
+        'statamic.magic-translator.prism.connect_timeout' => 15,
+        'statamic.magic-translator.prism.retry_attempts' => 1,
+        'statamic.magic-translator.prism.retry_sleep_ms' => 1000,
+        'statamic.magic-translator.max_units_per_request' => null,
     ]);
 });
 
@@ -148,8 +148,8 @@ it('preserves original unit properties when setting translated text', function (
 
 it('uses configured provider and model', function () {
     config([
-        'statamic.content-translator.prism.provider' => 'openai',
-        'statamic.content-translator.prism.model' => 'gpt-4o',
+        'statamic.magic-translator.prism.provider' => 'openai',
+        'statamic.magic-translator.prism.model' => 'gpt-4o',
     ]);
 
     $fake = Prism::fake([
@@ -171,8 +171,8 @@ it('uses configured provider and model', function () {
 
 it('uses openai-compatible object schema with translations key', function () {
     config([
-        'statamic.content-translator.prism.provider' => 'openai',
-        'statamic.content-translator.prism.model' => 'gpt-4o',
+        'statamic.magic-translator.prism.provider' => 'openai',
+        'statamic.magic-translator.prism.model' => 'gpt-4o',
     ]);
 
     $fake = Prism::fake([
@@ -265,7 +265,7 @@ it('uses structured output schema with array of id/text objects', function () {
 });
 
 it('chunks requests when max_units_per_request is set', function () {
-    config(['statamic.content-translator.max_units_per_request' => 2]);
+    config(['statamic.magic-translator.max_units_per_request' => 2]);
 
     $fake = Prism::fake([
         makeStructuredResponse([
@@ -293,7 +293,7 @@ it('chunks requests when max_units_per_request is set', function () {
 });
 
 it('handles single unit without chunking', function () {
-    config(['statamic.content-translator.max_units_per_request' => 10]);
+    config(['statamic.magic-translator.max_units_per_request' => 10]);
 
     $fake = Prism::fake([
         makeStructuredResponse([
@@ -312,7 +312,7 @@ it('handles single unit without chunking', function () {
 });
 
 it('does not chunk when max_units_per_request is null', function () {
-    config(['statamic.content-translator.max_units_per_request' => null]);
+    config(['statamic.magic-translator.max_units_per_request' => null]);
 
     $fake = Prism::fake([
         makeStructuredResponse([
@@ -413,7 +413,7 @@ it('maps prism timeout failures to provider unavailable exceptions', function ()
 });
 
 it('throws for invalid max_units_per_request config', function () {
-    config(['statamic.content-translator.max_units_per_request' => 0]);
+    config(['statamic.magic-translator.max_units_per_request' => 0]);
 
     $service = app(PrismTranslationService::class);
 
@@ -424,10 +424,10 @@ it('throws for invalid max_units_per_request config', function () {
 
 it('applies configured prism transport options and retries to requests', function () {
     config([
-        'statamic.content-translator.prism.request_timeout' => 180,
-        'statamic.content-translator.prism.connect_timeout' => 25,
-        'statamic.content-translator.prism.retry_attempts' => 2,
-        'statamic.content-translator.prism.retry_sleep_ms' => 1500,
+        'statamic.magic-translator.prism.request_timeout' => 180,
+        'statamic.magic-translator.prism.connect_timeout' => 25,
+        'statamic.magic-translator.prism.retry_attempts' => 2,
+        'statamic.magic-translator.prism.retry_sleep_ms' => 1500,
     ]);
 
     $fake = Prism::fake([
@@ -457,11 +457,11 @@ it('applies configured prism transport options and retries to requests', functio
 });
 
 it('throws for invalid prism transport config', function () {
-    config(['statamic.content-translator.prism.request_timeout' => 0]);
+    config(['statamic.magic-translator.prism.request_timeout' => 0]);
 
     $service = app(PrismTranslationService::class);
 
     $service->translate([
         new TranslationUnit('title', 'Hello', TranslationFormat::Plain),
     ], 'en', 'fr');
-})->throws(InvalidArgumentException::class, 'statamic.content-translator.prism.request_timeout must be a positive integer.');
+})->throws(InvalidArgumentException::class, 'statamic.magic-translator.prism.request_timeout must be a positive integer.');

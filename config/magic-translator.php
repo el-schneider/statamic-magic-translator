@@ -88,10 +88,10 @@ return [
         'retry_attempts' => env('CONTENT_TRANSLATOR_PRISM_RETRY_ATTEMPTS', 1),
         'retry_sleep_ms' => env('CONTENT_TRANSLATOR_PRISM_RETRY_SLEEP_MS', 1000),
         'prompts' => [
-            'system' => 'content-translator::prompts.system',
-            'user' => 'content-translator::prompts.user',
+            'system' => 'magic-translator::prompts.system',
+            'user' => 'magic-translator::prompts.user',
             'overrides' => [
-                // 'ja' => ['system' => 'content-translator::prompts.system-ja'],
+                // 'ja' => ['system' => 'magic-translator::prompts.system-ja'],
             ],
         ],
     ],

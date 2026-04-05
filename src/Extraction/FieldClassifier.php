@@ -2,9 +2,9 @@
 
 declare(strict_types=1);
 
-namespace ElSchneider\ContentTranslator\Extraction;
+namespace ElSchneider\MagicTranslator\Extraction;
 
-use ElSchneider\ContentTranslator\Data\TranslationFormat;
+use ElSchneider\MagicTranslator\Data\TranslationFormat;
 
 /**
  * Classifies a Statamic field config array into a FieldTier.

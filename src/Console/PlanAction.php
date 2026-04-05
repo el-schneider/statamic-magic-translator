@@ -2,7 +2,7 @@
 
 declare(strict_types=1);
 
-namespace ElSchneider\ContentTranslator\Console;
+namespace ElSchneider\MagicTranslator\Console;
 
 enum PlanAction: string
 {

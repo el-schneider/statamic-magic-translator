@@ -2,14 +2,14 @@
 
 declare(strict_types=1);
 
-use ElSchneider\ContentTranslator\Actions\TranslateEntry;
-use ElSchneider\ContentTranslator\Contracts\TranslationService;
-use ElSchneider\ContentTranslator\Data\TranslationUnit;
-use ElSchneider\ContentTranslator\Events\AfterEntryTranslation;
-use ElSchneider\ContentTranslator\Events\BeforeEntryTranslation;
-use ElSchneider\ContentTranslator\Exceptions\ProviderAuthException;
-use ElSchneider\ContentTranslator\Exceptions\ProviderRateLimitedException;
-use ElSchneider\ContentTranslator\Jobs\TranslateEntryJob;
+use ElSchneider\MagicTranslator\Actions\TranslateEntry;
+use ElSchneider\MagicTranslator\Contracts\TranslationService;
+use ElSchneider\MagicTranslator\Data\TranslationUnit;
+use ElSchneider\MagicTranslator\Events\AfterEntryTranslation;
+use ElSchneider\MagicTranslator\Events\BeforeEntryTranslation;
+use ElSchneider\MagicTranslator\Exceptions\ProviderAuthException;
+use ElSchneider\MagicTranslator\Exceptions\ProviderRateLimitedException;
+use ElSchneider\MagicTranslator\Jobs\TranslateEntryJob;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\Event;
 use Statamic\Facades\Entry;
@@ -133,7 +133,7 @@ it('skips existing localization when overwrite is false', function () {
 
 // ── Metadata ──────────────────────────────────────────────────────────────────
 
-it('sets last_translated_at on the content_translator field', function () {
+it('sets last_translated_at on the magic_translator field', function () {
     ['entry' => $entry, 'action' => $action] = setUpTranslationTest();
 
     $before = now()->subSecond(); // subtract 1s to avoid equal-timestamp edge case
@@ -141,7 +141,7 @@ it('sets last_translated_at on the content_translator field', function () {
     $action->handle($entry->id(), 'fr');
 
     $fr = Entry::find($entry->id())->in('fr');
-    $meta = $fr->get('content_translator');
+    $meta = $fr->get('magic_translator');
 
     expect($meta)->toBeArray();
     expect($meta)->toHaveKey('last_translated_at');
@@ -321,13 +321,13 @@ it('TranslateEntryJob has correct retry configuration', function () {
 });
 
 it('TranslateEntryJob applies queue connection and name from config', function () {
-    config()->set('statamic.content-translator.queue.connection', 'redis');
-    config()->set('statamic.content-translator.queue.name', 'content-translator');
+    config()->set('statamic.magic-translator.queue.connection', 'redis');
+    config()->set('statamic.magic-translator.queue.name', 'magic-translator');
 
     $job = new TranslateEntryJob('some-id', 'fr');
 
     expect($job->connection)->toBe('redis');
-    expect($job->queue)->toBe('content-translator');
+    expect($job->queue)->toBe('magic-translator');
 });
 
 it('TranslateEntryJob is a no-op when the entry was deleted before execution', function () {
@@ -399,7 +399,7 @@ it('stores a structured unexpected error in cache when translation throws a gene
 
     $jobId = 'generic-fail-job-test';
 
-    Cache::put("content-translator:job:{$jobId}", [
+    Cache::put("magic-translator:job:{$jobId}", [
         'id' => $jobId,
         'target_site' => 'fr',
         'status' => 'pending',
@@ -414,7 +414,7 @@ it('stores a structured unexpected error in cache when translation throws a gene
 
     expect(fn () => app()->call([$job, 'handle']))->toThrow(RuntimeException::class);
 
-    $cached = Cache::get("content-translator:job:{$jobId}");
+    $cached = Cache::get("magic-translator:job:{$jobId}");
     expect($cached['status'])->toBe('failed');
     expect($cached['error'])->toBe([
         'code' => 'unexpected_error',
@@ -434,7 +434,7 @@ it('stores the domain exception api error in cache when translation throws a con
 
     $jobId = 'domain-fail-job-test';
 
-    Cache::put("content-translator:job:{$jobId}", [
+    Cache::put("magic-translator:job:{$jobId}", [
         'id' => $jobId,
         'target_site' => 'fr',
         'status' => 'pending',
@@ -449,12 +449,12 @@ it('stores the domain exception api error in cache when translation throws a con
 
     expect(fn () => app()->call([$job, 'handle']))->toThrow(ProviderAuthException::class);
 
-    $cached = Cache::get("content-translator:job:{$jobId}");
+    $cached = Cache::get("magic-translator:job:{$jobId}");
     expect($cached['status'])->toBe('failed');
     expect($cached['error'])->toBe([
         'code' => 'provider_auth_failed',
         'message' => 'Translation service authentication failed.',
-        'message_key' => 'content-translator::messages.error_provider_auth_failed',
+        'message_key' => 'magic-translator::messages.error_provider_auth_failed',
         'retryable' => false,
     ]);
 });
@@ -470,7 +470,7 @@ it('preserves the retryable flag in cached structured job errors', function () {
 
     $jobId = 'retryable-domain-fail-job-test';
 
-    Cache::put("content-translator:job:{$jobId}", [
+    Cache::put("magic-translator:job:{$jobId}", [
         'id' => $jobId,
         'target_site' => 'fr',
         'status' => 'pending',
@@ -485,7 +485,7 @@ it('preserves the retryable flag in cached structured job errors', function () {
 
     expect(fn () => app()->call([$job, 'handle']))->toThrow(ProviderRateLimitedException::class);
 
-    $cached = Cache::get("content-translator:job:{$jobId}");
+    $cached = Cache::get("magic-translator:job:{$jobId}");
     expect($cached['status'])->toBe('failed');
     expect($cached['error']['code'])->toBe('provider_rate_limited');
     expect($cached['error']['retryable'])->toBeTrue();

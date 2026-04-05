@@ -2,7 +2,7 @@
 
 declare(strict_types=1);
 
-use ElSchneider\ContentTranslator\Exceptions\ProviderUnavailableException;
+use ElSchneider\MagicTranslator\Exceptions\ProviderUnavailableException;
 
 uses(Tests\TestCase::class);
 
@@ -26,7 +26,7 @@ it('formats api errors for provider unavailable exceptions', function () {
 
     expect($exception->toApiError())->toMatchArray([
         'code' => 'provider_unavailable',
-        'message_key' => 'content-translator::messages.error_provider_unavailable',
+        'message_key' => 'magic-translator::messages.error_provider_unavailable',
         'retryable' => true,
     ])->and($exception->toApiError()['message'])->toBeString()->not->toBe('');
 });

@@ -1,7 +1,7 @@
 # Research: Statamic Blueprint Caching & Dynamic Field Injection
 
-> Files examined: v5 @ `statamic-content-translator-test/vendor/statamic/cms/src/`  
-> v6 @ `statamic-content-translator-test-v6/vendor/statamic/cms/src/`
+> Files examined: v5 @ `statamic-magic-translator-test/vendor/statamic/cms/src/`  
+> v6 @ `statamic-magic-translator-test-v6/vendor/statamic/cms/src/`
 
 ---
 

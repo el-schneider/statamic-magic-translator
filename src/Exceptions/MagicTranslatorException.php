@@ -2,12 +2,12 @@
 
 declare(strict_types=1);
 
-namespace ElSchneider\ContentTranslator\Exceptions;
+namespace ElSchneider\MagicTranslator\Exceptions;
 
 use RuntimeException;
 use Throwable;
 
-abstract class ContentTranslatorException extends RuntimeException
+abstract class MagicTranslatorException extends RuntimeException
 {
     /**
      * @param  array<string, mixed>  $context

@@ -2,13 +2,13 @@
 
 declare(strict_types=1);
 
-namespace ElSchneider\ContentTranslator\Actions;
+namespace ElSchneider\MagicTranslator\Actions;
 
-use ElSchneider\ContentTranslator\Contracts\TranslationService;
-use ElSchneider\ContentTranslator\Events\AfterEntryTranslation;
-use ElSchneider\ContentTranslator\Events\BeforeEntryTranslation;
-use ElSchneider\ContentTranslator\Extraction\ContentExtractor;
-use ElSchneider\ContentTranslator\Reassembly\ContentReassembler;
+use ElSchneider\MagicTranslator\Contracts\TranslationService;
+use ElSchneider\MagicTranslator\Events\AfterEntryTranslation;
+use ElSchneider\MagicTranslator\Events\BeforeEntryTranslation;
+use ElSchneider\MagicTranslator\Extraction\ContentExtractor;
+use ElSchneider\MagicTranslator\Reassembly\ContentReassembler;
 use Illuminate\Support\Str;
 use InvalidArgumentException;
 use Statamic\Entries\Entry;
@@ -135,14 +135,14 @@ final class TranslateEntry
         }
 
         // ── 13. Set last_translated_at metadata ───────────────────────────────
-        $meta = $localization->get('content_translator') ?? [];
+        $meta = $localization->get('magic_translator') ?? [];
 
         if (! is_array($meta)) {
             $meta = [];
         }
 
         $meta['last_translated_at'] = now()->toIso8601String();
-        $localization->set('content_translator', $meta);
+        $localization->set('magic_translator', $meta);
 
         // ── 14. Save ──────────────────────────────────────────────────────────
         $localization->save();

@@ -2,11 +2,11 @@
 
 declare(strict_types=1);
 
-namespace ElSchneider\ContentTranslator\Jobs;
+namespace ElSchneider\MagicTranslator\Jobs;
 
-use ElSchneider\ContentTranslator\Actions\TranslateEntry;
-use ElSchneider\ContentTranslator\Exceptions\ContentTranslatorException;
-use ElSchneider\ContentTranslator\Support\TranslationLogger;
+use ElSchneider\MagicTranslator\Actions\TranslateEntry;
+use ElSchneider\MagicTranslator\Exceptions\MagicTranslatorException;
+use ElSchneider\MagicTranslator\Support\TranslationLogger;
 use Illuminate\Bus\Queueable;
 use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Foundation\Bus\Dispatchable;
@@ -25,11 +25,11 @@ use Throwable;
  * be called directly (e.g. in tests or from controllers) without
  * going through the queue.
  *
- * Queue settings are picked up from config/statamic/content-translator.php.
+ * Queue settings are picked up from config/statamic/magic-translator.php.
  * Retries use exponential backoff: 30s → 60s → 120s.
  *
  * When a $jobId is provided the job writes status updates to cache
- * (key: content-translator:job:{jobId}) so the HTTP status endpoint
+ * (key: magic-translator:job:{jobId}) so the HTTP status endpoint
  * can poll for progress without requiring a database.
  */
 final class TranslateEntryJob implements ShouldQueue
@@ -39,7 +39,7 @@ final class TranslateEntryJob implements ShouldQueue
     /**
      * Cache key prefix shared with TranslationController.
      */
-    private const CACHE_PREFIX = 'content-translator:job:';
+    private const CACHE_PREFIX = 'magic-translator:job:';
 
     /**
      * Cache TTL in seconds (60 minutes) — matches TranslationController.
@@ -65,7 +65,7 @@ final class TranslateEntryJob implements ShouldQueue
         private readonly array $options = [],
         private readonly ?string $jobId = null,
     ) {
-        $queueConfig = config('statamic.content-translator.queue', []);
+        $queueConfig = config('statamic.magic-translator.queue', []);
 
         if (! empty($queueConfig['connection'])) {
             $this->onConnection($queueConfig['connection']);
@@ -118,7 +118,7 @@ final class TranslateEntryJob implements ShouldQueue
             $this->updateCacheStatus('failed', $this->unexpectedApiError());
 
             throw $e;
-        } catch (ContentTranslatorException $e) {
+        } catch (MagicTranslatorException $e) {
             TranslationLogger::error($e, $this->jobLogContext());
             $this->updateCacheStatus('failed', $e->toApiError());
 
@@ -138,7 +138,7 @@ final class TranslateEntryJob implements ShouldQueue
      */
     public function failed(Throwable $exception): void
     {
-        if ($exception instanceof ContentTranslatorException) {
+        if ($exception instanceof MagicTranslatorException) {
             $this->updateCacheStatus('failed', $exception->toApiError());
 
             return;
@@ -212,7 +212,7 @@ final class TranslateEntryJob implements ShouldQueue
     {
         return [
             'code' => 'unexpected_error',
-            'message' => (string) __('content-translator::messages.error_unexpected'),
+            'message' => (string) __('magic-translator::messages.error_unexpected'),
             'retryable' => false,
         ];
     }

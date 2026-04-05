@@ -1,4 +1,4 @@
-# Statamic Content Translator
+# Statamic Magic Translator
 
 > Translate Statamic entry content across multi-site localizations using LLMs or DeepL — with full support for Bard, Replicator, Grid, and deeply nested content structures.
 
@@ -9,6 +9,7 @@
 - **Async processing**: Every translation runs as a queued job with retry and backoff
 - **Sidebar UI**: Auto-injected fieldtype with a translation dialog — pick target locales, track progress per locale, retry failures inline
 - **Bulk actions**: Translate multiple entries at once from collection listings
+- **Artisan command**: `statamic:magic-translator:translate` for scripted/automated bulk translation with dry-run, filtering, and sync/async modes
 - **Staleness detection**: Badges in the Sites panel show which localizations are up-to-date, outdated, or missing
 - **Customizable prompts**: Blade views for system/user prompts, with per-language overrides
 - **Statamic v5 + v6**
@@ -16,13 +17,13 @@
 ## Installation
 
 ```bash
-composer require el-schneider/statamic-content-translator
+composer require el-schneider/statamic-magic-translator
 ```
 
 Publish the configuration:
 
 ```bash
-php artisan vendor:publish --tag=statamic-content-translator-config
+php artisan vendor:publish --tag=statamic-magic-translator-config
 ```
 
 ## CP Usage
@@ -63,7 +64,7 @@ The Sites panel in the sidebar shows translation status per locale:
 The addon also ships with an artisan command for bulk and automated translation:
 
 ```bash
-php please statamic:content-translator:translate [options]
+php please statamic:magic-translator:translate [options]
 ```
 
 > Requires at least one filter: `--to`, `--collection`, `--entry`, or `--blueprint`.
@@ -73,25 +74,25 @@ php please statamic:content-translator:translate [options]
 Preview what would be translated for a collection (safe, no changes):
 
 ```bash
-php please statamic:content-translator:translate --collection=pages --to=de --dry-run
+php please statamic:magic-translator:translate --collection=pages --to=de --dry-run
 ```
 
 Translate all missing `pages` entries into German and French asynchronously:
 
 ```bash
-php please statamic:content-translator:translate --collection=pages --to=de --to=fr --dispatch-jobs -n
+php please statamic:magic-translator:translate --collection=pages --to=de --to=fr --dispatch-jobs -n
 ```
 
 Re-translate stale entries for CI/cron:
 
 ```bash
-php please statamic:content-translator:translate --collection=pages --include-stale --dispatch-jobs -n
+php please statamic:magic-translator:translate --collection=pages --include-stale --dispatch-jobs -n
 ```
 
 Translate one specific entry to every site its collection supports:
 
 ```bash
-php please statamic:content-translator:translate --entry=abc-123
+php please statamic:magic-translator:translate --entry=abc-123
 ```
 
 ### Options
@@ -126,7 +127,7 @@ By default, the addon auto-injects its fieldtype into entry blueprints. Use
 `exclude_blueprints` to opt out specific blueprints or whole collections:
 
 ```php
-// config/content-translator.php
+// config/magic-translator.php
 
 'exclude_blueprints' => [
     'pages.redirect', // exact blueprint
@@ -208,31 +209,31 @@ Deeply nested structures (Bard → set → Replicator → set → Bard → …) 
 Translation prompts are Blade views. Publish them to customize:
 
 ```bash
-php artisan vendor:publish --tag=content-translator-views
+php artisan vendor:publish --tag=magic-translator-views
 ```
 
-This copies prompt templates to `resources/views/vendor/content-translator/prompts/`.
+This copies prompt templates to `resources/views/vendor/magic-translator/prompts/`.
 
 ### Per-language prompt overrides
 
 Different languages may need different instructions (e.g., formal "Sie" in German, polite form in Japanese):
 
 ```php
-// config/content-translator.php
+// config/magic-translator.php
 
 'prism' => [
     'prompts' => [
-        'system' => 'content-translator::prompts.system',
-        'user' => 'content-translator::prompts.user',
+        'system' => 'magic-translator::prompts.system',
+        'user' => 'magic-translator::prompts.user',
         'overrides' => [
-            'de' => ['system' => 'content-translator::prompts.system-de'],
-            'ja' => ['system' => 'content-translator::prompts.system-ja'],
+            'de' => ['system' => 'magic-translator::prompts.system-de'],
+            'ja' => ['system' => 'magic-translator::prompts.system-ja'],
         ],
     ],
 ],
 ```
 
-Create the override views (e.g., `resources/views/vendor/content-translator/prompts/system-de.blade.php`) with language-specific instructions.
+Create the override views (e.g., `resources/views/vendor/magic-translator/prompts/system-de.blade.php`) with language-specific instructions.
 
 ### Available prompt variables
 
@@ -254,7 +255,7 @@ Hook into the translation lifecycle:
 Fired before extraction. Modify the `$units` array to exclude or alter translation units.
 
 ```php
-use ElSchneider\ContentTranslator\Events\BeforeEntryTranslation;
+use ElSchneider\MagicTranslator\Events\BeforeEntryTranslation;
 
 Event::listen(BeforeEntryTranslation::class, function ($event) {
     // $event->entry — the source entry
@@ -268,7 +269,7 @@ Event::listen(BeforeEntryTranslation::class, function ($event) {
 Fired after translation, before save. Modify `$translatedData` to post-process the result.
 
 ```php
-use ElSchneider\ContentTranslator\Events\AfterEntryTranslation;
+use ElSchneider\MagicTranslator\Events\AfterEntryTranslation;
 
 Event::listen(AfterEntryTranslation::class, function ($event) {
     // $event->entry — the source entry
@@ -282,8 +283,8 @@ Event::listen(AfterEntryTranslation::class, function ($event) {
 Implement the `TranslationService` contract to add your own backend (Google Translate, etc.):
 
 ```php
-use ElSchneider\ContentTranslator\Contracts\TranslationService;
-use ElSchneider\ContentTranslator\Data\TranslationUnit;
+use ElSchneider\MagicTranslator\Contracts\TranslationService;
+use ElSchneider\MagicTranslator\Data\TranslationUnit;
 
 class GoogleTranslateService implements TranslationService
 {

@@ -2,9 +2,9 @@
 
 declare(strict_types=1);
 
-use ElSchneider\ContentTranslator\Contracts\TranslationService;
-use ElSchneider\ContentTranslator\Data\TranslationUnit;
-use ElSchneider\ContentTranslator\Jobs\TranslateEntryJob;
+use ElSchneider\MagicTranslator\Contracts\TranslationService;
+use ElSchneider\MagicTranslator\Data\TranslationUnit;
+use ElSchneider\MagicTranslator\Jobs\TranslateEntryJob;
 use Illuminate\Support\Facades\Queue;
 use Statamic\Facades\Entry;
 use Tests\StatamicTestHelpers;
@@ -12,13 +12,13 @@ use Tests\StatamicTestHelpers;
 uses(StatamicTestHelpers::class);
 
 it('errors out when no filter is provided', function () {
-    $this->artisan('statamic:content-translator:translate')
+    $this->artisan('statamic:magic-translator:translate')
         ->expectsOutputToContain('at least one filter')
         ->assertExitCode(2);
 });
 
 it('errors on unknown collection handle', function () {
-    $this->artisan('statamic:content-translator:translate', [
+    $this->artisan('statamic:magic-translator:translate', [
         '--collection' => ['nonexistent'],
         '--to' => ['fr'],
     ])
@@ -31,7 +31,7 @@ it('prints plan summary on --dry-run and exits 0 without executing', function ()
     $this->createTestBlueprint('articles');
     $this->createTestEntry(collection: 'articles', site: 'en');
 
-    $this->artisan('statamic:content-translator:translate', [
+    $this->artisan('statamic:magic-translator:translate', [
         '--to' => ['fr'],
         '--dry-run' => true,
     ])
@@ -44,7 +44,7 @@ it('prints plan summary on --dry-run and exits 0 without executing', function ()
 it('prints empty plan when no entries match filter', function () {
     $this->createTestCollection('articles', ['en', 'fr']);
 
-    $this->artisan('statamic:content-translator:translate', [
+    $this->artisan('statamic:magic-translator:translate', [
         '--to' => ['fr'],
         '--dry-run' => true,
     ])
@@ -57,7 +57,7 @@ it('aborts gracefully when user answers no at confirm prompt', function () {
     $this->createTestBlueprint('articles');
     $this->createTestEntry(collection: 'articles', site: 'en');
 
-    $this->artisan('statamic:content-translator:translate', [
+    $this->artisan('statamic:magic-translator:translate', [
         '--to' => ['fr'],
     ])
         ->expectsConfirmation('Proceed?', 'no')
@@ -70,7 +70,7 @@ it('proceeds past confirm with --no-interaction', function () {
     $this->createTestBlueprint('articles');
     $this->createTestEntry(collection: 'articles', site: 'en');
 
-    $this->artisan('statamic:content-translator:translate', [
+    $this->artisan('statamic:magic-translator:translate', [
         '--to' => ['fr'],
         '--no-interaction' => true,
     ])
@@ -96,7 +96,7 @@ it('executes sync translation and reports success summary', function () {
     $this->createTestBlueprint('articles');
     $en = $this->createTestEntry(collection: 'articles', site: 'en');
 
-    $this->artisan('statamic:content-translator:translate', [
+    $this->artisan('statamic:magic-translator:translate', [
         '--to' => ['fr'],
         '--no-interaction' => true,
     ])
@@ -121,7 +121,7 @@ it('reports partial failure and exits 1 when a translation throws', function () 
     $this->createTestBlueprint('articles');
     $this->createTestEntry(collection: 'articles', site: 'en');
 
-    $this->artisan('statamic:content-translator:translate', [
+    $this->artisan('statamic:magic-translator:translate', [
         '--to' => ['fr'],
         '--no-interaction' => true,
     ])
@@ -144,7 +144,7 @@ it('dispatches a job per processable pair when --dispatch-jobs is set', function
     $this->createTestBlueprint('articles');
     $this->createTestEntry(collection: 'articles', site: 'en');
 
-    $this->artisan('statamic:content-translator:translate', [
+    $this->artisan('statamic:magic-translator:translate', [
         '--to' => ['fr', 'de'],
         '--dispatch-jobs' => true,
         '--no-interaction' => true,
@@ -160,7 +160,7 @@ it('dispatches zero jobs when plan is empty', function () {
 
     $this->createTestCollection('articles', ['en', 'fr']);
 
-    $this->artisan('statamic:content-translator:translate', [
+    $this->artisan('statamic:magic-translator:translate', [
         '--to' => ['fr'],
         '--dispatch-jobs' => true,
         '--no-interaction' => true,

@@ -2,7 +2,7 @@
 
 declare(strict_types=1);
 
-namespace ElSchneider\ContentTranslator\Support;
+namespace ElSchneider\MagicTranslator\Support;
 
 use Illuminate\Support\Collection as LaravelCollection;
 use Statamic\Contracts\Auth\User;

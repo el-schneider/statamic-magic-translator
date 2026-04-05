@@ -28,7 +28,7 @@ import type { LocaleJobState, SiteMeta, SiteDescriptor } from '../../core/types'
 declare function __(key: string, replacements?: Record<string, string | number>): string
 
 const t = (key: string, replacements: Record<string, string | number> = {}): string =>
-  __('content-translator::messages.' + key, replacements)
+  __('magic-translator::messages.' + key, replacements)
 
 // ── Props ─────────────────────────────────────────────────────────────────────
 

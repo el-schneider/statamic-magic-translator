@@ -110,7 +110,7 @@ function resolveMessage(code: string, fallback: string): string {
   const key = ERROR_MESSAGE_KEYS[code]
   if (!key) return fallback
 
-  const fullKey = 'content-translator::messages.' + key
+  const fullKey = 'magic-translator::messages.' + key
   const translated = t(key)
 
   return translated === fullKey ? fallback : translated
@@ -123,7 +123,7 @@ function t(key: string): string {
     }
   ).__
 
-  const fullKey = 'content-translator::messages.' + key
+  const fullKey = 'magic-translator::messages.' + key
 
   return translator ? translator(fullKey) : fullKey
 }

@@ -2,14 +2,14 @@
 
 declare(strict_types=1);
 
-namespace ElSchneider\ContentTranslator\Services;
+namespace ElSchneider\MagicTranslator\Services;
 
-use ElSchneider\ContentTranslator\Contracts\TranslationService;
-use ElSchneider\ContentTranslator\Data\TranslationUnit;
-use ElSchneider\ContentTranslator\Exceptions\ProviderAuthException;
-use ElSchneider\ContentTranslator\Exceptions\ProviderRateLimitedException;
-use ElSchneider\ContentTranslator\Exceptions\ProviderResponseInvalidException;
-use ElSchneider\ContentTranslator\Exceptions\ProviderUnavailableException;
+use ElSchneider\MagicTranslator\Contracts\TranslationService;
+use ElSchneider\MagicTranslator\Data\TranslationUnit;
+use ElSchneider\MagicTranslator\Exceptions\ProviderAuthException;
+use ElSchneider\MagicTranslator\Exceptions\ProviderRateLimitedException;
+use ElSchneider\MagicTranslator\Exceptions\ProviderResponseInvalidException;
+use ElSchneider\MagicTranslator\Exceptions\ProviderUnavailableException;
 use Illuminate\Http\Client\ConnectionException;
 use Illuminate\Http\Client\RequestException;
 use InvalidArgumentException;
@@ -42,7 +42,7 @@ final class PrismTranslationService implements TranslationService
             return [];
         }
 
-        $maxUnits = $this->resolveChunkSize(config('statamic.content-translator.max_units_per_request'));
+        $maxUnits = $this->resolveChunkSize(config('statamic.magic-translator.max_units_per_request'));
 
         if ($maxUnits !== null && count($units) > $maxUnits) {
             return $this->translateInChunks($units, $sourceLocale, $targetLocale, $maxUnits);
@@ -77,8 +77,8 @@ final class PrismTranslationService implements TranslationService
      */
     private function sendRequest(array $units, string $sourceLocale, string $targetLocale): array
     {
-        $provider = (string) config('statamic.content-translator.prism.provider');
-        $model = (string) config('statamic.content-translator.prism.model');
+        $provider = (string) config('statamic.magic-translator.prism.provider');
+        $model = (string) config('statamic.magic-translator.prism.model');
         $context = [
             'provider' => $provider,
             'model' => $model,
@@ -324,7 +324,7 @@ final class PrismTranslationService implements TranslationService
         }
 
         if (! is_int($configured) || $configured <= 0) {
-            throw new InvalidArgumentException('statamic.content-translator.max_units_per_request must be a positive integer or null.');
+            throw new InvalidArgumentException('statamic.magic-translator.max_units_per_request must be a positive integer or null.');
         }
 
         return $configured;
@@ -333,15 +333,15 @@ final class PrismTranslationService implements TranslationService
     private function configureTransport(\Prism\Prism\Structured\PendingRequest $request): void
     {
         $requestTimeout = $this->resolvePositiveInt(
-            config('statamic.content-translator.prism.request_timeout'),
+            config('statamic.magic-translator.prism.request_timeout'),
             120,
-            'statamic.content-translator.prism.request_timeout'
+            'statamic.magic-translator.prism.request_timeout'
         );
 
         $connectTimeout = $this->resolvePositiveInt(
-            config('statamic.content-translator.prism.connect_timeout'),
+            config('statamic.magic-translator.prism.connect_timeout'),
             15,
-            'statamic.content-translator.prism.connect_timeout'
+            'statamic.magic-translator.prism.connect_timeout'
         );
 
         $request->withClientOptions([
@@ -350,9 +350,9 @@ final class PrismTranslationService implements TranslationService
         ]);
 
         $retryAttempts = $this->resolveNonNegativeInt(
-            config('statamic.content-translator.prism.retry_attempts'),
+            config('statamic.magic-translator.prism.retry_attempts'),
             1,
-            'statamic.content-translator.prism.retry_attempts'
+            'statamic.magic-translator.prism.retry_attempts'
         );
 
         if ($retryAttempts === 0) {
@@ -360,9 +360,9 @@ final class PrismTranslationService implements TranslationService
         }
 
         $retrySleepMs = $this->resolveNonNegativeInt(
-            config('statamic.content-translator.prism.retry_sleep_ms'),
+            config('statamic.magic-translator.prism.retry_sleep_ms'),
             1000,
-            'statamic.content-translator.prism.retry_sleep_ms'
+            'statamic.magic-translator.prism.retry_sleep_ms'
         );
 
         $request->withClientRetry(

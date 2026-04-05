@@ -44,7 +44,7 @@ const props = defineProps<{
   handle: string
   /** Field value (unused, but required by Statamic fieldtype contract) */
   value: unknown
-  /** Pre-loaded meta from PHP ContentTranslatorFieldtype::preload() */
+  /** Pre-loaded meta from PHP MagicTranslatorFieldtype::preload() */
   meta: FieldtypePreload
   /** Field config object */
   config: Record<string, unknown>
@@ -158,7 +158,7 @@ onBeforeUnmount(() => {
 
 function openDialog(): void {
   if (!entryId.value) {
-    console.warn('[content-translator] Cannot open dialog: entry_id is not available.')
+    console.warn('[magic-translator] Cannot open dialog: entry_id is not available.')
     return
   }
 
@@ -172,7 +172,7 @@ function openDialog(): void {
     sites.value[0]?.handle ??
     ''
 
-  const dialog = Statamic.$components.append('content-translator-dialog', {
+  const dialog = Statamic.$components.append('magic-translator-dialog', {
     props: {
       entryId: entryId.value,
       sourceSite: defaultSource,
@@ -187,14 +187,14 @@ function openDialog(): void {
 </script>
 
 <template>
-  <div ref="rootEl" class="content-translator-fieldtype">
+  <div ref="rootEl" class="magic-translator-fieldtype">
     <template v-if="hasTargets">
       <!-- Translate button -->
       <Button
         v-if="!buttonInjected"
         variant="default"
         size="sm"
-        :text="__('content-translator::messages.translate_button')"
+        :text="__('magic-translator::messages.translate_button')"
         class="w-full"
         :disabled="!hasTargets"
         @click="openDialog"

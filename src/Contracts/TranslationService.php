@@ -2,9 +2,9 @@
 
 declare(strict_types=1);
 
-namespace ElSchneider\ContentTranslator\Contracts;
+namespace ElSchneider\MagicTranslator\Contracts;
 
-use ElSchneider\ContentTranslator\Data\TranslationUnit;
+use ElSchneider\MagicTranslator\Data\TranslationUnit;
 
 interface TranslationService
 {

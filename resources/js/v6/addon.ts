@@ -1,5 +1,5 @@
 /**
- * Content Translator — Statamic v6 entry point (Vue 3 / Composition API).
+ * Magic Translator — Statamic v6 entry point (Vue 3 / Composition API).
  *
  * Registers the fieldtype component and the translation dialog, then wires
  * up the bulk-action callback so the "Translate" entry action can open the
@@ -42,10 +42,10 @@ Statamic.booting(() => {
 
   // The fieldtype component is auto-injected into configured collection
   // blueprints by the PHP ServiceProvider (EntryBlueprintFound listener).
-  Statamic.$components.register('content_translator-fieldtype', TranslatorFieldtype)
+  Statamic.$components.register('magic_translator-fieldtype', TranslatorFieldtype)
 
   // The dialog is opened programmatically via $components.append.
-  Statamic.$components.register('content-translator-dialog', TranslationDialog)
+  Statamic.$components.register('magic-translator-dialog', TranslationDialog)
 
   // ── Bulk action callback ───────────────────────────────────────────────
 
@@ -62,7 +62,7 @@ Statamic.booting(() => {
 
     if (ids.length === 0) return
 
-    const dialog = Statamic.$components.append('content-translator-dialog', {
+    const dialog = Statamic.$components.append('magic-translator-dialog', {
       props: {
         entryIds: ids,
         sourceSite: siteList[0]?.handle ?? '',

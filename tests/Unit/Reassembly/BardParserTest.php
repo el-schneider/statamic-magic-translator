@@ -2,8 +2,8 @@
 
 declare(strict_types=1);
 
-use ElSchneider\ContentTranslator\Extraction\BardSerializer;
-use ElSchneider\ContentTranslator\Reassembly\BardParser;
+use ElSchneider\MagicTranslator\Extraction\BardSerializer;
+use ElSchneider\MagicTranslator\Reassembly\BardParser;
 
 beforeEach(function () {
     $this->parser = new BardParser;

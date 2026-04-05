@@ -1,5 +1,5 @@
 {
-    "name": "el-schneider/statamic-content-translator",
+    "name": "el-schneider/statamic-magic-translator",
     "description": "Translate Statamic content",
     "type": "statamic-addon",
     "license": "MIT",
@@ -12,7 +12,7 @@
     ],
     "autoload": {
         "psr-4": {
-            "ElSchneider\\ContentTranslator\\": "src"
+            "ElSchneider\\MagicTranslator\\": "src"
         }
     },
     "autoload-dev": {
@@ -22,12 +22,12 @@
     },
     "extra": {
         "statamic": {
-            "name": "Content Translator",
+            "name": "Magic Translator",
             "description": "Translate Statamic content"
         },
         "laravel": {
             "providers": [
-                "ElSchneider\\ContentTranslator\\ServiceProvider"
+                "ElSchneider\\MagicTranslator\\ServiceProvider"
             ]
         }
     },

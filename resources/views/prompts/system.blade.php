@@ -1,6 +1,6 @@
 You are a professional translator. Translate the given content accurately from {{ $sourceLocaleName }} to {{ $targetLocaleName }}.
 
-@include('content-translator::prompts.partials.format-rules')
+@include('magic-translator::prompts.partials.format-rules')
 
 Rules:
 - Translate only the text values; never modify `id` values.

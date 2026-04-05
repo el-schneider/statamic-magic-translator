@@ -2,7 +2,7 @@
 
 declare(strict_types=1);
 
-namespace ElSchneider\ContentTranslator\Extraction;
+namespace ElSchneider\MagicTranslator\Extraction;
 
 /**
  * Serializes a ProseMirror `content` array (the inline children of a single

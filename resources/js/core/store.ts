@@ -85,7 +85,7 @@ export async function startTranslation(config: {
   const existing = sessions.get(key)
 
   if (existing && !existing.isComplete) {
-    throw new Error(`[content-translator] Session already running for key: ${key}`)
+    throw new Error(`[magic-translator] Session already running for key: ${key}`)
   }
 
   if (existing) {
@@ -434,7 +434,7 @@ function cloneSession(session: TranslationSession): TranslationSession {
 }
 
 function t(key: string, replacements: Record<string, string | number> = {}): string {
-  return __('content-translator::messages.' + key, replacements)
+  return __('magic-translator::messages.' + key, replacements)
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -447,7 +447,7 @@ function t(key: string, replacements: Record<string, string | number> = {}): str
 // have been purged server-side are dropped silently.
 // ─────────────────────────────────────────────────────────────────────────────
 
-const STORAGE_KEY = 'content-translator:sessions'
+const STORAGE_KEY = 'magic-translator:sessions'
 const MAX_AGE_MS = 24 * 60 * 60 * 1000
 
 interface PersistedSession {
@@ -537,7 +537,7 @@ async function rehydrateSessions(): Promise<void> {
   await Promise.all(
     fresh.map((record) =>
       rehydrateSession(record).catch((err) => {
-        console.error('[content-translator] session rehydration error:', err)
+        console.error('[magic-translator] session rehydration error:', err)
       }),
     ),
   )

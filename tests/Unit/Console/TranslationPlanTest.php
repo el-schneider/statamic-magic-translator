@@ -2,9 +2,9 @@
 
 declare(strict_types=1);
 
-use ElSchneider\ContentTranslator\Console\PlanAction;
-use ElSchneider\ContentTranslator\Console\PlanItem;
-use ElSchneider\ContentTranslator\Console\TranslationPlan;
+use ElSchneider\MagicTranslator\Console\PlanAction;
+use ElSchneider\MagicTranslator\Console\PlanItem;
+use ElSchneider\MagicTranslator\Console\TranslationPlan;
 
 function makeItem(PlanAction $action, string $id = 'e', string $site = 'de'): PlanItem
 {

@@ -2,15 +2,15 @@
 
 declare(strict_types=1);
 
-namespace ElSchneider\ContentTranslator\Commands;
+namespace ElSchneider\MagicTranslator\Commands;
 
-use ElSchneider\ContentTranslator\Actions\TranslateEntry;
-use ElSchneider\ContentTranslator\Console\FilterCriteria;
-use ElSchneider\ContentTranslator\Console\PlanAction;
-use ElSchneider\ContentTranslator\Console\PlanItem;
-use ElSchneider\ContentTranslator\Console\TranslationPlan;
-use ElSchneider\ContentTranslator\Console\TranslationPlanner;
-use ElSchneider\ContentTranslator\Jobs\TranslateEntryJob;
+use ElSchneider\MagicTranslator\Actions\TranslateEntry;
+use ElSchneider\MagicTranslator\Console\FilterCriteria;
+use ElSchneider\MagicTranslator\Console\PlanAction;
+use ElSchneider\MagicTranslator\Console\PlanItem;
+use ElSchneider\MagicTranslator\Console\TranslationPlan;
+use ElSchneider\MagicTranslator\Console\TranslationPlanner;
+use ElSchneider\MagicTranslator\Jobs\TranslateEntryJob;
 use Illuminate\Console\Command;
 use InvalidArgumentException;
 use Statamic\Console\RunsInPlease;
@@ -20,7 +20,7 @@ final class TranslateCommand extends Command
 {
     use RunsInPlease;
 
-    protected $signature = 'statamic:content-translator:translate
+    protected $signature = 'statamic:magic-translator:translate
                             {--to=*             : Target site handle (repeatable). Default: all sites each entry supports (minus source)}
                             {--from=            : Source site handle (default: entry origin)}
                             {--collection=*     : Filter by collection handle (repeatable)}
@@ -132,7 +132,7 @@ final class TranslateCommand extends Command
     private function printPlan(TranslationPlan $plan, FilterCriteria $criteria): void
     {
         $this->newLine();
-        $this->line('<info>Content Translator — translation plan</info>');
+        $this->line('<info>Magic Translator — translation plan</info>');
         $this->line(str_repeat('─', 61));
 
         $filtersLine = sprintf(
@@ -248,7 +248,7 @@ final class TranslateCommand extends Command
         }
 
         $this->info(sprintf('Dispatched %d job%s to the queue.', $count, $count === 1 ? '' : 's'));
-        $this->comment('Track status: GET /cp/content-translator/status or run `php artisan queue:work`.');
+        $this->comment('Track status: GET /cp/magic-translator/status or run `php artisan queue:work`.');
 
         return 0;
     }
