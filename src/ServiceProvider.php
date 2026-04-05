@@ -8,6 +8,7 @@ use DeepL\Translator;
 use ElSchneider\MagicTranslator\Contracts\TranslationService;
 use ElSchneider\MagicTranslator\Extraction\BardSerializer;
 use ElSchneider\MagicTranslator\Extraction\ContentExtractor;
+use ElSchneider\MagicTranslator\Listeners\RefreshLocaleHashOnSave;
 use ElSchneider\MagicTranslator\Reassembly\BardParser;
 use ElSchneider\MagicTranslator\Reassembly\ContentReassembler;
 use ElSchneider\MagicTranslator\Services\TranslationServiceFactory;
@@ -69,6 +70,7 @@ final class ServiceProvider extends AddonServiceProvider
         $this->registerViews();
         $this->registerBlueprintInjection();
         $this->registerEntrySavingListener();
+        $this->registerLocaleHashRefreshListener();
     }
 
     public function supportsInertia(): bool
@@ -184,6 +186,13 @@ final class ServiceProvider extends AddonServiceProvider
             if ($storedMeta !== null) {
                 $entry->set('magic_translator', $storedMeta);
             }
+        });
+    }
+
+    private function registerLocaleHashRefreshListener(): void
+    {
+        Event::listen(EntrySaving::class, function (EntrySaving $event): void {
+            app(RefreshLocaleHashOnSave::class)($event);
         });
     }
 }
