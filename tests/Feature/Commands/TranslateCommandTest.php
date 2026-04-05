@@ -66,6 +66,8 @@ it('aborts gracefully when user answers no at confirm prompt', function () {
 });
 
 it('proceeds past confirm with --no-interaction', function () {
+    bindPrefixService('FR: ');
+
     $this->createTestCollection('articles', ['en', 'fr']);
     $this->createTestBlueprint('articles');
     $this->createTestEntry(collection: 'articles', site: 'en');

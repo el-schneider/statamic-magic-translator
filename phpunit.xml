@@ -7,6 +7,12 @@
     <php>
         <server name="APP_KEY" value="base64:dmTSKiIIvH2bnUwALj3kYs5ESZw2Wa6fN8uDUVh8/XI="/>
         <server name="APP_ENV" value="testing"/>
+        <!-- Force-blank AI provider credentials so shell env cannot leak into tests.
+             Any test that makes a real provider call must mock TranslationService
+             (or use Prism::fake()) or it will fail with 401. -->
+        <server name="OPENAI_API_KEY" value="" force="true"/>
+        <server name="ANTHROPIC_API_KEY" value="" force="true"/>
+        <server name="DEEPL_API_KEY" value="" force="true"/>
     </php>
 
     <testsuites>
