@@ -12,7 +12,7 @@
  * never succeeded in the current session.
  */
 import { Button } from '@statamic/cms/ui'
-import { computed, onBeforeUnmount, onMounted, ref } from 'vue'
+import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import {
   injectBadges,
   injectTranslateButton,
@@ -21,6 +21,7 @@ import {
   wasPreviouslyInjected,
   wasTranslateButtonPreviouslyInjected,
 } from '../../core/injection'
+import { getMarkedHandles, subscribeMarked } from '../../core/markCurrentStore'
 import type { FieldtypePreload } from '../../core/types'
 
 declare function __(key: string, replacements?: Record<string, string | number>): string
@@ -61,6 +62,16 @@ const entryId = computed(() => props.meta?.entry_id ?? null)
 const targetSites = computed(() => sites.value.filter((s) => s.handle !== currentSite.value))
 
 const hasTargets = computed(() => targetSites.value.length > 0)
+
+const markedCurrentHandles = ref<Set<string>>(entryId.value ? getMarkedHandles(entryId.value) : new Set())
+
+const effectiveSites = computed(() =>
+  sites.value.map((site) =>
+    markedCurrentHandles.value.has(site.handle)
+      ? { ...site, is_stale: false, last_translated_at: new Date().toISOString() }
+      : site,
+  ),
+)
 
 // ── Badge injection ───────────────────────────────────────────────────────────
 
@@ -112,12 +123,12 @@ function hasInjectedTranslateButtonInDom(): boolean {
 }
 
 function tryInject(): void {
-  if (injecting || sites.value.length === 0) return
+  if (injecting || effectiveSites.value.length === 0) return
 
   injecting = true
   try {
-    badgeInjected.value = injectBadges(sites.value, 'v6')
-    buttonInjected.value = injectTranslateButton(sites.value, 'v6', {
+    badgeInjected.value = injectBadges(effectiveSites.value, 'v6')
+    buttonInjected.value = injectTranslateButton(effectiveSites.value, 'v6', {
       onClick: openDialog,
       disabled: !hasTargets.value,
     })
@@ -125,6 +136,16 @@ function tryInject(): void {
     injecting = false
   }
 }
+
+watch(
+  effectiveSites,
+  () => {
+    tryInject()
+  },
+  { deep: true },
+)
+
+let unsubscribeMarked: (() => void) | null = null
 
 onMounted(() => {
   if (!hasTargets.value) {
@@ -146,10 +167,18 @@ onMounted(() => {
     tryInject()
   })
   observer.observe(document.body, { childList: true, subtree: true })
+
+  const id = entryId.value
+  if (id !== null) {
+    unsubscribeMarked = subscribeMarked(id, () => {
+      markedCurrentHandles.value = getMarkedHandles(id)
+    })
+  }
 })
 
 onBeforeUnmount(() => {
   observer?.disconnect()
+  unsubscribeMarked?.()
   removeBadges()
   removeTranslateButtons()
 })
@@ -176,7 +205,7 @@ function openDialog(): void {
     props: {
       entryId: entryId.value,
       sourceSite: defaultSource,
-      sites: sites.value,
+      sites: effectiveSites.value,
     },
   })
 
@@ -204,8 +233,8 @@ function openDialog(): void {
               Fallback locale status list — shown only when badge injection into
               the native Sites panel has not (yet) succeeded.
           -->
-      <div v-if="!badgeInjected && sites.length > 0" class="mt-3 space-y-1">
-        <div v-for="site in sites" :key="site.handle" class="text-xs flex items-center gap-1.5 py-0.5">
+      <div v-if="!badgeInjected && effectiveSites.length > 0" class="mt-3 space-y-1">
+        <div v-for="site in effectiveSites" :key="site.handle" class="text-xs flex items-center gap-1.5 py-0.5">
           <span
             class="little-dot shrink-0"
             :class="{

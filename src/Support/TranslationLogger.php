@@ -27,6 +27,33 @@ final class TranslationLogger
     }
 
     /**
+     * Log a debug event at debug level. Gated by LOG_LEVEL only.
+     *
+     * @param  array<string, mixed>  $context
+     */
+    public static function debug(string $event, array $context = []): void
+    {
+        Log::debug('[magic-translator] '.$event, $context);
+    }
+
+    /**
+     * Log a request/response payload (prompts, raw responses, translated text).
+     *
+     * Gated by LOG_LEVEL=debug AND `log_payloads=true` because payloads contain
+     * user content and may include sensitive data.
+     *
+     * @param  array<string, mixed>  $context
+     */
+    public static function payload(string $event, array $context = []): void
+    {
+        if (! config('statamic.magic-translator.log_payloads')) {
+            return;
+        }
+
+        Log::debug('[magic-translator] '.$event, $context);
+    }
+
+    /**
      * @param  array<string, mixed>  $extra
      */
     public static function unexpected(Throwable $exception, array $extra = []): void

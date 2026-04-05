@@ -9,11 +9,13 @@ use ElSchneider\MagicTranslator\Events\AfterEntryTranslation;
 use ElSchneider\MagicTranslator\Events\BeforeEntryTranslation;
 use ElSchneider\MagicTranslator\Extraction\ContentExtractor;
 use ElSchneider\MagicTranslator\Reassembly\ContentReassembler;
+use ElSchneider\MagicTranslator\Support\ContentFingerprint;
+use ElSchneider\MagicTranslator\Support\FieldDefinitionBuilder;
 use Illuminate\Support\Str;
 use InvalidArgumentException;
 use Statamic\Entries\Entry;
+use Statamic\Facades\Blink;
 use Statamic\Facades\Entry as EntryFacade;
-use Statamic\Fields\Blueprint;
 
 final class TranslateEntry
 {
@@ -75,7 +77,7 @@ final class TranslateEntry
 
         // ── 5. Build field definitions from the blueprint ─────────────────────
         $blueprint = $sourceEntry->blueprint();
-        $fieldDefs = $this->buildFieldDefinitions($blueprint);
+        $fieldDefs = FieldDefinitionBuilder::fromBlueprint($blueprint);
 
         // ── 6. Extract TranslationUnits ───────────────────────────────────────
         $sourceData = $sourceEntry->data()->all();
@@ -142,10 +144,17 @@ final class TranslateEntry
         }
 
         $meta['last_translated_at'] = now()->toIso8601String();
+        $meta['source_content_hash'] = ContentFingerprint::compute($sourceData, $fieldDefs);
         $localization->set('magic_translator', $meta);
 
         // ── 14. Save ──────────────────────────────────────────────────────────
-        $localization->save();
+        Blink::put("magic-translator:translating:{$localization->id()}", true);
+
+        try {
+            $localization->save();
+        } finally {
+            Blink::forget("magic-translator:translating:{$localization->id()}");
+        }
     }
 
     // ── Helpers ───────────────────────────────────────────────────────────────
@@ -195,184 +204,5 @@ final class TranslateEntry
         }
 
         return $root->makeLocalization($targetSite);
-    }
-
-    /**
-     * Build the field definitions array that ContentExtractor expects.
-     *
-     * Walks every top-level field in the blueprint and converts the Field
-     * objects into the flat array format understood by ContentExtractor.
-     * Nested fields within replicator/bard sets are normalised from Statamic's
-     * ordered `[['handle' => ..., 'field' => ...]]` format into a simple
-     * keyed map `['handle' => [...config...]]`.
-     *
-     * @return array<string, array<string, mixed>>
-     */
-    private function buildFieldDefinitions(Blueprint $blueprint): array
-    {
-        return $blueprint->fields()->all()
-            ->mapWithKeys(fn ($field) => [$field->handle() => $this->normalizeFieldConfig($field->config())])
-            ->toArray();
-    }
-
-    /**
-     * Normalize a single field's config array into the format ContentExtractor
-     * expects. For top-level scalar/flat fields, the config is returned as-is.
-     * For structural fields (replicator, bard, grid), nested field definitions
-     * are normalized recursively.
-     *
-     * @param  array<string, mixed>  $config
-     * @return array<string, mixed>
-     */
-    private function normalizeFieldConfig(array $config): array
-    {
-        $type = $config['type'] ?? 'text';
-
-        return match ($type) {
-            'replicator', 'bard' => $this->normalizeSetConfig($config),
-            'grid' => $this->normalizeGridConfig($config),
-            default => $config,
-        };
-    }
-
-    /**
-     * Normalize a replicator or bard field config.
-     *
-     * Handles two Statamic storage formats for sets:
-     *  - Legacy flat format: `['text' => ['display' => '...', 'fields' => [...]]]`
-     *  - Section-grouped format (Statamic 5+):
-     *    `['main' => ['display' => '...', 'sets' => ['text' => [...]]]]`
-     *
-     * Nested field items (`[['handle' => 'body', 'field' => ['type' => 'text']]]`)
-     * are converted to the keyed format ContentExtractor expects
-     * (`['body' => ['type' => 'text']]`).
-     *
-     * @param  array<string, mixed>  $config
-     * @return array<string, mixed>
-     */
-    private function normalizeSetConfig(array $config): array
-    {
-        $rawSets = $config['sets'] ?? [];
-
-        if (empty($rawSets)) {
-            return $config;
-        }
-
-        // Detect section-grouped format: first item has a nested 'sets' key.
-        $firstItem = reset($rawSets);
-
-        if (is_array($firstItem) && array_key_exists('sets', $firstItem)) {
-            // Flatten all sections into a single map.
-            $flattened = [];
-
-            foreach ($rawSets as $section) {
-                foreach ($section['sets'] ?? [] as $setHandle => $setConfig) {
-                    $flattened[(string) $setHandle] = $setConfig;
-                }
-            }
-
-            $rawSets = $flattened;
-        }
-
-        // Normalize fields within each set.
-        $normalizedSets = [];
-
-        foreach ($rawSets as $setHandle => $setConfig) {
-            $normalizedSets[(string) $setHandle] = [
-                'display' => $setConfig['display'] ?? $setHandle,
-                'fields' => $this->normalizeFieldItems($setConfig['fields'] ?? []),
-            ];
-        }
-
-        $config['sets'] = $normalizedSets;
-
-        return $config;
-    }
-
-    /**
-     * Normalize a grid field config.
-     *
-     * Converts the column `fields` array from Statamic's ordered item format
-     * to the keyed map ContentExtractor expects.
-     *
-     * @param  array<string, mixed>  $config
-     * @return array<string, mixed>
-     */
-    private function normalizeGridConfig(array $config): array
-    {
-        $rawFields = $config['fields'] ?? [];
-
-        if (empty($rawFields)) {
-            return $config;
-        }
-
-        $config['fields'] = $this->normalizeFieldItems($rawFields);
-
-        return $config;
-    }
-
-    /**
-     * Convert a Statamic-style ordered field items array into a keyed map.
-     *
-     * Input:  `[['handle' => 'body', 'field' => ['type' => 'text']], ...]`
-     * Output: `['body' => ['type' => 'text'], ...]`
-     *
-     * Fieldset imports (`['import' => '...']`) and string references are
-     * silently skipped since they cannot be resolved here without loading the
-     * full fieldset (which would require the database / stache).
-     *
-     * @param  array<int|string, mixed>  $fieldItems
-     * @return array<string, array<string, mixed>>
-     */
-    private function normalizeFieldItems(array $fieldItems): array
-    {
-        // Already a keyed map (ContentExtractor format) — return as-is.
-        if (! isset($fieldItems[0]) && ! empty($fieldItems)) {
-            // Check if this looks like an already-keyed map (string keys with array values)
-            $allStringKeys = array_reduce(
-                array_keys($fieldItems),
-                fn (bool $carry, mixed $key): bool => $carry && is_string($key),
-                true,
-            );
-
-            if ($allStringKeys) {
-                // The values are already field config arrays — just normalize each one.
-                return array_map(
-                    fn (array $fieldConfig) => $this->normalizeFieldConfig($fieldConfig),
-                    $fieldItems,
-                );
-            }
-        }
-
-        $result = [];
-
-        foreach ($fieldItems as $item) {
-            if (! is_array($item)) {
-                continue;
-            }
-
-            // Skip fieldset imports.
-            if (isset($item['import'])) {
-                continue;
-            }
-
-            if (! isset($item['handle'])) {
-                continue;
-            }
-
-            $handle = (string) $item['handle'];
-
-            // 'field' can be a string reference (fieldset path) or an inline config array.
-            $fieldConfig = $item['field'] ?? [];
-
-            if (is_string($fieldConfig)) {
-                // String fieldset reference — skip (can't resolve here).
-                continue;
-            }
-
-            $result[$handle] = $this->normalizeFieldConfig((array) $fieldConfig);
-        }
-
-        return $result;
     }
 }

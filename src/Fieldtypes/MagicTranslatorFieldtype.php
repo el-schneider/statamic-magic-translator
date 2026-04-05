@@ -5,6 +5,8 @@ declare(strict_types=1);
 namespace ElSchneider\MagicTranslator\Fieldtypes;
 
 use ElSchneider\MagicTranslator\Support\AccessibleSites;
+use ElSchneider\MagicTranslator\Support\FieldDefinitionBuilder;
+use ElSchneider\MagicTranslator\Support\SourceHashCache;
 use Illuminate\Support\Carbon;
 use Statamic\Facades\Blink;
 use Statamic\Facades\Site;
@@ -132,11 +134,18 @@ final class MagicTranslatorFieldtype extends Fieldtype
         $rootEntry = $isOrigin ? $entry : $entry->root();
         $originSite = $rootEntry?->locale();
 
-        // Determine the origin's last-modified time for staleness comparisons.
+        // Legacy fallback source for pre-hash metadata.
         $originUpdatedAt = null;
 
         if ($rootEntry !== null && method_exists($rootEntry, 'lastModified')) {
             $originUpdatedAt = $rootEntry->lastModified();
+        }
+
+        $currentSourceHash = null;
+
+        if ($rootEntry !== null) {
+            $fieldDefs = FieldDefinitionBuilder::fromBlueprint($rootEntry->blueprint());
+            $currentSourceHash = app(SourceHashCache::class)->get($rootEntry, $fieldDefs);
         }
 
         // Restrict the site list to the collection's configured sites AND the
@@ -149,7 +158,7 @@ final class MagicTranslatorFieldtype extends Fieldtype
 
         $sitesData = Site::all()->filter(
             fn ($site) => in_array($site->handle(), $allowedHandles, true)
-        )->map(function ($site) use ($entry, $originUpdatedAt) {
+        )->map(function ($site) use ($entry, $originUpdatedAt, $currentSourceHash) {
             $siteHandle = $site->handle();
             $localization = $entry->in($siteHandle);
             $exists = $localization !== null;
@@ -159,19 +168,28 @@ final class MagicTranslatorFieldtype extends Fieldtype
             if ($localization !== null) {
                 $meta = $localization->get('magic_translator');
 
-                if (is_array($meta) && is_string($meta['last_translated_at'] ?? null) && $meta['last_translated_at'] !== '') {
-                    $lastTranslatedAt = $meta['last_translated_at'];
+                if (is_array($meta)) {
+                    $storedHash = $meta['source_content_hash'] ?? null;
 
-                    // A localization is stale when the origin was modified
-                    // after the translation was last run.
-                    if ($originUpdatedAt !== null) {
-                        try {
-                            $translatedAt = Carbon::parse($lastTranslatedAt);
-                            $isStale = $originUpdatedAt->greaterThan($translatedAt);
-                        } catch (Throwable) {
-                            $lastTranslatedAt = null;
-                            $isStale = false;
+                    if (is_string($meta['last_translated_at'] ?? null) && $meta['last_translated_at'] !== '') {
+                        $lastTranslatedAt = $meta['last_translated_at'];
+                    }
+
+                    if (is_string($storedHash) && $storedHash !== '' && is_string($currentSourceHash)) {
+                        $isStale = $storedHash !== $currentSourceHash;
+                    } elseif ($lastTranslatedAt !== null) {
+                        // Legacy fallback: timestamps for pre-hash metadata.
+                        if ($originUpdatedAt !== null) {
+                            try {
+                                $translatedAt = Carbon::parse($lastTranslatedAt);
+                                $isStale = $originUpdatedAt->greaterThan($translatedAt);
+                            } catch (Throwable) {
+                                $lastTranslatedAt = null;
+                                $isStale = false;
+                            }
                         }
+                    } elseif (is_string($currentSourceHash)) {
+                        $isStale = true;
                     }
                 }
             }

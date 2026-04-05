@@ -11,6 +11,7 @@
  * delegates to `Vue.component()` under the hood.
  */
 import type { Axios } from 'axios'
+import { markCurrent } from '../core/api'
 import {
   injectBadges,
   injectTranslateButton,
@@ -19,8 +20,10 @@ import {
   wasPreviouslyInjected,
   wasTranslateButtonPreviouslyInjected,
 } from '../core/injection'
+import { getMarkedHandles, markSiteCurrent, subscribeMarked } from '../core/markCurrentStore'
 import {
   getSession,
+  resumeSessionIfStuck,
   retryLocale as retryLocaleInStore,
   sessionKey,
   startTranslation,
@@ -75,6 +78,10 @@ interface DialogData {
   overwrite: boolean
   session: TranslationSession | null
   unsubscribeFn: (() => void) | null
+  markedCurrentHandles: string[]
+  markCurrentPending: Record<string, boolean>
+  markCurrentErrors: Record<string, string>
+  unsubscribeMarked: (() => void) | null
 }
 
 const TranslationDialog = {
@@ -99,6 +106,10 @@ const TranslationDialog = {
       overwrite: false,
       session: null,
       unsubscribeFn: null,
+      markedCurrentHandles: [],
+      markCurrentPending: {},
+      markCurrentErrors: {},
+      unsubscribeMarked: null,
     }
   },
 
@@ -135,6 +146,11 @@ const TranslationDialog = {
       return sessionKey(self.allEntryIds)
     },
 
+    singleEntryId(): string | null {
+      const self = this as unknown as { allEntryIds: string[] }
+      return self.allEntryIds.length === 1 ? (self.allEntryIds[0] ?? null) : null
+    },
+
     localeState(): Record<string, LocaleJobState> {
       const self = this as unknown as { session: TranslationSession | null }
       return self.session?.localeState ?? {}
@@ -162,14 +178,26 @@ const TranslationDialog = {
       applySessionSnapshot: (session: TranslationSession | null) => void
       subscribeToSession: () => void
       syncSelectedLocales: () => void
+      singleEntryId: string | null
+      markedCurrentHandles: string[]
+      unsubscribeMarked: (() => void) | null
     }
 
     self.applySessionSnapshot(getSession(self.translationSessionKey))
     self.subscribeToSession()
+    resumeSessionIfStuck(self.translationSessionKey)
 
     const existing = getSession(self.translationSessionKey)
     if (!existing || !existing.isTranslating) {
       self.syncSelectedLocales()
+    }
+
+    const id = self.singleEntryId
+    if (id !== null) {
+      self.markedCurrentHandles = [...getMarkedHandles(id)]
+      self.unsubscribeMarked = subscribeMarked(id, () => {
+        self.markedCurrentHandles = [...getMarkedHandles(id)]
+      })
     }
   },
 
@@ -201,8 +229,12 @@ const TranslationDialog = {
   },
 
   beforeDestroy() {
-    const self = this as unknown as { unsubscribeFn: (() => void) | null }
+    const self = this as unknown as {
+      unsubscribeFn: (() => void) | null
+      unsubscribeMarked: (() => void) | null
+    }
     self.unsubscribeFn?.()
+    self.unsubscribeMarked?.()
   },
 
   methods: {
@@ -222,6 +254,98 @@ const TranslationDialog = {
       }
 
       return self.isTranslating || (self.hasExistingTranslation(site) && !self.overwrite)
+    },
+
+    isMarkedCurrent(handle: string): boolean {
+      const self = this as unknown as { markedCurrentHandles: string[] }
+      return self.markedCurrentHandles.includes(handle)
+    },
+
+    isEffectivelyStale(site: SiteMeta | SiteDescriptor): boolean {
+      const self = this as unknown as { isMarkedCurrent: (handle: string) => boolean }
+      if (self.isMarkedCurrent(site.handle)) return false
+
+      return Boolean((site as SiteMeta).is_stale)
+    },
+
+    hasEffectiveTranslation(site: SiteMeta | SiteDescriptor): boolean {
+      const self = this as unknown as { isMarkedCurrent: (handle: string) => boolean }
+      if (self.isMarkedCurrent(site.handle)) return true
+
+      return Boolean((site as SiteMeta).last_translated_at)
+    },
+
+    shouldShowMarkCurrentButton(site: SiteMeta | SiteDescriptor): boolean {
+      const self = this as unknown as {
+        allEntryIds: string[]
+        localeState: Record<string, LocaleJobState>
+        hasExistingTranslation: (site: SiteMeta | SiteDescriptor) => boolean
+        isMarkedCurrent: (handle: string) => boolean
+        isEffectivelyStale: (site: SiteMeta | SiteDescriptor) => boolean
+        hasEffectiveTranslation: (site: SiteMeta | SiteDescriptor) => boolean
+      }
+
+      if (self.allEntryIds.length !== 1) return false
+      if (self.localeState[site.handle]) return false
+      if (!self.hasExistingTranslation(site)) return false
+      if (self.isMarkedCurrent(site.handle)) return false
+
+      return self.isEffectivelyStale(site) || !self.hasEffectiveTranslation(site)
+    },
+
+    async handleMarkCurrentClick(handle: string) {
+      const self = this as unknown as {
+        allEntryIds: string[]
+        markCurrentPending: Record<string, boolean>
+        markCurrentErrors: Record<string, string>
+      }
+
+      const entryId = self.allEntryIds[0]
+      if (!entryId) return
+
+      self.markCurrentPending = {
+        ...self.markCurrentPending,
+        [handle]: true,
+      }
+
+      self.markCurrentErrors = {
+        ...self.markCurrentErrors,
+        [handle]: '',
+      }
+
+      try {
+        const response = await markCurrent(entryId, handle)
+
+        if (!response.success) {
+          const message = response.error?.message ?? t('mark_current_failed')
+          self.markCurrentErrors = {
+            ...self.markCurrentErrors,
+            [handle]: message,
+          }
+
+          console.error('[magic-translator] Mark current failed:', response.error ?? response)
+          return
+        }
+
+        markSiteCurrent(entryId, handle)
+
+        Statamic.$toast.success(t('mark_current_success'))
+      } catch (error) {
+        const message =
+          error && typeof error === 'object' && 'message' in error ? String(error.message) : t('mark_current_failed')
+
+        self.markCurrentErrors = {
+          ...self.markCurrentErrors,
+          [handle]: message,
+        }
+
+        console.error('[magic-translator] Mark current request failed:', error)
+      } finally {
+        self.markCurrentPending = {
+          ...self.markCurrentPending,
+          [handle]: false,
+        }
+      }
     },
 
     syncSelectedLocales() {
@@ -411,28 +535,44 @@ const TranslationDialog = {
                                 <span
                                     class="little-dot shrink-0"
                                     :class="{
-                                        'bg-orange': site.is_stale,
-                                        'bg-green-600': hasExistingTranslation(site) && !site.is_stale,
+                                        'bg-orange': isEffectivelyStale(site),
+                                        'bg-green-600': hasExistingTranslation(site) && !isEffectivelyStale(site),
                                         'bg-red-500': !hasExistingTranslation(site)
                                     }"
                                 ></span>
 
                                 {{ site.name }}
+                            </label>
+
+                            <div v-if="!localeState[site.handle]" class="flex items-center gap-2 shrink-0">
+                                <button
+                                    v-if="shouldShowMarkCurrentButton(site)"
+                                    type="button"
+                                    class="text-2xs text-blue underline hover:no-underline disabled:opacity-60 disabled:no-underline"
+                                    :disabled="Boolean(markCurrentPending[site.handle])"
+                                    @click="handleMarkCurrentClick(site.handle)"
+                                >
+                                    {{ t('mark_current_button') }}
+                                </button>
 
                                 <span
-                                    v-if="site.is_stale && !localeState[site.handle]"
+                                    v-if="isEffectivelyStale(site)"
                                     class="badge-sm bg-orange dark:bg-orange-dark"
                                 >
                                     {{ t('badge_outdated') }}
                                 </span>
 
                                 <span
-                                    v-else-if="site.last_translated_at && !localeState[site.handle]"
+                                    v-else-if="hasEffectiveTranslation(site)"
                                     class="badge-sm bg-blue dark:bg-dark-blue-175"
                                 >
                                     {{ t('badge_translated') }}
                                 </span>
-                            </label>
+
+                                <span v-if="markCurrentErrors[site.handle]" class="text-2xs text-red-600 dark:text-red-400">
+                                    {{ markCurrentErrors[site.handle] }}
+                                </span>
+                            </div>
 
                             <!-- Job status indicator -->
                             <div v-if="localeState[site.handle]" class="flex items-center gap-2 shrink-0">
@@ -531,6 +671,8 @@ interface FieldtypeData {
   buttonInjected: boolean
   observer: MutationObserver | null
   injecting: boolean
+  markedCurrentHandles: string[]
+  unsubscribeMarked: (() => void) | null
 }
 
 const TranslatorFieldtype = {
@@ -553,6 +695,8 @@ const TranslatorFieldtype = {
       buttonInjected: wasTranslateButtonPreviouslyInjected(),
       observer: null,
       injecting: false,
+      markedCurrentHandles: [],
+      unsubscribeMarked: null,
     }
   },
 
@@ -580,6 +724,25 @@ const TranslatorFieldtype = {
 
     hasTargets(): boolean {
       return (this as unknown as { targetSites: SiteMeta[] }).targetSites.length > 0
+    },
+
+    effectiveSites(): SiteMeta[] {
+      const self = this as unknown as { sites: SiteMeta[]; markedCurrentHandles: string[] }
+      return self.sites.map((site) =>
+        self.markedCurrentHandles.includes(site.handle)
+          ? { ...site, is_stale: false, last_translated_at: new Date().toISOString() }
+          : site,
+      )
+    },
+  },
+
+  watch: {
+    effectiveSites: {
+      handler() {
+        const self = this as unknown as { tryInjectBadges: () => void }
+        self.tryInjectBadges()
+      },
+      deep: true,
     },
   },
 
@@ -618,11 +781,30 @@ const TranslatorFieldtype = {
       self.tryInjectBadges()
     })
     self.observer.observe(document.body, { childList: true, subtree: true })
+
+    const entryIdForSub = (this as unknown as { entryId: string | null }).entryId
+    if (entryIdForSub !== null) {
+      const selfForSub = this as unknown as {
+        markedCurrentHandles: string[]
+        unsubscribeMarked: (() => void) | null
+      }
+      selfForSub.markedCurrentHandles = [...getMarkedHandles(entryIdForSub)]
+      selfForSub.unsubscribeMarked = subscribeMarked(entryIdForSub, () => {
+        selfForSub.markedCurrentHandles = [...getMarkedHandles(entryIdForSub)]
+      })
+    }
   },
 
   beforeDestroy() {
-    const self = this as unknown as { observer: MutationObserver | null }
+    const self = this as unknown as {
+      observer: MutationObserver | null
+      unsubscribeMarked: (() => void) | null
+    }
     self.observer?.disconnect()
+    if (self.unsubscribeMarked) {
+      self.unsubscribeMarked()
+      self.unsubscribeMarked = null
+    }
     removeBadges()
     removeTranslateButtons()
   },
@@ -668,7 +850,7 @@ const TranslatorFieldtype = {
 
     tryInjectBadges() {
       const self = this as unknown as {
-        sites: SiteMeta[]
+        effectiveSites: SiteMeta[]
         badgeInjected: boolean
         buttonInjected: boolean
         observer: MutationObserver | null
@@ -676,12 +858,12 @@ const TranslatorFieldtype = {
         hasTargets: boolean
         openDialog: () => void
       }
-      if (self.injecting || !self.sites.length) return
+      if (self.injecting || !self.effectiveSites.length) return
 
       self.injecting = true
       try {
-        self.badgeInjected = injectBadges(self.sites, 'v5')
-        self.buttonInjected = injectTranslateButton(self.sites, 'v5', {
+        self.badgeInjected = injectBadges(self.effectiveSites, 'v5')
+        self.buttonInjected = injectTranslateButton(self.effectiveSites, 'v5', {
           onClick: () => self.openDialog(),
           disabled: !self.hasTargets,
         })
@@ -696,6 +878,7 @@ const TranslatorFieldtype = {
         currentSite: string | null
         originSite: string | null
         sites: SiteMeta[]
+        effectiveSites: SiteMeta[]
       }
 
       if (!self.entryId) {
@@ -717,7 +900,7 @@ const TranslatorFieldtype = {
         props: {
           entryId: self.entryId,
           sourceSite: defaultSource,
-          sites: self.sites,
+          sites: self.effectiveSites,
         },
       })
 
@@ -741,8 +924,8 @@ const TranslatorFieldtype = {
                 </button>
 
                 <!-- Fallback status list when badge injection has not succeeded yet -->
-                <div v-if="!badgeInjected && sites.length > 0" class="mt-3 space-y-1">
-                    <div v-for="site in sites" :key="site.handle" class="text-xs flex items-center gap-1.5 py-0.5">
+                <div v-if="!badgeInjected && effectiveSites.length > 0" class="mt-3 space-y-1">
+                    <div v-for="site in effectiveSites" :key="site.handle" class="text-xs flex items-center gap-1.5 py-0.5">
                         <span
                             class="little-dot shrink-0"
                             :class="{

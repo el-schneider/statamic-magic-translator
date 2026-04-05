@@ -173,7 +173,10 @@ final class TranslateEntryJob implements ShouldQueue
                 'target_site' => $this->targetSite,
             ],
             $existing,
-            ['status' => $status],
+            [
+                'status' => $status,
+                'heartbeat_at' => now()->toIso8601String(),
+            ],
         );
 
         // A successful retry should clear stale errors from prior attempts.

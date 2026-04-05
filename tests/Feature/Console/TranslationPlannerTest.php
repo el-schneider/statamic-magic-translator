@@ -5,6 +5,8 @@ declare(strict_types=1);
 use ElSchneider\MagicTranslator\Console\FilterCriteria;
 use ElSchneider\MagicTranslator\Console\PlanAction;
 use ElSchneider\MagicTranslator\Console\TranslationPlanner;
+use ElSchneider\MagicTranslator\Support\ContentFingerprint;
+use ElSchneider\MagicTranslator\Support\FieldDefinitionBuilder;
 use Tests\StatamicTestHelpers;
 
 uses(StatamicTestHelpers::class);
@@ -182,6 +184,75 @@ it('includes stale targets when --include-stale is set', function () {
     expect($plan->count())->toBe(1);
     expect($plan->items[0]->action)->toBe(PlanAction::Stale);
     expect($plan->processable())->toHaveCount(1);
+});
+
+it('keeps SkipExists when target hash matches current source hash', function () {
+    $this->createTestCollection('articles', ['en', 'fr']);
+    $this->createTestBlueprint('articles', 'default', [
+        'title' => ['type' => 'text', 'localizable' => true],
+        'publish_date' => ['type' => 'date', 'localizable' => true],
+    ]);
+
+    $en = $this->createTestEntry(collection: 'articles', site: 'en', data: [
+        'title' => 'Hello',
+        'publish_date' => '2026-01-01',
+    ]);
+
+    $fieldDefs = FieldDefinitionBuilder::fromBlueprint($en->blueprint());
+    $sourceHash = ContentFingerprint::compute($en->data()->all(), $fieldDefs);
+
+    $en->makeLocalization('fr')->data([
+        'title' => 'Bonjour',
+        'magic_translator' => [
+            'last_translated_at' => now()->subDays(7)->toIso8601String(),
+            'source_content_hash' => $sourceHash,
+        ],
+    ])->save();
+
+    // Non-extractable field change should not alter source hash.
+    $en->set('publish_date', '2026-02-01')->save();
+
+    $planner = app(TranslationPlanner::class);
+    $plan = $planner->plan(makeCriteria([
+        'targetSites' => ['fr'],
+        'includeStale' => true,
+    ]));
+
+    expect($plan->items[0]->action)->toBe(PlanAction::SkipExists);
+});
+
+it('includes stale targets when source hash differs', function () {
+    $this->createTestCollection('articles', ['en', 'fr']);
+    $this->createTestBlueprint('articles', 'default', [
+        'title' => ['type' => 'text', 'localizable' => true],
+        'publish_date' => ['type' => 'date', 'localizable' => true],
+    ]);
+
+    $en = $this->createTestEntry(collection: 'articles', site: 'en', data: [
+        'title' => 'Hello',
+        'publish_date' => '2026-01-01',
+    ]);
+
+    $fieldDefs = FieldDefinitionBuilder::fromBlueprint($en->blueprint());
+    $sourceHash = ContentFingerprint::compute($en->data()->all(), $fieldDefs);
+
+    $en->makeLocalization('fr')->data([
+        'title' => 'Bonjour',
+        'magic_translator' => [
+            'last_translated_at' => now()->toIso8601String(),
+            'source_content_hash' => $sourceHash,
+        ],
+    ])->save();
+
+    $en->set('title', 'Hello updated')->save();
+
+    $planner = app(TranslationPlanner::class);
+    $plan = $planner->plan(makeCriteria([
+        'targetSites' => ['fr'],
+        'includeStale' => true,
+    ]));
+
+    expect($plan->items[0]->action)->toBe(PlanAction::Stale);
 });
 
 it('keeps SkipExists when target is fresh even with --include-stale', function () {

@@ -8,11 +8,13 @@ use DeepL\Translator;
 use ElSchneider\MagicTranslator\Contracts\TranslationService;
 use ElSchneider\MagicTranslator\Extraction\BardSerializer;
 use ElSchneider\MagicTranslator\Extraction\ContentExtractor;
+use ElSchneider\MagicTranslator\Listeners\RefreshLocaleHashOnSave;
 use ElSchneider\MagicTranslator\Reassembly\BardParser;
 use ElSchneider\MagicTranslator\Reassembly\ContentReassembler;
 use ElSchneider\MagicTranslator\Services\TranslationServiceFactory;
 use ElSchneider\MagicTranslator\StatamicActions\TranslateEntryAction;
 use ElSchneider\MagicTranslator\Support\BlueprintExclusions;
+use ElSchneider\MagicTranslator\Support\SourceHashCache;
 use Illuminate\Support\Facades\Event;
 use Statamic\Events\EntryBlueprintFound;
 use Statamic\Events\EntrySaving;
@@ -50,6 +52,7 @@ final class ServiceProvider extends AddonServiceProvider
         $this->app->singleton(BardParser::class);
         $this->app->singleton(ContentExtractor::class);
         $this->app->singleton(ContentReassembler::class);
+        $this->app->singleton(SourceHashCache::class);
 
         // Bind the TranslationService contract to the configured implementation.
         // Tests can swap this binding via app()->instance(TranslationService::class, $mock).
@@ -67,6 +70,7 @@ final class ServiceProvider extends AddonServiceProvider
         $this->registerViews();
         $this->registerBlueprintInjection();
         $this->registerEntrySavingListener();
+        $this->registerLocaleHashRefreshListener();
     }
 
     public function supportsInertia(): bool
@@ -182,6 +186,13 @@ final class ServiceProvider extends AddonServiceProvider
             if ($storedMeta !== null) {
                 $entry->set('magic_translator', $storedMeta);
             }
+        });
+    }
+
+    private function registerLocaleHashRefreshListener(): void
+    {
+        Event::listen(EntrySaving::class, function (EntrySaving $event): void {
+            app(RefreshLocaleHashOnSave::class)($event);
         });
     }
 }

@@ -35,8 +35,8 @@ This addon has companion Statamic sandboxes for testing. They may live as **sibl
 
 ### Sandbox URLs
 
-| Version | URL                                               |
-| ------- | ------------------------------------------------- |
+| Version | URL                                             |
+| ------- | ----------------------------------------------- |
 | v5      | `http://statamic-magic-translator-test.test`    |
 | v6      | `http://statamic-magic-translator-test-v6.test` |
 
@@ -83,4 +83,6 @@ Check first: `pgrep -f 'queue:listen'` — only start one if none is running.
 - In tests, `Entry::blueprint()->handle()` may resolve to the collection handle unless an explicit blueprint is created first. Create the blueprint when asserting exact `exclude_blueprints` matches.
 - Feature tests already extend `Tests\TestCase` via `tests/Pest.php`; adding `uses(Tests\TestCase::class)` again in a Feature test file causes a Pest duplicate-test-case error.
 - `npx tsc --noEmit` can crash with `RangeError: Maximum call stack size exceeded` in this workspace (Node 22 + current include set). Use `node --stack_size=16384 ./node_modules/typescript/bin/tsc --noEmit` to inspect actual TS errors.
+- If a sibling `worktrees/` directory exists, `tsc --noEmit` may report unrelated errors from that tree; filter diagnostics to `^resources/js` to compare against the known 5 baseline addon errors.
 - In tests, `makeLocalization('<site>')->save()` fails with `Call to a member function lang() on null` if the site handle is not configured in Statamic's active sites. Use configured handles (default test setup includes `en`/`fr`) or set sites first.
+- In `EntrySaving` listeners, `getOriginal('<field>')` can already equal current values on cached entry instances because `Entry::save()` calls `Entry::find($id)` (which syncs originals). In tests that assert original-vs-current diffs, clone the entry before mutating/saving.
