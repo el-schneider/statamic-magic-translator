@@ -5,6 +5,8 @@ declare(strict_types=1);
 namespace ElSchneider\MagicTranslator\Console;
 
 use ElSchneider\MagicTranslator\Support\BlueprintExclusions;
+use ElSchneider\MagicTranslator\Support\FieldDefinitionBuilder;
+use ElSchneider\MagicTranslator\Support\SourceHashCache;
 use Illuminate\Support\Carbon;
 use InvalidArgumentException;
 use Statamic\Contracts\Entries\Entry as EntryContract;
@@ -15,6 +17,10 @@ use Throwable;
 
 final class TranslationPlanner
 {
+    public function __construct(
+        private readonly SourceHashCache $sourceHashCache,
+    ) {}
+
     /**
      * Build a translation plan from filter criteria.
      */
@@ -217,12 +223,26 @@ final class TranslationPlanner
     {
         $meta = $targetEntry->get('magic_translator');
 
-        if (! is_array($meta) || ! isset($meta['last_translated_at'])) {
+        if (! is_array($meta)) {
+            return true;
+        }
+
+        $fields = FieldDefinitionBuilder::fromBlueprint($sourceEntry->blueprint());
+        $currentSourceHash = $this->sourceHashCache->get($sourceEntry, $fields);
+        $storedHash = $meta['source_content_hash'] ?? null;
+
+        if (is_string($storedHash) && $storedHash !== '') {
+            return $storedHash !== $currentSourceHash;
+        }
+
+        $legacyTranslatedAt = $meta['last_translated_at'] ?? null;
+
+        if (! is_string($legacyTranslatedAt) || $legacyTranslatedAt === '') {
             return true;
         }
 
         try {
-            $lastTranslatedAt = Carbon::parse($meta['last_translated_at']);
+            $lastTranslatedAt = Carbon::parse($legacyTranslatedAt);
         } catch (Throwable) {
             return true;
         }
