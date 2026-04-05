@@ -6,6 +6,7 @@ namespace ElSchneider\ContentTranslator\Http\Controllers;
 
 use ElSchneider\ContentTranslator\Exceptions\ContentTranslatorException;
 use ElSchneider\ContentTranslator\Jobs\TranslateEntryJob;
+use ElSchneider\ContentTranslator\Support\AccessibleSites;
 use ElSchneider\ContentTranslator\Support\TranslationLogger;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -92,10 +93,51 @@ final class TranslationController extends Controller
             ], 403);
         }
 
-        // ── Dispatch one job per target site ──────────────────────────────────
-        $sourceSite = $validated['source_site'] ?? null;
+        // ── Enforce collection + per-site authorization ───────────────────────
+        $sourceSite = $validated['source_site'] ?? $entry->locale();
         $targetSites = $validated['target_sites'];
         $options = $validated['options'] ?? [];
+
+        $accessibleSites = AccessibleSites::forCollection($user, $entry->collection());
+
+        if (! $accessibleSites->contains($sourceSite)) {
+            return response()->json([
+                'success' => false,
+                'error' => [
+                    'code' => 'forbidden',
+                    'message' => "Not authorized to translate from [{$sourceSite}].",
+                    'retryable' => false,
+                ],
+            ], 403);
+        }
+
+        // Entry must actually exist in the source locale.
+        if ($entry->in($sourceSite) === null) {
+            return response()->json([
+                'success' => false,
+                'error' => [
+                    'code' => 'resource_not_found',
+                    'message' => "Entry [{$validated['entry_id']}] has no localization in [{$sourceSite}].",
+                    'retryable' => false,
+                ],
+            ], 404);
+        }
+
+        $forbidden = array_values(array_diff(
+            $targetSites,
+            $accessibleSites->reject(fn ($handle) => $handle === $sourceSite)->all(),
+        ));
+
+        if ($forbidden !== []) {
+            return response()->json([
+                'success' => false,
+                'error' => [
+                    'code' => 'forbidden',
+                    'message' => 'Not authorized to translate into: '.implode(', ', $forbidden).'.',
+                    'retryable' => false,
+                ],
+            ], 403);
+        }
 
         $jobs = [];
         $currentTargetSite = null;
