@@ -217,6 +217,14 @@ async function markSiteCurrent(handle: string): Promise<void> {
 
     markedCurrentHandles.value = new Set([...markedCurrentHandles.value, handle])
 
+    // Notify the fieldtype so its own markedCurrentHandles reflects this change
+    // and the next dialog instance doesn't see stale props for this locale.
+    window.dispatchEvent(
+      new CustomEvent('magic-translator:marked-current', {
+        detail: { siteHandle: handle },
+      }),
+    )
+
     if (typeof Statamic !== 'undefined' && Statamic.$toast) {
       Statamic.$toast.success(t('mark_current_success'))
     }

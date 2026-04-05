@@ -179,6 +179,14 @@ watch(
   { deep: true },
 )
 
+function handleMarkedCurrentNotice(event: Event): void {
+  const detail = (event as CustomEvent).detail
+  if (!detail?.siteHandle) return
+  const siteHandle = String(detail.siteHandle)
+  if (markedCurrentHandles.value.has(siteHandle)) return
+  markedCurrentHandles.value = new Set([...markedCurrentHandles.value, siteHandle])
+}
+
 onMounted(() => {
   if (!hasTargets.value) {
     hideEntireField()
@@ -200,11 +208,13 @@ onMounted(() => {
   })
   observer.observe(document.body, { childList: true, subtree: true })
   window.addEventListener('magic-translator:request-mark-current', handleMarkCurrentRequest)
+  window.addEventListener('magic-translator:marked-current', handleMarkedCurrentNotice)
 })
 
 onBeforeUnmount(() => {
   observer?.disconnect()
   window.removeEventListener('magic-translator:request-mark-current', handleMarkCurrentRequest)
+  window.removeEventListener('magic-translator:marked-current', handleMarkedCurrentNotice)
   removeBadges()
   removeTranslateButtons()
 })
@@ -231,7 +241,7 @@ function openDialog(): void {
     props: {
       entryId: entryId.value,
       sourceSite: defaultSource,
-      sites: sites.value,
+      sites: effectiveSites.value,
     },
   })
 
