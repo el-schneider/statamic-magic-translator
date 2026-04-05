@@ -36,6 +36,19 @@ export interface StatusResponse {
   jobs: ApiJob[]
 }
 
+/** Response from POST /cp/magic-translator/mark-current */
+export interface MarkCurrentResponse {
+  success: boolean
+  meta?: {
+    handle: string
+    exists: boolean
+    last_translated_at: string | null
+    source_content_hash: string | null
+    is_stale: boolean
+  }
+  error?: NormalizedError
+}
+
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
 /**
@@ -43,8 +56,8 @@ export interface StatusResponse {
  * request header in Laravel's CSRF scheme.
  */
 function getXsrfToken(): string {
-  const match = document.cookie.match(/(?:^|;\s*)XSRF-TOKEN=([^;]+)/)
-  return match ? decodeURIComponent(match[1]) : ''
+  const rawToken = document.cookie.match(/(?:^|;\s*)XSRF-TOKEN=([^;]+)/)?.[1]
+  return rawToken ? decodeURIComponent(rawToken) : ''
 }
 
 /**
@@ -137,6 +150,46 @@ export async function checkStatus(jobIds: string[]): Promise<StatusResponse> {
   }
 
   return (await response.json()) as StatusResponse
+}
+
+/**
+ * Mark a target locale as current for the given source entry.
+ */
+export async function markCurrent(entryId: string, locale: string): Promise<MarkCurrentResponse> {
+  const payload = {
+    entry_id: entryId,
+    locale,
+  }
+
+  // v5 — use Statamic.$axios (has baseURL + interceptors already set up)
+  if (Statamic.$axios) {
+    const response = await Statamic.$axios.post('/cp/magic-translator/mark-current', payload)
+    return response.data as MarkCurrentResponse
+  }
+
+  // v6 — fall back to native fetch with XSRF-TOKEN
+  const response = await fetch('/cp/magic-translator/mark-current', {
+    method: 'POST',
+    headers: jsonHeaders(),
+    body: JSON.stringify(payload),
+  })
+
+  if (!response.ok) {
+    try {
+      const body = await response.json()
+      throw normalizeApiError(body)
+    } catch (error) {
+      if (error && typeof error === 'object' && 'code' in error) throw error
+
+      throw {
+        code: 'unexpected_error',
+        message: `HTTP ${response.status}: ${response.statusText}`,
+        retryable: false,
+      } satisfies NormalizedError
+    }
+  }
+
+  return (await response.json()) as MarkCurrentResponse
 }
 
 /**
