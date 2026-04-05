@@ -22,6 +22,7 @@ import {
   wasPreviouslyInjected,
   wasTranslateButtonPreviouslyInjected,
 } from '../../core/injection'
+import { getMarkedHandles, markSiteCurrent, subscribeMarked } from '../../core/markCurrentStore'
 import type { FieldtypePreload } from '../../core/types'
 
 declare function __(key: string, replacements?: Record<string, string | number>): string
@@ -63,7 +64,7 @@ const targetSites = computed(() => sites.value.filter((s) => s.handle !== curren
 
 const hasTargets = computed(() => targetSites.value.length > 0)
 
-const markedCurrentHandles = ref<Set<string>>(new Set())
+const markedCurrentHandles = ref<Set<string>>(entryId.value ? getMarkedHandles(entryId.value) : new Set())
 const markCurrentPending = ref<Set<string>>(new Set())
 
 const effectiveSites = computed(() =>
@@ -156,7 +157,7 @@ async function handleMarkCurrentRequest(event: Event): Promise<void> {
   try {
     const response = await markCurrent(entryId.value, siteHandle)
     if (response.success) {
-      markedCurrentHandles.value = new Set([...markedCurrentHandles.value, siteHandle])
+      markSiteCurrent(entryId.value, siteHandle)
       return
     }
 
@@ -179,13 +180,7 @@ watch(
   { deep: true },
 )
 
-function handleMarkedCurrentNotice(event: Event): void {
-  const detail = (event as CustomEvent).detail
-  if (!detail?.siteHandle) return
-  const siteHandle = String(detail.siteHandle)
-  if (markedCurrentHandles.value.has(siteHandle)) return
-  markedCurrentHandles.value = new Set([...markedCurrentHandles.value, siteHandle])
-}
+let unsubscribeMarked: (() => void) | null = null
 
 onMounted(() => {
   if (!hasTargets.value) {
@@ -208,13 +203,19 @@ onMounted(() => {
   })
   observer.observe(document.body, { childList: true, subtree: true })
   window.addEventListener('magic-translator:request-mark-current', handleMarkCurrentRequest)
-  window.addEventListener('magic-translator:marked-current', handleMarkedCurrentNotice)
+
+  const id = entryId.value
+  if (id !== null) {
+    unsubscribeMarked = subscribeMarked(id, () => {
+      markedCurrentHandles.value = getMarkedHandles(id)
+    })
+  }
 })
 
 onBeforeUnmount(() => {
   observer?.disconnect()
   window.removeEventListener('magic-translator:request-mark-current', handleMarkCurrentRequest)
-  window.removeEventListener('magic-translator:marked-current', handleMarkedCurrentNotice)
+  unsubscribeMarked?.()
   removeBadges()
   removeTranslateButtons()
 })
