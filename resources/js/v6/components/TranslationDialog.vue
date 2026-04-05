@@ -15,6 +15,7 @@
  */
 import { Badge, Button, Card, Checkbox, Icon, Label, Modal, ModalClose, Select, Separator } from '@statamic/cms/ui'
 import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
+import { markCurrent } from '../../core/api'
 import {
   getSession,
   retryLocale as retryLocaleInStore,
@@ -109,6 +110,9 @@ const translationSessionKey = computed(() => sessionKey(allEntryIds.value))
 
 const localeState = computed<Record<string, LocaleJobState>>(() => session.value?.localeState ?? {})
 const isTranslating = computed(() => session.value?.isTranslating ?? false)
+const markCurrentPending = ref<Record<string, boolean>>({})
+const markCurrentErrors = ref<Record<string, string>>({})
+const markedCurrentHandles = ref<Set<string>>(new Set())
 
 let unsubscribeSession: (() => void) | null = null
 
@@ -158,6 +162,78 @@ function toggleLocale(handle: string, checked: boolean): void {
     selectedLocales.value = [...selectedLocales.value, handle]
   } else {
     selectedLocales.value = selectedLocales.value.filter((h) => h !== handle)
+  }
+}
+
+function isMarkedCurrent(handle: string): boolean {
+  return markedCurrentHandles.value.has(handle)
+}
+
+function isEffectivelyStale(site: SiteMeta | SiteDescriptor): boolean {
+  if (isMarkedCurrent(site.handle)) return false
+  return Boolean((site as SiteMeta).is_stale)
+}
+
+function hasEffectiveTranslation(site: SiteMeta | SiteDescriptor): boolean {
+  if (isMarkedCurrent(site.handle)) return true
+  return Boolean((site as SiteMeta).last_translated_at)
+}
+
+function shouldShowMarkCurrentButton(site: SiteMeta | SiteDescriptor): boolean {
+  if (allEntryIds.value.length !== 1) return false
+  if (localeState.value[site.handle]) return false
+  if (!hasExistingTranslation(site)) return false
+  if (isMarkedCurrent(site.handle)) return false
+
+  return isEffectivelyStale(site) || !hasEffectiveTranslation(site)
+}
+
+async function markSiteCurrent(handle: string): Promise<void> {
+  const entryId = allEntryIds.value[0]
+  if (!entryId) return
+
+  markCurrentPending.value = {
+    ...markCurrentPending.value,
+    [handle]: true,
+  }
+
+  markCurrentErrors.value = {
+    ...markCurrentErrors.value,
+    [handle]: '',
+  }
+
+  try {
+    const response = await markCurrent(entryId, handle)
+
+    if (!response.success) {
+      const message = response.error?.message ?? t('mark_current_failed')
+      markCurrentErrors.value = {
+        ...markCurrentErrors.value,
+        [handle]: message,
+      }
+      console.error('[magic-translator] Mark current failed:', response.error ?? response)
+      return
+    }
+
+    markedCurrentHandles.value = new Set([...markedCurrentHandles.value, handle])
+
+    if (typeof Statamic !== 'undefined' && Statamic.$toast) {
+      Statamic.$toast.success(t('mark_current_success'))
+    }
+  } catch (error) {
+    const message = error && typeof error === 'object' && 'message' in error ? String(error.message) : t('mark_current_failed')
+
+    markCurrentErrors.value = {
+      ...markCurrentErrors.value,
+      [handle]: message,
+    }
+
+    console.error('[magic-translator] Mark current request failed:', error)
+  } finally {
+    markCurrentPending.value = {
+      ...markCurrentPending.value,
+      [handle]: false,
+    }
   }
 }
 
@@ -263,8 +339,8 @@ onBeforeUnmount(() => {
                     <span
                       class="little-dot me-2"
                       :class="{
-                        'bg-orange': (site as SiteMeta).is_stale,
-                        'bg-green-600': hasExistingTranslation(site) && !(site as SiteMeta).is_stale,
+                        'bg-orange': isEffectivelyStale(site),
+                        'bg-green-600': hasExistingTranslation(site) && !isEffectivelyStale(site),
                         'bg-red-500': !hasExistingTranslation(site),
                       }"
                     />
@@ -274,18 +350,32 @@ onBeforeUnmount(() => {
               </div>
 
               <div class="flex items-center gap-1.5 shrink-0">
+                <Button
+                  v-if="shouldShowMarkCurrentButton(site)"
+                  variant="ghost"
+                  size="sm"
+                  :text="t('mark_current_button')"
+                  :loading="Boolean(markCurrentPending[site.handle])"
+                  :disabled="Boolean(markCurrentPending[site.handle])"
+                  @click="markSiteCurrent(site.handle)"
+                />
+
                 <Badge
-                  v-if="(site as SiteMeta).is_stale && !localeState[site.handle]"
+                  v-if="isEffectivelyStale(site) && !localeState[site.handle]"
                   size="sm"
                   color="orange"
                   :text="t('badge_outdated')"
                 />
                 <Badge
-                  v-else-if="(site as SiteMeta).last_translated_at && !localeState[site.handle]"
+                  v-else-if="hasEffectiveTranslation(site) && !localeState[site.handle]"
                   size="sm"
                   color="blue"
                   :text="t('badge_translated')"
                 />
+
+                <span v-if="markCurrentErrors[site.handle]" class="text-2xs text-red-600 dark:text-red-400">
+                  {{ markCurrentErrors[site.handle] }}
+                </span>
 
                 <!-- Job status indicator -->
                 <div v-if="localeState[site.handle]" class="flex items-center gap-2 shrink-0">

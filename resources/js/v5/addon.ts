@@ -19,6 +19,7 @@ import {
   wasPreviouslyInjected,
   wasTranslateButtonPreviouslyInjected,
 } from '../core/injection'
+import { markCurrent } from '../core/api'
 import {
   getSession,
   retryLocale as retryLocaleInStore,
@@ -75,6 +76,9 @@ interface DialogData {
   overwrite: boolean
   session: TranslationSession | null
   unsubscribeFn: (() => void) | null
+  markedCurrentHandles: string[]
+  markCurrentPending: Record<string, boolean>
+  markCurrentErrors: Record<string, string>
 }
 
 const TranslationDialog = {
@@ -99,6 +103,9 @@ const TranslationDialog = {
       overwrite: false,
       session: null,
       unsubscribeFn: null,
+      markedCurrentHandles: [],
+      markCurrentPending: {},
+      markCurrentErrors: {},
     }
   },
 
@@ -222,6 +229,100 @@ const TranslationDialog = {
       }
 
       return self.isTranslating || (self.hasExistingTranslation(site) && !self.overwrite)
+    },
+
+    isMarkedCurrent(handle: string): boolean {
+      const self = this as unknown as { markedCurrentHandles: string[] }
+      return self.markedCurrentHandles.includes(handle)
+    },
+
+    isEffectivelyStale(site: SiteMeta | SiteDescriptor): boolean {
+      const self = this as unknown as { isMarkedCurrent: (handle: string) => boolean }
+      if (self.isMarkedCurrent(site.handle)) return false
+
+      return Boolean((site as SiteMeta).is_stale)
+    },
+
+    hasEffectiveTranslation(site: SiteMeta | SiteDescriptor): boolean {
+      const self = this as unknown as { isMarkedCurrent: (handle: string) => boolean }
+      if (self.isMarkedCurrent(site.handle)) return true
+
+      return Boolean((site as SiteMeta).last_translated_at)
+    },
+
+    shouldShowMarkCurrentButton(site: SiteMeta | SiteDescriptor): boolean {
+      const self = this as unknown as {
+        allEntryIds: string[]
+        localeState: Record<string, LocaleJobState>
+        hasExistingTranslation: (site: SiteMeta | SiteDescriptor) => boolean
+        isMarkedCurrent: (handle: string) => boolean
+        isEffectivelyStale: (site: SiteMeta | SiteDescriptor) => boolean
+        hasEffectiveTranslation: (site: SiteMeta | SiteDescriptor) => boolean
+      }
+
+      if (self.allEntryIds.length !== 1) return false
+      if (self.localeState[site.handle]) return false
+      if (!self.hasExistingTranslation(site)) return false
+      if (self.isMarkedCurrent(site.handle)) return false
+
+      return self.isEffectivelyStale(site) || !self.hasEffectiveTranslation(site)
+    },
+
+    async markSiteCurrent(handle: string) {
+      const self = this as unknown as {
+        allEntryIds: string[]
+        markCurrentPending: Record<string, boolean>
+        markCurrentErrors: Record<string, string>
+        markedCurrentHandles: string[]
+      }
+
+      const entryId = self.allEntryIds[0]
+      if (!entryId) return
+
+      self.markCurrentPending = {
+        ...self.markCurrentPending,
+        [handle]: true,
+      }
+
+      self.markCurrentErrors = {
+        ...self.markCurrentErrors,
+        [handle]: '',
+      }
+
+      try {
+        const response = await markCurrent(entryId, handle)
+
+        if (!response.success) {
+          const message = response.error?.message ?? t('mark_current_failed')
+          self.markCurrentErrors = {
+            ...self.markCurrentErrors,
+            [handle]: message,
+          }
+
+          console.error('[magic-translator] Mark current failed:', response.error ?? response)
+          return
+        }
+
+        if (!self.markedCurrentHandles.includes(handle)) {
+          self.markedCurrentHandles = [...self.markedCurrentHandles, handle]
+        }
+
+        Statamic.$toast.success(t('mark_current_success'))
+      } catch (error) {
+        const message = error && typeof error === 'object' && 'message' in error ? String(error.message) : t('mark_current_failed')
+
+        self.markCurrentErrors = {
+          ...self.markCurrentErrors,
+          [handle]: message,
+        }
+
+        console.error('[magic-translator] Mark current request failed:', error)
+      } finally {
+        self.markCurrentPending = {
+          ...self.markCurrentPending,
+          [handle]: false,
+        }
+      }
     },
 
     syncSelectedLocales() {
@@ -411,28 +512,44 @@ const TranslationDialog = {
                                 <span
                                     class="little-dot shrink-0"
                                     :class="{
-                                        'bg-orange': site.is_stale,
-                                        'bg-green-600': hasExistingTranslation(site) && !site.is_stale,
+                                        'bg-orange': isEffectivelyStale(site),
+                                        'bg-green-600': hasExistingTranslation(site) && !isEffectivelyStale(site),
                                         'bg-red-500': !hasExistingTranslation(site)
                                     }"
                                 ></span>
 
                                 {{ site.name }}
+                            </label>
+
+                            <div v-if="!localeState[site.handle]" class="flex items-center gap-2 shrink-0">
+                                <button
+                                    v-if="shouldShowMarkCurrentButton(site)"
+                                    type="button"
+                                    class="text-2xs text-blue underline hover:no-underline disabled:opacity-60 disabled:no-underline"
+                                    :disabled="Boolean(markCurrentPending[site.handle])"
+                                    @click="markSiteCurrent(site.handle)"
+                                >
+                                    {{ t('mark_current_button') }}
+                                </button>
 
                                 <span
-                                    v-if="site.is_stale && !localeState[site.handle]"
+                                    v-if="isEffectivelyStale(site)"
                                     class="badge-sm bg-orange dark:bg-orange-dark"
                                 >
                                     {{ t('badge_outdated') }}
                                 </span>
 
                                 <span
-                                    v-else-if="site.last_translated_at && !localeState[site.handle]"
+                                    v-else-if="hasEffectiveTranslation(site)"
                                     class="badge-sm bg-blue dark:bg-dark-blue-175"
                                 >
                                     {{ t('badge_translated') }}
                                 </span>
-                            </label>
+
+                                <span v-if="markCurrentErrors[site.handle]" class="text-2xs text-red-600 dark:text-red-400">
+                                    {{ markCurrentErrors[site.handle] }}
+                                </span>
+                            </div>
 
                             <!-- Job status indicator -->
                             <div v-if="localeState[site.handle]" class="flex items-center gap-2 shrink-0">
