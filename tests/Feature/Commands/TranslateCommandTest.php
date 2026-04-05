@@ -2,6 +2,9 @@
 
 declare(strict_types=1);
 
+use ElSchneider\ContentTranslator\Contracts\TranslationService;
+use ElSchneider\ContentTranslator\Data\TranslationUnit;
+use Statamic\Facades\Entry;
 use Tests\StatamicTestHelpers;
 
 uses(StatamicTestHelpers::class);
@@ -70,4 +73,58 @@ it('proceeds past confirm with --no-interaction', function () {
         '--no-interaction' => true,
     ])
         ->assertExitCode(0);
+});
+
+function bindPrefixService(string $prefix = 'FR: '): void
+{
+    $mock = Mockery::mock(TranslationService::class);
+    $mock->shouldReceive('translate')
+        ->andReturnUsing(fn (array $units) => array_map(
+            fn (TranslationUnit $u) => $u->withTranslation($prefix.$u->text),
+            $units,
+        ));
+
+    app()->instance(TranslationService::class, $mock);
+}
+
+it('executes sync translation and reports success summary', function () {
+    bindPrefixService('FR: ');
+
+    $this->createTestCollection('articles', ['en', 'fr']);
+    $this->createTestBlueprint('articles');
+    $en = $this->createTestEntry(collection: 'articles', site: 'en');
+
+    $this->artisan('statamic:content-translator:translate', [
+        '--to' => ['fr'],
+        '--no-interaction' => true,
+    ])
+        ->expectsOutputToContain('Translation summary')
+        ->expectsOutputToContain('Succeeded:   1')
+        ->expectsOutputToContain('Failed:       0')
+        ->assertExitCode(0);
+
+    $localized = Entry::find($en->id())->in('fr');
+    expect($localized)->not->toBeNull();
+    expect($localized->get('title'))->toBe('FR: Test Entry');
+});
+
+it('reports partial failure and exits 1 when a translation throws', function () {
+    $mock = Mockery::mock(TranslationService::class);
+    $mock->shouldReceive('translate')
+        ->andThrow(new RuntimeException('provider exploded'));
+
+    app()->instance(TranslationService::class, $mock);
+
+    $this->createTestCollection('articles', ['en', 'fr']);
+    $this->createTestBlueprint('articles');
+    $this->createTestEntry(collection: 'articles', site: 'en');
+
+    $this->artisan('statamic:content-translator:translate', [
+        '--to' => ['fr'],
+        '--no-interaction' => true,
+    ])
+        ->expectsOutputToContain('Translation summary')
+        ->expectsOutputToContain('Failed:       1')
+        ->expectsOutputToContain('provider exploded')
+        ->assertExitCode(1);
 });
