@@ -90,6 +90,19 @@ function hideFieldLabelChrome(): void {
   }
 }
 
+function hideEntireField(): void {
+  const root = rootEl.value
+  if (!root) return
+
+  const wrappers = [root.closest('[data-ui-input-group]'), root.closest('.publish-field')].filter(
+    (el): el is Element => el !== null,
+  )
+
+  for (const wrapper of wrappers) {
+    ;(wrapper as HTMLElement).style.display = 'none'
+  }
+}
+
 function hasInjectedBadgesInDom(): boolean {
   return document.querySelector('[data-ct-badge]') !== null
 }
@@ -114,6 +127,11 @@ function tryInject(): void {
 }
 
 onMounted(() => {
+  if (!hasTargets.value) {
+    hideEntireField()
+    return
+  }
+
   hideFieldLabelChrome()
 
   // Attempt immediately (the Sites panel may already be in the DOM)
@@ -170,36 +188,38 @@ function openDialog(): void {
 
 <template>
   <div ref="rootEl" class="content-translator-fieldtype">
-    <!-- Translate button -->
-    <Button
-      v-if="!buttonInjected"
-      variant="default"
-      size="sm"
-      :text="__('content-translator::messages.translate_button')"
-      class="w-full"
-      :disabled="!hasTargets"
-      @click="openDialog"
-    />
+    <template v-if="hasTargets">
+      <!-- Translate button -->
+      <Button
+        v-if="!buttonInjected"
+        variant="default"
+        size="sm"
+        :text="__('content-translator::messages.translate_button')"
+        class="w-full"
+        :disabled="!hasTargets"
+        @click="openDialog"
+      />
 
-    <!--
-            Fallback locale status list — shown only when badge injection into
-            the native Sites panel has not (yet) succeeded.
-        -->
-    <div v-if="!badgeInjected && sites.length > 0" class="mt-3 space-y-1">
-      <div v-for="site in sites" :key="site.handle" class="text-xs flex items-center gap-1.5 py-0.5">
-        <span
-          class="little-dot shrink-0"
-          :class="{
-            'bg-green-600': site.exists && !site.is_stale,
-            'bg-amber-500': site.is_stale,
-            'bg-red-500': !site.exists,
-          }"
-        />
-        <span class="flex-1 truncate">{{ site.name }}</span>
-        <span v-if="site.is_stale" class="text-amber-500 shrink-0">⚠</span>
-        <span v-else-if="site.last_translated_at" class="text-gray-400 shrink-0">✓</span>
-        <span v-else class="text-gray-400 shrink-0">—</span>
+      <!--
+              Fallback locale status list — shown only when badge injection into
+              the native Sites panel has not (yet) succeeded.
+          -->
+      <div v-if="!badgeInjected && sites.length > 0" class="mt-3 space-y-1">
+        <div v-for="site in sites" :key="site.handle" class="text-xs flex items-center gap-1.5 py-0.5">
+          <span
+            class="little-dot shrink-0"
+            :class="{
+              'bg-green-600': site.exists && !site.is_stale,
+              'bg-amber-500': site.is_stale,
+              'bg-red-500': !site.exists,
+            }"
+          />
+          <span class="flex-1 truncate">{{ site.name }}</span>
+          <span v-if="site.is_stale" class="text-amber-500 shrink-0">⚠</span>
+          <span v-else-if="site.last_translated_at" class="text-gray-400 shrink-0">✓</span>
+          <span v-else class="text-gray-400 shrink-0">—</span>
+        </div>
       </div>
-    </div>
+    </template>
   </div>
 </template>
