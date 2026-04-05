@@ -6,9 +6,11 @@ namespace ElSchneider\ContentTranslator\Console;
 
 use ElSchneider\ContentTranslator\Support\BlueprintExclusions;
 use Illuminate\Support\Carbon;
+use InvalidArgumentException;
 use Statamic\Contracts\Entries\Entry as EntryContract;
 use Statamic\Facades\Collection as CollectionFacade;
 use Statamic\Facades\Entry as EntryFacade;
+use Statamic\Facades\Site;
 use Throwable;
 
 final class TranslationPlanner
@@ -230,5 +232,26 @@ final class TranslationPlanner
         return $sourceModifiedAt !== null && $sourceModifiedAt->greaterThan($lastTranslatedAt);
     }
 
-    private function assertKnownHandles(FilterCriteria $filters): void {}
+    private function assertKnownHandles(FilterCriteria $filters): void
+    {
+        $knownSites = Site::all()->map->handle()->all();
+
+        foreach ($filters->targetSites as $site) {
+            if (! in_array($site, $knownSites, true)) {
+                throw new InvalidArgumentException("Unknown site '{$site}'");
+            }
+        }
+
+        if ($filters->sourceSite !== null && ! in_array($filters->sourceSite, $knownSites, true)) {
+            throw new InvalidArgumentException("Unknown site '{$filters->sourceSite}'");
+        }
+
+        $knownCollections = CollectionFacade::handles()->all();
+
+        foreach ($filters->collections as $collection) {
+            if (! in_array($collection, $knownCollections, true)) {
+                throw new InvalidArgumentException("Unknown collection '{$collection}'");
+            }
+        }
+    }
 }

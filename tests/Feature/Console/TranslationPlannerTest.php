@@ -23,27 +23,27 @@ function makeCriteria(array $overrides = []): FilterCriteria
 }
 
 it('returns empty plan when no entries exist', function () {
-    $this->createTestCollection('articles', ['en', 'de']);
+    $this->createTestCollection('articles', ['en', 'fr']);
 
     $planner = app(TranslationPlanner::class);
-    $plan = $planner->plan(makeCriteria(['targetSites' => ['de']]));
+    $plan = $planner->plan(makeCriteria(['targetSites' => ['fr']]));
 
     expect($plan->isEmpty())->toBeTrue();
 });
 
 it('plans one pair per entry × target site', function () {
-    $this->createTestCollection('articles', ['en', 'de', 'fr']);
+    $this->createTestCollection('articles', ['en', 'fr']);
     $this->createTestBlueprint('articles');
     $entry = $this->createTestEntry(collection: 'articles', site: 'en');
 
     $planner = app(TranslationPlanner::class);
     $plan = $planner->plan(makeCriteria([
-        'targetSites' => ['de', 'fr'],
+        'targetSites' => ['fr'],
         'sourceSite' => 'en',
     ]));
 
-    expect($plan->count())->toBe(2);
-    expect($plan->targetSites())->toBe(['de', 'fr']);
+    expect($plan->count())->toBe(1);
+    expect($plan->targetSites())->toBe(['fr']);
 
     foreach ($plan->items as $item) {
         expect($item->entryId)->toBe($entry->id());
@@ -53,8 +53,8 @@ it('plans one pair per entry × target site', function () {
 });
 
 it('filters by --collection', function () {
-    $this->createTestCollection('articles', ['en', 'de']);
-    $this->createTestCollection('pages', ['en', 'de']);
+    $this->createTestCollection('articles', ['en', 'fr']);
+    $this->createTestCollection('pages', ['en', 'fr']);
     $this->createTestBlueprint('articles');
     $this->createTestBlueprint('pages');
     $this->createTestEntry(collection: 'articles', site: 'en', slug: 'article-1');
@@ -62,7 +62,7 @@ it('filters by --collection', function () {
 
     $planner = app(TranslationPlanner::class);
     $plan = $planner->plan(makeCriteria([
-        'targetSites' => ['de'],
+        'targetSites' => ['fr'],
         'collections' => ['articles'],
     ]));
 
@@ -71,14 +71,14 @@ it('filters by --collection', function () {
 });
 
 it('filters by --entry IDs', function () {
-    $this->createTestCollection('articles', ['en', 'de']);
+    $this->createTestCollection('articles', ['en', 'fr']);
     $this->createTestBlueprint('articles');
     $e1 = $this->createTestEntry(collection: 'articles', site: 'en', slug: 'a');
     $this->createTestEntry(collection: 'articles', site: 'en', slug: 'b');
 
     $planner = app(TranslationPlanner::class);
     $plan = $planner->plan(makeCriteria([
-        'targetSites' => ['de'],
+        'targetSites' => ['fr'],
         'entryIds' => [$e1->id()],
     ]));
 
@@ -87,7 +87,7 @@ it('filters by --entry IDs', function () {
 });
 
 it('filters by --blueprint handle', function () {
-    $this->createTestCollection('articles', ['en', 'de']);
+    $this->createTestCollection('articles', ['en', 'fr']);
     $this->createTestBlueprint('articles', 'default');
     $this->createTestBlueprint('articles', 'news');
 
@@ -98,7 +98,7 @@ it('filters by --blueprint handle', function () {
 
     $planner = app(TranslationPlanner::class);
     $plan = $planner->plan(makeCriteria([
-        'targetSites' => ['de'],
+        'targetSites' => ['fr'],
         'blueprints' => ['news'],
     ]));
 
@@ -109,8 +109,8 @@ it('filters by --blueprint handle', function () {
 it('respects config exclude_blueprints', function () {
     config(['statamic.content-translator.exclude_blueprints' => ['articles.*']]);
 
-    $this->createTestCollection('articles', ['en', 'de']);
-    $this->createTestCollection('pages', ['en', 'de']);
+    $this->createTestCollection('articles', ['en', 'fr']);
+    $this->createTestCollection('pages', ['en', 'fr']);
     $this->createTestBlueprint('articles');
     $this->createTestBlueprint('pages');
     $this->createTestEntry(collection: 'articles', site: 'en', slug: 'a');
@@ -118,7 +118,7 @@ it('respects config exclude_blueprints', function () {
 
     $planner = app(TranslationPlanner::class);
     $plan = $planner->plan(makeCriteria([
-        'targetSites' => ['de'],
+        'targetSites' => ['fr'],
     ]));
 
     expect($plan->count())->toBe(1);
@@ -126,7 +126,7 @@ it('respects config exclude_blueprints', function () {
 });
 
 it('defaults target sites to all collection sites minus source when --to omitted', function () {
-    $this->createTestCollection('articles', ['en', 'de', 'fr']);
+    $this->createTestCollection('articles', ['en', 'fr']);
     $this->createTestBlueprint('articles');
     $this->createTestEntry(collection: 'articles', site: 'en');
 
@@ -136,8 +136,8 @@ it('defaults target sites to all collection sites minus source when --to omitted
         'sourceSite' => 'en',
     ]));
 
-    expect($plan->count())->toBe(2);
-    expect($plan->targetSites())->toBe(['de', 'fr']);
+    expect($plan->count())->toBe(1);
+    expect($plan->targetSites())->toBe(['fr']);
 });
 
 it('skips pair when target localization already exists (safe default)', function () {
@@ -231,4 +231,36 @@ it('marks pair Translate when target missing regardless of overwrite flag', func
 
     expect($withoutFlag->items[0]->action)->toBe(PlanAction::Translate);
     expect($withFlag->items[0]->action)->toBe(PlanAction::Translate);
+});
+
+it('errors on unknown collection handle', function () {
+    $this->createTestCollection('articles', ['en', 'fr']);
+
+    $planner = app(TranslationPlanner::class);
+
+    expect(fn () => $planner->plan(makeCriteria([
+        'targetSites' => ['fr'],
+        'collections' => ['nonexistent'],
+    ])))->toThrow(InvalidArgumentException::class, "Unknown collection 'nonexistent'");
+});
+
+it('errors on unknown target site handle', function () {
+    $this->createTestCollection('articles', ['en', 'fr']);
+
+    $planner = app(TranslationPlanner::class);
+
+    expect(fn () => $planner->plan(makeCriteria([
+        'targetSites' => ['xx'],
+    ])))->toThrow(InvalidArgumentException::class, "Unknown site 'xx'");
+});
+
+it('errors on unknown source site handle', function () {
+    $this->createTestCollection('articles', ['en', 'fr']);
+
+    $planner = app(TranslationPlanner::class);
+
+    expect(fn () => $planner->plan(makeCriteria([
+        'targetSites' => ['fr'],
+        'sourceSite' => 'xx',
+    ])))->toThrow(InvalidArgumentException::class, "Unknown site 'xx'");
 });
