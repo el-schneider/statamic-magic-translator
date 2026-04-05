@@ -77,6 +77,7 @@ Check first: `pgrep -f 'queue:listen'` — only start one if none is running.
 
 - **`vendor/`** — Managed by Composer.
 - **`dist/`** — Built assets. Rebuild, don't hand-edit.
+- **`CHANGELOG.md`** — Populated automatically by `.github/workflows/update-changelog.yml`
 
 ## Gotchas
 
