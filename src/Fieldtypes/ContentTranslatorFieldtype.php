@@ -4,9 +4,11 @@ declare(strict_types=1);
 
 namespace ElSchneider\ContentTranslator\Fieldtypes;
 
+use ElSchneider\ContentTranslator\Support\AccessibleSites;
 use Illuminate\Support\Carbon;
 use Statamic\Facades\Blink;
 use Statamic\Facades\Site;
+use Statamic\Facades\User;
 use Statamic\Fields\Fieldtype;
 use Throwable;
 
@@ -137,7 +139,17 @@ final class ContentTranslatorFieldtype extends Fieldtype
             $originUpdatedAt = $rootEntry->lastModified();
         }
 
-        $sitesData = Site::all()->map(function ($site) use ($entry, $originUpdatedAt) {
+        // Restrict the site list to the collection's configured sites AND the
+        // sites the current user may access for editing. An empty list here
+        // causes the sidebar component to hide its Translate button.
+        $user = User::current();
+        $allowedHandles = $user !== null
+            ? AccessibleSites::forCollection($user, $entry->collection())->all()
+            : [];
+
+        $sitesData = Site::all()->filter(
+            fn ($site) => in_array($site->handle(), $allowedHandles, true)
+        )->map(function ($site) use ($entry, $originUpdatedAt) {
             $siteHandle = $site->handle();
             $localization = $entry->in($siteHandle);
             $exists = $localization !== null;

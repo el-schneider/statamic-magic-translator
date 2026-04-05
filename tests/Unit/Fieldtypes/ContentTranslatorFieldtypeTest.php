@@ -72,6 +72,7 @@ it('preload returns empty structure when no parent entry is set', function () {
 // ── preload — with a live origin entry ───────────────────────────────────────
 
 it('preload returns current_site and is_origin true for a root entry', function () {
+    $this->loginUser();
     $this->createTestCollection('articles', ['en', 'fr']);
     $this->createTestBlueprint('articles');
     $entry = $this->createTestEntry(collection: 'articles', site: 'en');
@@ -88,6 +89,7 @@ it('preload returns current_site and is_origin true for a root entry', function 
 });
 
 it('preload returns a sites array with all configured sites', function () {
+    $this->loginUser();
     $this->createTestCollection('articles', ['en', 'fr']);
     $this->createTestBlueprint('articles');
     $entry = $this->createTestEntry(collection: 'articles', site: 'en');
@@ -104,6 +106,7 @@ it('preload returns a sites array with all configured sites', function () {
 });
 
 it('preload marks a site as existing when a localization exists', function () {
+    $this->loginUser();
     $this->createTestCollection('articles', ['en', 'fr']);
     $this->createTestBlueprint('articles');
     $entry = $this->createTestEntry(collection: 'articles', site: 'en');
@@ -124,6 +127,7 @@ it('preload marks a site as existing when a localization exists', function () {
 });
 
 it('preload reports last_translated_at from the localization metadata', function () {
+    $this->loginUser();
     $this->createTestCollection('articles', ['en', 'fr']);
     $this->createTestBlueprint('articles');
     $entry = $this->createTestEntry(collection: 'articles', site: 'en');
@@ -146,6 +150,7 @@ it('preload reports last_translated_at from the localization metadata', function
 });
 
 it('preload handles malformed last_translated_at metadata without crashing', function () {
+    $this->loginUser();
     $this->createTestCollection('articles', ['en', 'fr']);
     $this->createTestBlueprint('articles');
     $entry = $this->createTestEntry(collection: 'articles', site: 'en');
@@ -167,6 +172,7 @@ it('preload handles malformed last_translated_at metadata without crashing', fun
 });
 
 it('preload marks a localization as stale when origin was modified after last translation', function () {
+    $this->loginUser();
     $this->createTestCollection('articles', ['en', 'fr']);
     $this->createTestBlueprint('articles');
     $entry = $this->createTestEntry(collection: 'articles', site: 'en');
@@ -194,6 +200,7 @@ it('preload marks a localization as stale when origin was modified after last tr
 });
 
 it('preload marks a fresh translation as not stale', function () {
+    $this->loginUser();
     $this->createTestCollection('articles', ['en', 'fr']);
     $this->createTestBlueprint('articles');
     $entry = $this->createTestEntry(collection: 'articles', site: 'en');
@@ -222,7 +229,77 @@ it('preload marks a fresh translation as not stale', function () {
 
 // ── preload — localized entry (non-origin) ────────────────────────────────────
 
+// ── preload — authorization filtering ─────────────────────────────────────────
+
+it('preload returns only sites the user can access for editing', function () {
+    $this->createTestCollection('articles', ['en', 'fr']);
+    $this->createTestBlueprint('articles');
+    $entry = $this->createTestEntry(collection: 'articles', site: 'en');
+
+    $user = $this->createRestrictedUser([
+        'access en site',
+        'edit articles entries',
+    ]);
+    $this->loginUser($user);
+
+    $fieldtype = new ContentTranslatorFieldtype;
+    $field = (new \Statamic\Fields\Field('content_translator', ['type' => 'content_translator']))
+        ->setParent($entry);
+    $fieldtype->setField($field);
+
+    $result = $fieldtype->preload();
+
+    $handles = array_column($result['sites'], 'handle');
+    expect($handles)->toBe(['en']);
+});
+
+it('preload returns empty sites when user lacks edit permission for the collection', function () {
+    $this->createTestCollection('articles', ['en', 'fr']);
+    $this->createTestBlueprint('articles');
+    $entry = $this->createTestEntry(collection: 'articles', site: 'en');
+
+    $user = $this->createRestrictedUser([
+        'access en site',
+        'access fr site',
+    ]);
+    $this->loginUser($user);
+
+    $fieldtype = new ContentTranslatorFieldtype;
+    $field = (new \Statamic\Fields\Field('content_translator', ['type' => 'content_translator']))
+        ->setParent($entry);
+    $fieldtype->setField($field);
+
+    $result = $fieldtype->preload();
+
+    expect($result['sites'])->toBe([]);
+});
+
+it('preload returns only collection sites, ignoring unrelated Statamic sites', function () {
+    \Statamic\Facades\Site::setSites([
+        'en' => ['name' => 'English', 'url' => 'http://localhost/', 'locale' => 'en'],
+        'fr' => ['name' => 'French', 'url' => 'http://localhost/fr/', 'locale' => 'fr'],
+        'es' => ['name' => 'Spanish', 'url' => 'http://localhost/es/', 'locale' => 'es'],
+    ]);
+
+    // Collection only configured for en + fr.
+    $this->createTestCollection('articles', ['en', 'fr']);
+    $this->createTestBlueprint('articles');
+    $entry = $this->createTestEntry(collection: 'articles', site: 'en');
+    $this->loginUser(); // super
+
+    $fieldtype = new ContentTranslatorFieldtype;
+    $field = (new \Statamic\Fields\Field('content_translator', ['type' => 'content_translator']))
+        ->setParent($entry);
+    $fieldtype->setField($field);
+
+    $result = $fieldtype->preload();
+
+    $handles = array_column($result['sites'], 'handle');
+    expect($handles)->toEqualCanonicalizing(['en', 'fr']);
+});
+
 it('preload returns is_origin false for a localized entry', function () {
+    $this->loginUser();
     $this->createTestCollection('articles', ['en', 'fr']);
     $this->createTestBlueprint('articles');
     $originEntry = $this->createTestEntry(collection: 'articles', site: 'en');
