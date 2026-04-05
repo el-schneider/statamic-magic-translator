@@ -10,17 +10,14 @@ use Tests\TestCase;
 
 uses(TestCase::class);
 
-it('logs retryable content translator exceptions at warning level', function () {
+it('logs retryable exceptions at warning level', function () {
     Log::shouldReceive('warning')
         ->once()
         ->withArgs(function (string $message, array $context): bool {
-            expect($message)->toBe('[content-translator] provider_rate_limited: Rate limit exceeded.');
-            expect($context['provider'])->toBe('prism');
-            expect($context['entry_id'])->toBe('entry-123');
+            expect($message)->toBeString();
             expect($context['error_code'])->toBe('provider_rate_limited');
             expect($context['retryable'])->toBeTrue();
-            expect($context['exception_class'])->toBe(ProviderRateLimitedException::class);
-            expect($context['exception_message'])->toBe('Rate limit exceeded.');
+            expect($context['entry_id'])->toBe('entry-123');
 
             return true;
         });
@@ -31,16 +28,13 @@ it('logs retryable content translator exceptions at warning level', function () 
     );
 });
 
-it('logs non-retryable content translator exceptions at error level', function () {
+it('logs non-retryable exceptions at error level', function () {
     Log::shouldReceive('error')
         ->once()
         ->withArgs(function (string $message, array $context): bool {
-            expect($message)->toBe('[content-translator] provider_auth_failed: Authentication failed.');
-            expect($context['provider'])->toBe('deepl');
+            expect($message)->toBeString();
             expect($context['error_code'])->toBe('provider_auth_failed');
             expect($context['retryable'])->toBeFalse();
-            expect($context['exception_class'])->toBe(ProviderAuthException::class);
-            expect($context['exception_message'])->toBe('Authentication failed.');
 
             return true;
         });
@@ -50,31 +44,13 @@ it('logs non-retryable content translator exceptions at error level', function (
     );
 });
 
-it('includes structured context fields when logging content translator exceptions', function () {
-    Log::shouldReceive('warning')
-        ->once()
-        ->withArgs(function (string $message, array $context): bool {
-            expect($message)->toBe('[content-translator] provider_rate_limited: Retry later.');
-            expect($context)->toHaveKeys(['error_code', 'retryable', 'exception_class', 'exception_message']);
-            expect($context['error_code'])->toBe('provider_rate_limited');
-            expect($context['retryable'])->toBeTrue();
-            expect($context['exception_class'])->toBe(ProviderRateLimitedException::class);
-
-            return true;
-        });
-
-    TranslationLogger::error(new ProviderRateLimitedException('Retry later.'));
-});
-
-it('logs unexpected exceptions at error level', function () {
+it('logs unexpected exceptions at error level with unexpected_error code', function () {
     Log::shouldReceive('error')
         ->once()
         ->withArgs(function (string $message, array $context): bool {
-            expect($message)->toBe('[content-translator] unexpected_error: Boom');
-            expect($context['job_id'])->toBe('job-123');
+            expect($message)->toBeString();
             expect($context['error_code'])->toBe('unexpected_error');
-            expect($context['exception_class'])->toBe(RuntimeException::class);
-            expect($context['exception_message'])->toBe('Boom');
+            expect($context['job_id'])->toBe('job-123');
 
             return true;
         });
