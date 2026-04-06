@@ -247,25 +247,10 @@ final class DeepLTranslationService implements TranslationService
             // Chinese — explicit variant required
             'zh', 'zh-cn', 'zh-hans' => 'ZH-HANS',
             'zh-tw', 'zh-hant' => 'ZH-HANT',
-            // Everything else: uppercase the code as-is
-            default => $this->normalizeLocaleToDeepL($normalized),
+            // Everything else: base language code only (DeepL does not
+            // support regional variants beyond EN/PT/ZH).
+            default => mb_strtoupper(explode('-', $normalized)[0]),
         };
-    }
-
-    /**
-     * Uppercase a locale code while preserving the hyphen separator.
-     *
-     * Examples: 'de' → 'DE', 'de-at' → 'DE-AT'
-     */
-    private function normalizeLocaleToDeepL(string $locale): string
-    {
-        $parts = explode('-', $locale, 2);
-
-        if (count($parts) === 2) {
-            return mb_strtoupper($parts[0]).'-'.mb_strtoupper($parts[1]);
-        }
-
-        return mb_strtoupper($parts[0]);
     }
 
     /**
