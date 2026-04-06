@@ -7,6 +7,7 @@
 worktrees
 
 # Agent scratch dirs — never commit
+/AGENTS.local.md
 /docs/plans/
 /docs/research/
 /docs/todo.md

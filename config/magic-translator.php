@@ -27,7 +27,7 @@ return [
     |
     */
 
-    'service' => env('CONTENT_TRANSLATOR_SERVICE', 'prism'),
+    'service' => env('MAGIC_TRANSLATOR_SERVICE', 'prism'),
 
     /*
     |--------------------------------------------------------------------------
@@ -40,7 +40,7 @@ return [
     |
     */
 
-    'max_units_per_request' => env('CONTENT_TRANSLATOR_MAX_UNITS_PER_REQUEST'),
+    'max_units_per_request' => env('MAGIC_TRANSLATOR_MAX_UNITS_PER_REQUEST'),
 
     /*
     |--------------------------------------------------------------------------
@@ -58,7 +58,7 @@ return [
     |
     */
 
-    'log_payloads' => (bool) env('CONTENT_TRANSLATOR_LOG_PAYLOADS', false),
+    'log_payloads' => (bool) env('MAGIC_TRANSLATOR_LOG_PAYLOADS', false),
 
     /*
     |--------------------------------------------------------------------------
@@ -70,8 +70,8 @@ return [
     */
 
     'queue' => [
-        'connection' => env('CONTENT_TRANSLATOR_QUEUE_CONNECTION', null),
-        'name' => env('CONTENT_TRANSLATOR_QUEUE_NAME', null),
+        'connection' => env('MAGIC_TRANSLATOR_QUEUE_CONNECTION', null),
+        'name' => env('MAGIC_TRANSLATOR_QUEUE_NAME', null),
     ],
 
     /*
@@ -84,15 +84,15 @@ return [
     */
 
     'prism' => [
-        'provider' => env('CONTENT_TRANSLATOR_PROVIDER', 'openai'),
-        'model' => env('CONTENT_TRANSLATOR_MODEL', 'gpt-5-mini'),
+        'provider' => env('MAGIC_TRANSLATOR_PROVIDER', 'openai'),
+        'model' => env('MAGIC_TRANSLATOR_MODEL', 'gpt-5-mini'),
         // Long-form translation requests often exceed generic API defaults.
         // Keep these transport limits addon-scoped so translation reliability
         // does not depend on global Prism settings.
-        'request_timeout' => env('CONTENT_TRANSLATOR_PRISM_REQUEST_TIMEOUT', 120),
-        'connect_timeout' => env('CONTENT_TRANSLATOR_PRISM_CONNECT_TIMEOUT', 15),
-        'retry_attempts' => env('CONTENT_TRANSLATOR_PRISM_RETRY_ATTEMPTS', 1),
-        'retry_sleep_ms' => env('CONTENT_TRANSLATOR_PRISM_RETRY_SLEEP_MS', 1000),
+        'request_timeout' => env('MAGIC_TRANSLATOR_PRISM_REQUEST_TIMEOUT', 120),
+        'connect_timeout' => env('MAGIC_TRANSLATOR_PRISM_CONNECT_TIMEOUT', 15),
+        'retry_attempts' => env('MAGIC_TRANSLATOR_PRISM_RETRY_ATTEMPTS', 1),
+        'retry_sleep_ms' => env('MAGIC_TRANSLATOR_PRISM_RETRY_SLEEP_MS', 1000),
         'prompts' => [
             'system' => 'magic-translator::prompts.system',
             'user' => 'magic-translator::prompts.user',

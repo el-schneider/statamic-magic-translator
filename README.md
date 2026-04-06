@@ -144,9 +144,9 @@ By default, the addon auto-injects its fieldtype into entry blueprints. Use
 Set your provider and model:
 
 ```env
-CONTENT_TRANSLATOR_SERVICE=prism
-CONTENT_TRANSLATOR_PROVIDER=openai
-CONTENT_TRANSLATOR_MODEL=gpt-5-mini
+MAGIC_TRANSLATOR_SERVICE=prism
+MAGIC_TRANSLATOR_PROVIDER=openai
+MAGIC_TRANSLATOR_MODEL=gpt-5-mini
 OPENAI_API_KEY=sk-...
 ```
 
@@ -155,7 +155,7 @@ Any Prism-supported provider works — Anthropic, OpenAI, Gemini, Mistral, Ollam
 #### DeepL
 
 ```env
-CONTENT_TRANSLATOR_SERVICE=deepl
+MAGIC_TRANSLATOR_SERVICE=deepl
 DEEPL_API_KEY=your-deepl-key
 ```
 
@@ -182,8 +182,8 @@ php artisan queue:work
 Optionally configure a dedicated queue:
 
 ```env
-CONTENT_TRANSLATOR_QUEUE_CONNECTION=redis
-CONTENT_TRANSLATOR_QUEUE_NAME=translations
+MAGIC_TRANSLATOR_QUEUE_CONNECTION=redis
+MAGIC_TRANSLATOR_QUEUE_NAME=translations
 ```
 
 ## Content Structure Support
