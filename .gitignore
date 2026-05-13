@@ -1,7 +1,6 @@
 /vendor/
 /node_modules/
 /composer.lock
-/resources/dist/
 /.prettierignore.cache
 .DS_Store
 worktrees

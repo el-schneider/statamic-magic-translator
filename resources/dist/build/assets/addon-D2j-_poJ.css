@@ -1,0 +1,1 @@
+@keyframes ct-spin{to{transform:rotate(360deg)}}.animate-spin{animation:ct-spin 1s linear infinite}
