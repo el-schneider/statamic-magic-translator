@@ -2,6 +2,20 @@
 
 All notable changes to `el-schneider/statamic-magic-translator` will be documented in this file.
 
+## v0.1.2 - 2026-05-13
+
+### What's fixed
+
+- Include compiled Vite assets in the package so Composer installs no longer fail with `Vite manifest not found`.
+- Fix asset build CI by installing Composer dependencies before `npm ci`, so the local `@statamic/cms` package exists.
+- Build assets only against the Statamic v6/PHP 8.4 matrix where the Vite plugin package is available.
+- Keep Statamic's fake stache parent directory available during PHP 8.3 test teardown.
+
+### What's changed
+
+- Stop ignoring `resources/dist` so future asset builds can be committed by automation.
+- Adjust Dependabot cooldown settings for patch updates.
+
 ## v0.1.1 - 2026-04-06
 
 ### What's fixed
