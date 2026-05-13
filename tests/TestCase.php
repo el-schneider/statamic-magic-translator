@@ -38,6 +38,10 @@ abstract class TestCase extends AddonTestCase
             app('files')->deleteDirectory($blueprintDir.'/taxonomies');
         }
 
+        if (isset($this->fakeStacheDirectory)) {
+            app('files')->ensureDirectoryExists(dirname($this->fakeStacheDirectory));
+        }
+
         parent::tearDown();
     }
 

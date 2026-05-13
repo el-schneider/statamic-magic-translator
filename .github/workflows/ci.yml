@@ -64,8 +64,6 @@ jobs:
           node-version: 22
           cache: npm
 
-      - run: npm ci
-
       - uses: shivammathur/setup-php@v2
         with:
           php-version: ${{ matrix.php }}
@@ -86,7 +84,11 @@ jobs:
 
       - run: composer update --prefer-stable --prefer-dist --no-interaction
 
+      - run: npm ci
+        if: matrix.php == '8.4'
+
       - name: Build assets
+        if: matrix.php == '8.4'
         run: npm run build
 
       - name: Run Pest tests

@@ -1,0 +1,29 @@
+{
+  "_store-DBllWM2y.js": {
+    "file": "assets/store-DBllWM2y.js",
+    "name": "store"
+  },
+  "resources/js/v5/addon.css": {
+    "file": "assets/addon-D2j-_poJ.css",
+    "src": "resources/js/v5/addon.css",
+    "isEntry": true
+  },
+  "resources/js/v5/addon.ts": {
+    "file": "assets/addon-FazegrSx.js",
+    "name": "addon",
+    "src": "resources/js/v5/addon.ts",
+    "isEntry": true,
+    "imports": [
+      "_store-DBllWM2y.js"
+    ]
+  },
+  "resources/js/v6/addon.ts": {
+    "file": "assets/addon-L2UyNVeZ.js",
+    "name": "addon",
+    "src": "resources/js/v6/addon.ts",
+    "isEntry": true,
+    "imports": [
+      "_store-DBllWM2y.js"
+    ]
+  }
+}

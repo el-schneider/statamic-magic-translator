@@ -19,6 +19,18 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v4
 
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - uses: shivammathur/setup-php@v2
+        with:
+          php-version: '8.4'
+          coverage: none
+
+      - run: composer update --prefer-stable --prefer-dist --no-interaction
+
       - name: Install front-end dependencies
         run: npm ci
 
@@ -29,4 +41,4 @@ jobs:
         uses: stefanzweifel/git-auto-commit-action@v5
         with:
           commit_message: Build assets for distribution
-          file_pattern: 'resources/dist/*'
+          file_pattern: 'resources/dist/**'
