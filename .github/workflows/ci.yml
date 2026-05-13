@@ -64,8 +64,6 @@ jobs:
           node-version: 22
           cache: npm
 
-      - run: npm ci
-
       - uses: shivammathur/setup-php@v2
         with:
           php-version: ${{ matrix.php }}
@@ -85,6 +83,8 @@ jobs:
             composer-${{ matrix.php }}-
 
       - run: composer update --prefer-stable --prefer-dist --no-interaction
+
+      - run: npm ci
 
       - name: Build assets
         run: npm run build
