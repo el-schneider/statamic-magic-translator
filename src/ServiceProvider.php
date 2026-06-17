@@ -33,6 +33,10 @@ final class ServiceProvider extends AddonServiceProvider
         'cp' => __DIR__.'/../routes/cp.php',
     ];
 
+    protected $publishables = [
+        __DIR__.'/../resources/dist/build' => 'build',
+    ];
+
     public function register(): void
     {
         parent::register();
