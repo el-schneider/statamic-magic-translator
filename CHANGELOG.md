@@ -2,6 +2,15 @@
 
 All notable changes to `el-schneider/statamic-magic-translator` will be documented in this file.
 
+## v0.1.3 - 2026-06-17
+
+### What's fixed
+
+- Publish compiled control panel assets during Statamic's addon install flow so Composer installs copy `resources/dist/build` to `public/vendor/statamic-magic-translator/build`.
+- Add regression coverage for install-time asset publishing.
+
+Fixes #15
+
 ## v0.1.2 - 2026-05-13
 
 ### What's fixed
