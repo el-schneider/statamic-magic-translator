@@ -2,6 +2,16 @@
 
 All notable changes to `el-schneider/statamic-magic-translator` will be documented in this file.
 
+## v0.1.4 - 2026-07-22
+
+### What's fixed
+
+- Resolve imported fieldsets and referenced field definitions inside Replicator and Bard sets so their nested localized content is extracted and translated. Thanks to @Gitsack for reporting the issue and contributing the fix. (#21, #22)
+
+### Maintenance
+
+- Add `npm run ci` as the shared local and GitHub Actions quality gate, run the full suite before pushes, and require both supported PHP checks before Dependabot patch/minor updates can merge. (#23)
+
 ## v0.1.3 - 2026-06-17
 
 ### What's fixed
