@@ -3,14 +3,17 @@
   "type": "module",
   "scripts": {
     "build": "vite build",
+    "build:check": "vite build --outDir node_modules/.cache/magic-translator-dist",
     "dev": "vite",
     "check": "npm run format:check && npm run pint:check",
+    "ci": "npm run check && npm run build:check && npm test",
     "fix": "npm run format:fix && npm run pint:fix",
     "format:check": "prettier --check .",
     "format:fix": "prettier --write .",
     "pint:check": "./vendor/bin/pint --test",
     "pint:fix": "./vendor/bin/pint",
-    "prepare": "husky"
+    "prepare": "husky",
+    "test": "./vendor/bin/pest --ci"
   },
   "dependencies": {
     "@statamic/cms": "file:./vendor/statamic/cms/resources/dist-package"
