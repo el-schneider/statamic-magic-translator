@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace ElSchneider\MagicTranslator\Support;
 
 use Statamic\Fields\Blueprint;
+use Statamic\Fields\Fields;
 
 final class FieldDefinitionBuilder
 {
@@ -111,29 +112,17 @@ final class FieldDefinitionBuilder
             }
         }
 
+        // Resolve the item list through Statamic's own Fields class so that
+        // `import:` fieldsets (incl. prefixes) and `field: fieldset.handle`
+        // references are expanded instead of dropped. Hand-parsing the raw YAML
+        // silently skipped every set whose fields come from a fieldset import.
         $result = [];
 
-        foreach ($fieldItems as $item) {
-            if (! is_array($item)) {
-                continue;
-            }
+        foreach ((new Fields($fieldItems))->all() as $handle => $field) {
+            $config = $field->config();
+            $config['type'] ??= $field->type();
 
-            if (isset($item['import'])) {
-                continue;
-            }
-
-            if (! isset($item['handle'])) {
-                continue;
-            }
-
-            $handle = (string) $item['handle'];
-            $fieldConfig = $item['field'] ?? [];
-
-            if (is_string($fieldConfig)) {
-                continue;
-            }
-
-            $result[$handle] = self::normalizeFieldConfig((array) $fieldConfig);
+            $result[(string) $handle] = self::normalizeFieldConfig($config);
         }
 
         return $result;

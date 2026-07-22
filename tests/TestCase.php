@@ -38,6 +38,13 @@ abstract class TestCase extends AddonTestCase
             app('files')->deleteDirectory($blueprintDir.'/taxonomies');
         }
 
+        // Fieldsets have the same disk-bleed problem as blueprints.
+        $fieldsetDir = \Statamic\Facades\Fieldset::directory();
+
+        if ($fieldsetDir && str_contains($fieldsetDir, 'testbench')) {
+            app('files')->deleteDirectory($fieldsetDir);
+        }
+
         if (isset($this->fakeStacheDirectory)) {
             app('files')->ensureDirectoryExists(dirname($this->fakeStacheDirectory));
         }
