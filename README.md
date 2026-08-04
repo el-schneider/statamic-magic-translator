@@ -165,11 +165,14 @@ DeepL-specific options:
 'deepl' => [
     'api_key' => env('DEEPL_API_KEY'),
     'formality' => 'default', // 'more', 'less', 'prefer_more', 'prefer_less'
+    'glossary' => env('DEEPL_GLOSSARY_ID'),
     'overrides' => [
-        'de' => ['formality' => 'prefer_more'],
+        'de' => ['formality' => 'prefer_more', 'glossary' => 'glossary-id-for-german'],
     ],
 ],
 ```
+
+A [DeepL glossary](https://developers.deepl.com/docs/api-reference/glossaries) enforces your own terminology, so product names and jargon come back the way you want them. Because a glossary is bound to a single language pair, set `glossary` for your main pair and add a per-language `glossary` under `overrides` for every additional target language. A blank or missing value means no glossary is sent.
 
 ### 3. Set up a queue worker
 

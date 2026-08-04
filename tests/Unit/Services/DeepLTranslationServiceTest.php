@@ -685,3 +685,63 @@ it('ids restart from 0 in each chunk', function () {
     expect($capturedTexts[1])->toContain('id="0"');
     expect($capturedTexts[1])->not->toContain('id="2"');
 });
+
+// ─── Glossaries ───────────────────────────────────────────────────────────────
+
+/**
+ * Capture the options DeepL is called with for a single-unit translation.
+ */
+function capturedDeeplOptions(): array
+{
+    $capturedOptions = [];
+
+    $translator = Mockery::mock(Translator::class);
+    $translator->shouldReceive('translateText')
+        ->once()
+        ->andReturnUsing(function (string $text, ?string $source, string $target, array $options) use (&$capturedOptions) {
+            $capturedOptions = $options;
+
+            return deeplTextResult('<ct-unit id="0">Hallo</ct-unit>');
+        });
+
+    $units = [new TranslationUnit('title', 'Hello', TranslationFormat::Plain)];
+
+    deeplService($translator)->translate($units, 'en', 'de');
+
+    return $capturedOptions;
+}
+
+it('omits the glossary option when none is configured', function () {
+    config(['statamic.magic-translator.deepl.glossary' => null]);
+
+    expect(capturedDeeplOptions())->not->toHaveKey(TranslateTextOptions::GLOSSARY);
+});
+
+it('passes the configured glossary to DeepL', function () {
+    config(['statamic.magic-translator.deepl.glossary' => '11111111-2222-3333-4444-555555555555']);
+
+    expect(capturedDeeplOptions()[TranslateTextOptions::GLOSSARY])
+        ->toBe('11111111-2222-3333-4444-555555555555');
+});
+
+it('applies a per-language glossary override for the target locale', function () {
+    config([
+        'statamic.magic-translator.deepl.glossary' => 'global-glossary',
+        'statamic.magic-translator.deepl.overrides' => [
+            'de' => ['glossary' => 'german-glossary'],
+        ],
+    ]);
+
+    expect(capturedDeeplOptions()[TranslateTextOptions::GLOSSARY])->toBe('german-glossary');
+});
+
+it('ignores a blank glossary override and falls back to the global glossary', function () {
+    config([
+        'statamic.magic-translator.deepl.glossary' => 'global-glossary',
+        'statamic.magic-translator.deepl.overrides' => [
+            'de' => ['glossary' => ''],
+        ],
+    ]);
+
+    expect(capturedDeeplOptions()[TranslateTextOptions::GLOSSARY])->toBe('global-glossary');
+});
