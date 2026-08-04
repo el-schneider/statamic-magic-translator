@@ -46,7 +46,9 @@ final class TranslateEntryAction extends Action
         return [
             'callback' => [
                 'openTranslationDialog',
-                $items->map->id()->values()->all(),
+                // Cast because the Eloquent driver uses integer ids and the client
+                // posts these values back into string-validated endpoints.
+                $items->map(fn ($item) => (string) $item->id())->values()->all(),
                 $sites,
             ],
         ];

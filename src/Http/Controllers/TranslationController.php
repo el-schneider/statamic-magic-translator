@@ -19,6 +19,7 @@ use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Str;
 use Statamic\Facades\Blink;
 use Statamic\Facades\Entry;
+use Statamic\Facades\User;
 use Throwable;
 
 /**
@@ -55,6 +56,8 @@ final class TranslationController extends Controller
      */
     public function trigger(Request $request): JsonResponse
     {
+        $this->normalizeEntryId($request);
+
         $validated = $request->validate([
             'entry_id' => ['required', 'string'],
             'source_site' => ['nullable', 'string'],
@@ -80,7 +83,10 @@ final class TranslationController extends Controller
         }
 
         // ── Authorise the user ────────────────────────────────────────────────
-        $user = $request->user();
+        // The Eloquent driver hands back the application's own user model, which
+        // the permission helpers below cannot accept. Resolve it to a Statamic
+        // user; on the flat-file driver this returns the same instance.
+        $user = User::fromUser($request->user());
 
         if ($user === null) {
             return response()->json([
@@ -216,6 +222,8 @@ final class TranslationController extends Controller
      */
     public function markCurrent(Request $request): JsonResponse
     {
+        $this->normalizeEntryId($request);
+
         $validated = $request->validate([
             'entry_id' => ['required', 'string'],
             'locale' => ['required', 'string'],
@@ -234,7 +242,10 @@ final class TranslationController extends Controller
             ], 404);
         }
 
-        $user = $request->user();
+        // The Eloquent driver hands back the application's own user model, which
+        // the permission helpers below cannot accept. Resolve it to a Statamic
+        // user; on the flat-file driver this returns the same instance.
+        $user = User::fromUser($request->user());
 
         if ($user === null) {
             return response()->json([
@@ -425,6 +436,20 @@ final class TranslationController extends Controller
         }, $jobIds);
 
         return response()->json(['jobs' => $jobs]);
+    }
+
+    /**
+     * Entry ids are strings under the flat-file driver but integers under the
+     * Eloquent driver, where they arrive as JSON numbers. Cast them up front so
+     * the validation rules and the string-typed constructors downstream hold.
+     */
+    private function normalizeEntryId(Request $request): void
+    {
+        $entryId = $request->input('entry_id');
+
+        if (is_int($entryId)) {
+            $request->merge(['entry_id' => (string) $entryId]);
+        }
     }
 
     /**

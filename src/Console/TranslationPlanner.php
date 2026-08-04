@@ -209,7 +209,7 @@ final class TranslationPlanner
         string $reason,
     ): PlanItem {
         return new PlanItem(
-            entryId: $entry->id(),
+            entryId: (string) $entry->id(),
             entryTitle: $title,
             collection: $collection,
             sourceSite: $source,

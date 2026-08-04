@@ -204,7 +204,9 @@ final class MagicTranslatorFieldtype extends Fieldtype
         })->values()->all();
 
         return [
-            'entry_id' => $entry->id(),
+            // Cast because the Eloquent driver uses integer ids and the client
+            // posts this value back into string-validated endpoints.
+            'entry_id' => (string) $entry->id(),
             'current_site' => $currentSite,
             'origin_site' => $originSite,
             'is_origin' => $isOrigin,
