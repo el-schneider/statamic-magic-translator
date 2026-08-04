@@ -109,13 +109,18 @@ return [
     |
     | Configuration for the DeepL translation service.
     |
+    | A glossary enforces your own terminology. Since a DeepL glossary is bound
+    | to one language pair, set the global glossary for your main pair and add a
+    | per-language glossary under `overrides` for any additional target language.
+    |
     */
 
     'deepl' => [
         'api_key' => env('DEEPL_API_KEY'),
         'formality' => 'default',
+        'glossary' => env('DEEPL_GLOSSARY_ID'),
         'overrides' => [
-            // 'de' => ['formality' => 'prefer_more'],
+            // 'de' => ['formality' => 'prefer_more', 'glossary' => 'glossary-id-for-german'],
             // 'ja' => ['formality' => 'prefer_more'],
         ],
     ],
