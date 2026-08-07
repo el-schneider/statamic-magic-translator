@@ -8,7 +8,7 @@ on:
 
 jobs:
   tests:
-    name: Tests – PHP ${{ matrix.php }}
+    name: Tests – PHP ${{ matrix.php }} / Statamic ${{ matrix.statamic }}
     runs-on: ubuntu-latest
     timeout-minutes: 10
 
@@ -16,6 +16,12 @@ jobs:
       fail-fast: true
       matrix:
         php: ['8.3', '8.4']
+        statamic: ['6']
+        # The addon supports Statamic 5 until Statamic 7 lands. Statamic 5 caps
+        # at Laravel 12, so this leg also covers the older Testbench/Laravel.
+        include:
+          - php: '8.3'
+            statamic: '5'
 
     steps:
       - uses: actions/checkout@v4
@@ -39,9 +45,11 @@ jobs:
         uses: actions/cache@v4
         with:
           path: ${{ steps.composer-cache.outputs.dir }}
-          key: composer-${{ matrix.php }}-${{ hashFiles('composer.json') }}
+          key: composer-${{ matrix.php }}-statamic${{ matrix.statamic }}-${{ hashFiles('composer.json') }}
           restore-keys: |
-            composer-${{ matrix.php }}-
+            composer-${{ matrix.php }}-statamic${{ matrix.statamic }}-
+
+      - run: composer require "statamic/cms:^${{ matrix.statamic }}.0" --no-update --no-interaction
 
       - run: composer update --prefer-stable --prefer-dist --no-interaction
 
