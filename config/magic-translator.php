@@ -112,6 +112,7 @@ return [
     | A glossary enforces your own terminology. Since a DeepL glossary is bound
     | to one language pair, set the global glossary for your main pair and add a
     | per-language glossary under `overrides` for any additional target language.
+    | An empty override opts that language out of the global glossary.
     |
     */
 

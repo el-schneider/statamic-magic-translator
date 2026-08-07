@@ -691,7 +691,7 @@ it('ids restart from 0 in each chunk', function () {
 /**
  * Capture the options DeepL is called with for a single-unit translation.
  */
-function capturedDeeplOptions(): array
+function capturedDeeplOptions(string $targetLocale = 'de'): array
 {
     $capturedOptions = [];
 
@@ -706,7 +706,7 @@ function capturedDeeplOptions(): array
 
     $units = [new TranslationUnit('title', 'Hello', TranslationFormat::Plain)];
 
-    deeplService($translator)->translate($units, 'en', 'de');
+    deeplService($translator)->translate($units, 'en', $targetLocale);
 
     return $capturedOptions;
 }
@@ -735,7 +735,7 @@ it('applies a per-language glossary override for the target locale', function ()
     expect(capturedDeeplOptions()[TranslateTextOptions::GLOSSARY])->toBe('german-glossary');
 });
 
-it('ignores a blank glossary override and falls back to the global glossary', function () {
+it('treats a blank glossary override as an opt-out from the global glossary', function () {
     config([
         'statamic.magic-translator.deepl.glossary' => 'global-glossary',
         'statamic.magic-translator.deepl.overrides' => [
@@ -743,5 +743,22 @@ it('ignores a blank glossary override and falls back to the global glossary', fu
         ],
     ]);
 
-    expect(capturedDeeplOptions()[TranslateTextOptions::GLOSSARY])->toBe('global-glossary');
+    expect(capturedDeeplOptions())->not->toHaveKey(TranslateTextOptions::GLOSSARY);
+});
+
+it('matches a glossary override by base language code ignoring regional variant', function () {
+    config([
+        'statamic.magic-translator.deepl.glossary' => 'global-glossary',
+        'statamic.magic-translator.deepl.overrides' => [
+            'de' => ['glossary' => 'german-glossary'],
+        ],
+    ]);
+
+    expect(capturedDeeplOptions('de_DE')[TranslateTextOptions::GLOSSARY])->toBe('german-glossary');
+});
+
+it('drops a whitespace-only global glossary', function () {
+    config(['statamic.magic-translator.deepl.glossary' => '   ']);
+
+    expect(capturedDeeplOptions())->not->toHaveKey(TranslateTextOptions::GLOSSARY);
 });
