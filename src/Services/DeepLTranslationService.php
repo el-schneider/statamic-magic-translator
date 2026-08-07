@@ -92,6 +92,11 @@ final class DeepLTranslationService implements TranslationService
             TranslateTextOptions::FORMALITY => $this->resolveFormality($targetLocale),
         ];
 
+        if (($glossary = $this->resolveGlossary($targetLocale)) !== null) {
+            $options[TranslateTextOptions::GLOSSARY] = $glossary;
+            $context['glossary'] = $glossary;
+        }
+
         TranslationLogger::debug('deepl_request', array_merge($context, [
             'character_count' => mb_strlen($concatenated),
         ]));
@@ -202,7 +207,7 @@ final class DeepLTranslationService implements TranslationService
      */
     private function resolveFormality(string $targetLocale): string
     {
-        $baseLang = mb_strtolower(explode('-', str_replace('_', '-', $targetLocale))[0]);
+        $baseLang = $this->baseLanguage($targetLocale);
         $overrides = config('statamic.magic-translator.deepl.overrides', []);
 
         if (isset($overrides[$baseLang]['formality'])) {
@@ -213,6 +218,35 @@ final class DeepLTranslationService implements TranslationService
     }
 
     /**
+     * Resolve the glossary id for the given target locale.
+     *
+     * A DeepL glossary is bound to one language pair, so the global glossary
+     * only ever fits one target language. A blank override opts a language out
+     * of it; otherwise DeepL would reject the request.
+     */
+    private function resolveGlossary(string $targetLocale): ?string
+    {
+        $overrides = config('statamic.magic-translator.deepl.overrides', []);
+        $override = $overrides[$this->baseLanguage($targetLocale)]['glossary'] ?? null;
+
+        if (is_string($override)) {
+            return mb_trim($override) !== '' ? $override : null;
+        }
+
+        $global = config('statamic.magic-translator.deepl.glossary');
+
+        return is_string($global) && mb_trim($global) !== '' ? $global : null;
+    }
+
+    /**
+     * Reduce a Statamic locale to its base language code (`de_DE` -> `de`).
+     */
+    private function baseLanguage(string $locale): string
+    {
+        return mb_strtolower(explode('-', str_replace('_', '-', $locale))[0]);
+    }
+
+    /**
      * Map a Statamic source locale to a DeepL source language code.
      *
      * DeepL source languages only need the base code (e.g. 'EN', 'DE'),
@@ -220,9 +254,7 @@ final class DeepLTranslationService implements TranslationService
      */
     private function mapSourceLocale(string $locale): string
     {
-        $base = explode('-', str_replace('_', '-', $locale))[0];
-
-        return mb_strtoupper($base);
+        return mb_strtoupper($this->baseLanguage($locale));
     }
 
     /**

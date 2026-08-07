@@ -165,11 +165,18 @@ DeepL-specific options:
 'deepl' => [
     'api_key' => env('DEEPL_API_KEY'),
     'formality' => 'default', // 'more', 'less', 'prefer_more', 'prefer_less'
+    'glossary' => env('DEEPL_GLOSSARY_ID'),
     'overrides' => [
-        'de' => ['formality' => 'prefer_more'],
+        'de' => ['formality' => 'prefer_more', 'glossary' => 'glossary-id-for-german'],
     ],
 ],
 ```
+
+A [DeepL glossary](https://developers.deepl.com/docs/api-reference/glossaries) enforces your own terminology. Because a glossary is bound to a single language pair, set `glossary` for your main pair and add a per-language `glossary` under `overrides` for every additional target language. An override set to an empty string opts that language out of the global glossary.
+
+Glossaries are matched on the target language only, so they assume a single source language. If you translate the same target from several source sites, configure the glossary for the pair you translate most and expect DeepL to reject the others.
+
+If you already published `config/statamic/magic-translator.php` before upgrading, add `'glossary' => env('DEEPL_GLOSSARY_ID'),` to its `deepl` array — Laravel merges published config shallowly, so `DEEPL_GLOSSARY_ID` alone has no effect.
 
 ### 3. Set up a queue worker
 

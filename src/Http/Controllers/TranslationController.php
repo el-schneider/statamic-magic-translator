@@ -19,6 +19,7 @@ use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Str;
 use Statamic\Facades\Blink;
 use Statamic\Facades\Entry;
+use Statamic\Facades\User;
 use Throwable;
 
 /**
@@ -55,6 +56,8 @@ final class TranslationController extends Controller
      */
     public function trigger(Request $request): JsonResponse
     {
+        $this->normalizeEntryId($request);
+
         $validated = $request->validate([
             'entry_id' => ['required', 'string'],
             'source_site' => ['nullable', 'string'],
@@ -80,7 +83,10 @@ final class TranslationController extends Controller
         }
 
         // ── Authorise the user ────────────────────────────────────────────────
-        $user = $request->user();
+        // The Eloquent driver hands back the application's own user model, which
+        // the permission helpers below cannot accept. Resolve it to a Statamic
+        // user; on the flat-file driver this returns the same instance.
+        $user = User::fromUser($request->user());
 
         if ($user === null) {
             return response()->json([
@@ -187,14 +193,14 @@ final class TranslationController extends Controller
                 ];
             }
         } catch (MagicTranslatorException $exception) {
-            TranslationLogger::error($exception, $this->requestLogContext($request, $validated, $currentTargetSite));
+            TranslationLogger::error($exception, $this->requestLogContext($user->id(), $validated, $currentTargetSite));
 
             return response()->json([
                 'success' => false,
                 'error' => $exception->toApiError(),
             ], $exception->httpStatus());
         } catch (Throwable $exception) {
-            TranslationLogger::unexpected($exception, $this->requestLogContext($request, $validated, $currentTargetSite));
+            TranslationLogger::unexpected($exception, $this->requestLogContext($user->id(), $validated, $currentTargetSite));
 
             return response()->json([
                 'success' => false,
@@ -216,6 +222,8 @@ final class TranslationController extends Controller
      */
     public function markCurrent(Request $request): JsonResponse
     {
+        $this->normalizeEntryId($request);
+
         $validated = $request->validate([
             'entry_id' => ['required', 'string'],
             'locale' => ['required', 'string'],
@@ -234,7 +242,10 @@ final class TranslationController extends Controller
             ], 404);
         }
 
-        $user = $request->user();
+        // The Eloquent driver hands back the application's own user model, which
+        // the permission helpers below cannot accept. Resolve it to a Statamic
+        // user; on the flat-file driver this returns the same instance.
+        $user = User::fromUser($request->user());
 
         if ($user === null) {
             return response()->json([
@@ -428,17 +439,31 @@ final class TranslationController extends Controller
     }
 
     /**
+     * Entry ids are strings under the flat-file driver but integers under the
+     * Eloquent driver, where they arrive as JSON numbers. Cast them up front so
+     * the validation rules and the string-typed constructors downstream hold.
+     */
+    private function normalizeEntryId(Request $request): void
+    {
+        $entryId = $request->input('entry_id');
+
+        if (is_int($entryId)) {
+            $request->merge(['entry_id' => (string) $entryId]);
+        }
+    }
+
+    /**
      * @param  array<string, mixed>  $validated
      * @return array<string, mixed>
      */
-    private function requestLogContext(Request $request, array $validated, ?string $targetSite = null): array
+    private function requestLogContext(mixed $userId, array $validated, ?string $targetSite = null): array
     {
         return array_filter([
             'entry_id' => $validated['entry_id'] ?? null,
             'source_site' => $validated['source_site'] ?? null,
             'target_sites' => is_array($validated['target_sites'] ?? null) ? $validated['target_sites'] : null,
             'target_site' => $targetSite,
-            'user_id' => $request->user()?->id(),
+            'user_id' => $userId,
         ], static fn (mixed $value): bool => $value !== null);
     }
 
