@@ -2,6 +2,16 @@
 
 All notable changes to `el-schneider/statamic-magic-translator` will be documented in this file.
 
+## v0.2.0 - 2026-08-07
+
+### What's new
+
+- DeepL glossaries. Set a global `glossary` and per-target-language overrides to enforce your own terminology. Because a glossary is bound to one language pair, an override set to an empty string opts that language out of the global one. Thanks to @stijn-cube. (#26, #27)
+
+### What's fixed
+
+- Support Statamic's Eloquent driver. Numeric entry IDs are normalized before they reach the string-typed planner, Control Panel, endpoint and job boundaries, and the authenticated user is resolved through Statamic's user repository before permission checks and error logging. Thanks to @stijn-cube. (#25, #27)
+
 ## v0.1.4 - 2026-07-22
 
 ### What's fixed
