@@ -11,18 +11,14 @@ use ElSchneider\MagicTranslator\StatamicActions\TranslateEntryAction;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Queue;
 use Statamic\Facades\Entry;
+use Statamic\Facades\User;
 use Tests\StatamicTestHelpers;
 
 uses(StatamicTestHelpers::class);
 
 /**
- * The Eloquent driver hands out auto-increment integer ids instead of the
- * string uuids the flat-file driver uses. Those ids reach the addon as JSON
- * numbers from the Control Panel and as native ints from the entry objects.
- */
-
-/**
- * Build a saved entry whose id is numeric, mimicking the Eloquent driver.
+ * Build a saved entry whose id is numeric, as the Eloquent driver hands them
+ * out instead of the string uuids the flat-file driver uses.
  */
 function numericIdEntry(string $collection = 'articles', int $id = 48): Statamic\Entries\Entry
 {
@@ -144,14 +140,11 @@ function foreignUser(): object
 {
     return new class
     {
+        // No id(); Laravel's Eloquent user exposes id as an attribute, so any
+        // code path calling id() on the raw guard user breaks under Eloquent.
         public function can(string $ability, mixed $arguments = null): bool
         {
             return true;
-        }
-
-        public function id(): int
-        {
-            return 1;
         }
     };
 }
@@ -208,4 +201,34 @@ it('does not crash on mark-current when the guard returns an unresolvable user',
     );
 
     expect($response->getStatusCode())->toBe(401);
+});
+
+/**
+ * The error paths log a request context that includes the user id. Under the
+ * Eloquent driver the guard user has no id() method, so the context must be
+ * built from the resolved Statamic user or a provider failure turns into an
+ * unrelated crash instead of the structured error response.
+ */
+it('still returns a structured error when a dispatch fails for a foreign user model', function () {
+    $statamicUser = $this->loginUser();
+    $this->createTestCollection('articles', ['en', 'fr']);
+    $this->createTestBlueprint('articles');
+    $entry = numericIdEntry();
+
+    // Mimic the Eloquent user repository, which converts the application's
+    // own user model into a Statamic user.
+    User::partialMock()->shouldReceive('fromUser')->andReturn($statamicUser);
+
+    // Force the dispatch inside the try block to fail.
+    config(['statamic.magic-translator.queue.connection' => 'does-not-exist']);
+
+    $response = app(TranslationController::class)->trigger(
+        jsonRequestWithForeignUser('/magic-translator/translate', [
+            'entry_id' => (int) $entry->id(),
+            'target_sites' => ['fr'],
+        ])
+    );
+
+    expect($response->getStatusCode())->toBe(500)
+        ->and($response->getData(true)['error']['code'])->toBe('unexpected_error');
 });

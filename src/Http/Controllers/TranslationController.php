@@ -193,14 +193,14 @@ final class TranslationController extends Controller
                 ];
             }
         } catch (MagicTranslatorException $exception) {
-            TranslationLogger::error($exception, $this->requestLogContext($request, $validated, $currentTargetSite));
+            TranslationLogger::error($exception, $this->requestLogContext($user->id(), $validated, $currentTargetSite));
 
             return response()->json([
                 'success' => false,
                 'error' => $exception->toApiError(),
             ], $exception->httpStatus());
         } catch (Throwable $exception) {
-            TranslationLogger::unexpected($exception, $this->requestLogContext($request, $validated, $currentTargetSite));
+            TranslationLogger::unexpected($exception, $this->requestLogContext($user->id(), $validated, $currentTargetSite));
 
             return response()->json([
                 'success' => false,
@@ -456,14 +456,14 @@ final class TranslationController extends Controller
      * @param  array<string, mixed>  $validated
      * @return array<string, mixed>
      */
-    private function requestLogContext(Request $request, array $validated, ?string $targetSite = null): array
+    private function requestLogContext(mixed $userId, array $validated, ?string $targetSite = null): array
     {
         return array_filter([
             'entry_id' => $validated['entry_id'] ?? null,
             'source_site' => $validated['source_site'] ?? null,
             'target_sites' => is_array($validated['target_sites'] ?? null) ? $validated['target_sites'] : null,
             'target_site' => $targetSite,
-            'user_id' => $request->user()?->id(),
+            'user_id' => $userId,
         ], static fn (mixed $value): bool => $value !== null);
     }
 
