@@ -41,3 +41,24 @@ pest()->extend(Tests\TestCase::class)
 | global functions to help you to reduce the number of lines of code in your test files.
 |
 */
+
+use ElSchneider\MagicTranslator\Contracts\TranslationService;
+use ElSchneider\MagicTranslator\Data\TranslationUnit;
+
+/**
+ * Build a mock TranslationService that prefixes each unit's text with "FR: ".
+ */
+function makePrefixTranslationService(string $prefix = 'FR: '): TranslationService
+{
+    $mock = Mockery::mock(TranslationService::class);
+
+    $mock->shouldReceive('translate')
+        ->andReturnUsing(function (array $units) use ($prefix): array {
+            return array_map(
+                fn (TranslationUnit $u) => $u->withTranslation($prefix.$u->text),
+                $units,
+            );
+        });
+
+    return $mock;
+}

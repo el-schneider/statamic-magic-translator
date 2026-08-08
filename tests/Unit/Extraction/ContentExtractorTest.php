@@ -123,7 +123,7 @@ it('skips non-text field types (toggle, integer)', function () {
     expect($units[0]->path)->toBe('title');
 });
 
-it('skips tier 2 replicator fields (to be handled in task 4)', function () {
+it('skips replicator fields that carry no set field definitions', function () {
     $data = [
         'title' => 'My Post',
         'blocks' => [['type' => 'text', 'body' => 'Hello']],
@@ -139,7 +139,7 @@ it('skips tier 2 replicator fields (to be handled in task 4)', function () {
     expect($units[0]->path)->toBe('title');
 });
 
-it('skips tier 2 grid fields (to be handled in task 4)', function () {
+it('skips grid fields that carry no field definitions', function () {
     $data = [
         'title' => 'My Post',
         'links' => [['label' => 'Home', 'url' => '/']],

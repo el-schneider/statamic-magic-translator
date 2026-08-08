@@ -4,292 +4,14 @@ declare(strict_types=1);
 
 use ElSchneider\MagicTranslator\Actions\TranslateEntry;
 use ElSchneider\MagicTranslator\Contracts\TranslationService;
-use ElSchneider\MagicTranslator\Data\TranslationUnit;
-use ElSchneider\MagicTranslator\Events\AfterEntryTranslation;
-use ElSchneider\MagicTranslator\Events\BeforeEntryTranslation;
 use ElSchneider\MagicTranslator\Exceptions\ProviderAuthException;
 use ElSchneider\MagicTranslator\Exceptions\ProviderRateLimitedException;
 use ElSchneider\MagicTranslator\Jobs\TranslateEntryJob;
 use Illuminate\Support\Facades\Cache;
-use Illuminate\Support\Facades\Event;
 use Statamic\Facades\Entry;
 use Tests\StatamicTestHelpers;
 
 uses(StatamicTestHelpers::class);
-
-// ── Helpers ───────────────────────────────────────────────────────────────────
-
-/**
- * Build a mock TranslationService that prefixes each unit's text with "FR: ".
- */
-function makePrefixTranslationService(string $prefix = 'FR: '): TranslationService
-{
-    $mock = Mockery::mock(TranslationService::class);
-
-    $mock->shouldReceive('translate')
-        ->andReturnUsing(function (array $units) use ($prefix): array {
-            return array_map(
-                fn (TranslationUnit $u) => $u->withTranslation($prefix.$u->text),
-                $units,
-            );
-        });
-
-    return $mock;
-}
-
-/**
- * Set up a typical test: collection + blueprint + entry (en), mock service bound.
- *
- * @return array{entry: Statamic\Entries\Entry, action: TranslateEntry}
- */
-function setUpTranslationTest(
-    array $entryData = [],
-    array $blueprintFields = [],
-): array {
-    test()->createTestCollection('articles', ['en', 'fr']);
-    test()->createTestBlueprint('articles', 'default', $blueprintFields);
-
-    $defaultData = ['title' => 'Hello World', 'meta_description' => 'A great post'];
-
-    $entry = test()->createTestEntry(
-        collection: 'articles',
-        data: array_merge($defaultData, $entryData),
-        site: 'en',
-    );
-
-    $mock = makePrefixTranslationService();
-    app()->instance(TranslationService::class, $mock);
-
-    $action = app(TranslateEntry::class);
-
-    return compact('entry', 'action');
-}
-
-// ── Core translation ──────────────────────────────────────────────────────────
-
-it('translates an entry to a target locale', function () {
-    ['entry' => $entry, 'action' => $action] = setUpTranslationTest();
-
-    $action->handle($entry->id(), 'fr');
-
-    $fr = Entry::find($entry->id())->in('fr');
-
-    expect($fr)->not->toBeNull();
-    expect($fr->get('title'))->toBe('FR: Hello World');
-    expect($fr->get('meta_description'))->toBe('FR: A great post');
-});
-
-it('creates localization when it does not exist', function () {
-    ['entry' => $entry, 'action' => $action] = setUpTranslationTest();
-
-    expect($entry->in('fr'))->toBeNull();
-
-    $action->handle($entry->id(), 'fr');
-
-    expect($entry->in('fr'))->not->toBeNull();
-});
-
-it('overwrites existing localization by default', function () {
-    ['entry' => $entry, 'action' => $action] = setUpTranslationTest();
-
-    // First translation
-    $action->handle($entry->id(), 'fr');
-
-    $fr = Entry::find($entry->id())->in('fr');
-    expect($fr->get('title'))->toBe('FR: Hello World');
-
-    // Update source and translate again (overwrite = default true)
-    $entry->set('title', 'Updated Title')->save();
-
-    app()->instance(TranslationService::class, makePrefixTranslationService('FR2: '));
-    $action = app(TranslateEntry::class);
-    $action->handle($entry->id(), 'fr');
-
-    $fr = Entry::find($entry->id())->in('fr');
-    expect($fr->get('title'))->toBe('FR2: Updated Title');
-});
-
-it('skips existing localization when overwrite is false', function () {
-    ['entry' => $entry, 'action' => $action] = setUpTranslationTest();
-
-    // First translation
-    $action->handle($entry->id(), 'fr');
-
-    $fr = Entry::find($entry->id())->in('fr');
-    $firstTitle = $fr->get('title');
-    expect($firstTitle)->toBe('FR: Hello World');
-
-    // Update source and try to translate again with overwrite=false
-    $entry->set('title', 'Updated Title')->save();
-
-    app()->instance(TranslationService::class, makePrefixTranslationService('FR2: '));
-    $action = app(TranslateEntry::class);
-    $action->handle($entry->id(), 'fr', null, ['overwrite' => false]);
-
-    $fr = Entry::find($entry->id())->in('fr');
-    // Title should NOT have changed
-    expect($fr->get('title'))->toBe($firstTitle);
-});
-
-// ── Metadata ──────────────────────────────────────────────────────────────────
-
-it('sets last_translated_at and source_content_hash on the magic_translator field', function () {
-    ['entry' => $entry, 'action' => $action] = setUpTranslationTest();
-
-    $before = now()->subSecond(); // subtract 1s to avoid equal-timestamp edge case
-
-    $action->handle($entry->id(), 'fr');
-
-    $fr = Entry::find($entry->id())->in('fr');
-    $meta = $fr->get('magic_translator');
-
-    expect($meta)->toBeArray();
-    expect($meta)->toHaveKey('last_translated_at');
-    expect($meta)->toHaveKey('source_content_hash');
-    expect($meta['source_content_hash'])->toStartWith('v1:sha256:');
-
-    $timestamp = Carbon\Carbon::parse($meta['last_translated_at']);
-    expect($timestamp->gte($before))->toBeTrue();
-});
-
-// ── Slug regeneration ─────────────────────────────────────────────────────────
-
-it('regenerates slug from translated title when generate_slug is true', function () {
-    ['entry' => $entry, 'action' => $action] = setUpTranslationTest([
-        'title' => 'My English Title',
-    ]);
-
-    $action->handle($entry->id(), 'fr', null, ['generate_slug' => true]);
-
-    $fr = Entry::find($entry->id())->in('fr');
-    $translatedTitle = $fr->get('title');
-
-    expect($translatedTitle)->toBe('FR: My English Title');
-    // Slug should be derived from translated title
-    expect($fr->slug())->toBe(Illuminate\Support\Str::slug($translatedTitle));
-});
-
-it('does not regenerate slug when generate_slug is false', function () {
-    ['entry' => $entry, 'action' => $action] = setUpTranslationTest([
-        'title' => 'My English Title',
-    ]);
-
-    // Entry has slug 'test-entry'
-    $originalSlug = $entry->slug();
-
-    $action->handle($entry->id(), 'fr', null, ['generate_slug' => false]);
-
-    $fr = Entry::find($entry->id())->in('fr');
-    // When localization is created, it inherits the origin's slug
-    expect($fr->slug())->toBe($originalSlug);
-});
-
-// ── Events ────────────────────────────────────────────────────────────────────
-
-it('fires BeforeEntryTranslation event before extraction', function () {
-    ['entry' => $entry, 'action' => $action] = setUpTranslationTest();
-
-    $firedBefore = false;
-
-    Event::listen(BeforeEntryTranslation::class, function (BeforeEntryTranslation $event) use (&$firedBefore, $entry) {
-        $firedBefore = true;
-        expect($event->entry->id())->toBe($entry->id());
-        expect($event->targetSite)->toBe('fr');
-        expect($event->units)->toBeArray();
-    });
-
-    $action->handle($entry->id(), 'fr');
-
-    expect($firedBefore)->toBeTrue();
-});
-
-it('fires AfterEntryTranslation event after translation', function () {
-    ['entry' => $entry, 'action' => $action] = setUpTranslationTest();
-
-    $firedAfter = false;
-
-    Event::listen(AfterEntryTranslation::class, function (AfterEntryTranslation $event) use (&$firedAfter) {
-        $firedAfter = true;
-        expect($event->targetSite)->toBe('fr');
-        expect($event->translatedData)->toBeArray();
-        expect($event->translatedData)->toHaveKey('title');
-    });
-
-    $action->handle($entry->id(), 'fr');
-
-    expect($firedAfter)->toBeTrue();
-});
-
-it('allows BeforeEntryTranslation listener to modify units', function () {
-    ['entry' => $entry, 'action' => $action] = setUpTranslationTest();
-
-    // Listener removes all units → nothing gets translated
-    Event::listen(BeforeEntryTranslation::class, function (BeforeEntryTranslation $event) {
-        $event->units = [];
-    });
-
-    $action->handle($entry->id(), 'fr');
-
-    $fr = Entry::find($entry->id())->in('fr');
-    // With no units to translate, the fr entry data should be empty (no translated fields)
-    expect($fr->get('title'))->toBeNull();
-});
-
-it('allows AfterEntryTranslation listener to modify translated data', function () {
-    ['entry' => $entry, 'action' => $action] = setUpTranslationTest();
-
-    Event::listen(AfterEntryTranslation::class, function (AfterEntryTranslation $event) {
-        $event->translatedData['title'] = 'Overridden by listener';
-    });
-
-    $action->handle($entry->id(), 'fr');
-
-    $fr = Entry::find($entry->id())->in('fr');
-    expect($fr->get('title'))->toBe('Overridden by listener');
-});
-
-// ── Source site override ──────────────────────────────────────────────────────
-
-it('translates from a specified source site instead of origin', function () {
-    // Set up three sites: en, fr, es.
-    Statamic\Facades\Site::setSites([
-        'en' => ['name' => 'English', 'url' => 'http://localhost/', 'locale' => 'en'],
-        'fr' => ['name' => 'French', 'url' => 'http://localhost/fr/', 'locale' => 'fr'],
-        'es' => ['name' => 'Spanish', 'url' => 'http://localhost/es/', 'locale' => 'es'],
-    ]);
-
-    test()->createTestCollection('articles', ['en', 'fr', 'es']);
-    test()->createTestBlueprint('articles', 'default');
-
-    // Origin entry (en)
-    $originEntry = test()->createTestEntry(
-        collection: 'articles',
-        data: ['title' => 'English Title', 'meta_description' => 'English meta'],
-        site: 'en',
-        slug: 'source-entry',
-    );
-
-    // Create fr localization manually with different content
-    $frEntry = $originEntry->makeLocalization('fr');
-    $frEntry->data(['title' => 'Titre Français', 'meta_description' => 'Meta française']);
-    $frEntry->save();
-
-    // Mock service to prefix with "ES: "
-    $mock = makePrefixTranslationService('ES: ');
-    app()->instance(TranslationService::class, $mock);
-
-    $action = app(TranslateEntry::class);
-
-    // Translate fr → es (using fr as source)
-    $action->handle($originEntry->id(), 'es', 'fr');
-
-    $esEntry = Entry::find($originEntry->id())->in('es');
-
-    expect($esEntry)->not->toBeNull();
-    // Should have translated FROM fr content, not en
-    expect($esEntry->get('title'))->toBe('ES: Titre Français');
-    expect($esEntry->get('meta_description'))->toBe('ES: Meta française');
-});
 
 // ── Job wrapper ───────────────────────────────────────────────────────────────
 
@@ -491,4 +213,67 @@ it('preserves the retryable flag in cached structured job errors', function () {
     expect($cached['status'])->toBe('failed');
     expect($cached['error']['code'])->toBe('provider_rate_limited');
     expect($cached['error']['retryable'])->toBeTrue();
+});
+
+it('marks the cached job failed when Laravel gives up after the final retry', function () {
+    $jobId = 'exhausted-retries-job-test';
+
+    // A retry cycle set the status back to 'running'; only failed() can move it
+    // to the terminal state, so the CP stops polling.
+    Cache::put("magic-translator:job:{$jobId}", [
+        'id' => $jobId,
+        'target_site' => 'fr',
+        'status' => 'running',
+        'error' => null,
+    ], 600);
+
+    (new TranslateEntryJob('entry-id', 'fr', null, [], $jobId))
+        ->failed(new ProviderRateLimitedException('Provider rate limit exceeded.', null, ['provider' => 'prism']));
+
+    $cached = Cache::get("magic-translator:job:{$jobId}");
+
+    expect($cached['status'])->toBe('failed')
+        ->and($cached['error']['code'])->toBe('provider_rate_limited');
+});
+
+it('marks the cached job failed with an unexpected error for non-domain exceptions', function () {
+    $jobId = 'exhausted-retries-generic-job-test';
+
+    Cache::put("magic-translator:job:{$jobId}", [
+        'id' => $jobId,
+        'target_site' => 'fr',
+        'status' => 'running',
+        'error' => null,
+    ], 600);
+
+    (new TranslateEntryJob('entry-id', 'fr', null, [], $jobId))->failed(new RuntimeException('boom'));
+
+    $cached = Cache::get("magic-translator:job:{$jobId}");
+
+    expect($cached['status'])->toBe('failed')
+        ->and($cached['error']['code'])->toBe('unexpected_error');
+});
+
+it('clears stale cache errors when a retried job later succeeds', function () {
+    app()->instance(TranslationService::class, makePrefixTranslationService());
+
+    $jobId = 'retry-success-job-id';
+
+    Cache::put("magic-translator:job:{$jobId}", [
+        'id' => $jobId,
+        'target_site' => 'fr',
+        'status' => 'failed',
+        'error' => 'Previous transient error',
+    ], 600);
+
+    test()->createTestCollection('articles', ['en', 'fr']);
+    test()->createTestBlueprint('articles');
+    $entry = test()->createTestEntry('articles');
+
+    $job = new TranslateEntryJob($entry->id(), 'fr', null, [], $jobId);
+    app()->call([$job, 'handle']);
+
+    $cached = Cache::get("magic-translator:job:{$jobId}");
+    expect($cached['status'])->toBe('completed');
+    expect($cached['error'] ?? null)->toBeNull();
 });

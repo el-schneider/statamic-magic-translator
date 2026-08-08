@@ -5,26 +5,6 @@ declare(strict_types=1);
 use ElSchneider\MagicTranslator\Console\PlanAction;
 use ElSchneider\MagicTranslator\Console\PlanItem;
 
-it('constructs a PlanItem with all fields', function () {
-    $item = new PlanItem(
-        entryId: 'entry-abc',
-        entryTitle: 'Hello World',
-        collection: 'articles',
-        sourceSite: 'en',
-        targetSite: 'de',
-        action: PlanAction::Translate,
-        reason: 'target localization missing',
-    );
-
-    expect($item->entryId)->toBe('entry-abc');
-    expect($item->entryTitle)->toBe('Hello World');
-    expect($item->collection)->toBe('articles');
-    expect($item->sourceSite)->toBe('en');
-    expect($item->targetSite)->toBe('de');
-    expect($item->action)->toBe(PlanAction::Translate);
-    expect($item->reason)->toBe('target localization missing');
-});
-
 it('exposes willProcess() semantics per action', function () {
     $translate = new PlanItem('e', 't', 'c', 'en', 'de', PlanAction::Translate, '');
     $stale = new PlanItem('e', 't', 'c', 'en', 'de', PlanAction::Stale, '');

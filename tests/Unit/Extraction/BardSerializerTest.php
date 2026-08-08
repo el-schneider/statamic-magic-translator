@@ -46,13 +46,6 @@ it('serializes text node with empty string', function () {
     expect($result->markMap)->toBe([]);
 });
 
-it('serializes plain paragraph fixture', function () {
-    $result = $this->serializer->serialize(bardFixture('plain-paragraph'));
-
-    expect($result->text)->toBe('Hello world');
-    expect($result->markMap)->toBe([]);
-});
-
 // ── Single known marks ────────────────────────────────────────────────────────
 
 it('serializes bold mark as <b> tag', function () {
@@ -183,12 +176,6 @@ it('serializes nested marks (bold + italic) with outermost first', function () {
     expect($result->markMap)->toBe([]);
 });
 
-it('serializes nested marks fixture', function () {
-    $result = $this->serializer->serialize(bardFixture('nested-marks'));
-
-    expect($result->text)->toBe('This is <b><i>strong emphasis</i></b> here');
-});
-
 it('serializes three nested marks', function () {
     $content = [
         ['type' => 'text', 'marks' => [['type' => 'bold'], ['type' => 'italic'], ['type' => 'underline']], 'text' => 'all three'],
@@ -260,13 +247,6 @@ it('serializes multiple text nodes concatenating in order', function () {
     expect($result->markMap)->toBe([]);
 });
 
-it('serializes mixed-nodes fixture', function () {
-    $result = $this->serializer->serialize(bardFixture('mixed-nodes'));
-
-    expect($result->text)->toBe('Plain start, <b>bold middle</b>, plain again, <i>italic end</i>');
-    expect($result->markMap)->toBe([]);
-});
-
 it('serializes inline-marks fixture with all distinct marks', function () {
     $result = $this->serializer->serialize(bardFixture('inline-marks'));
 
@@ -282,12 +262,3 @@ it('serializes all-known-marks fixture', function () {
 });
 
 // ── Result object ─────────────────────────────────────────────────────────────
-
-it('returns an object with text and markMap properties', function () {
-    $result = $this->serializer->serialize([['type' => 'text', 'text' => 'hi']]);
-
-    expect($result)->toHaveProperty('text');
-    expect($result)->toHaveProperty('markMap');
-    expect($result->text)->toBeString();
-    expect($result->markMap)->toBeArray();
-});

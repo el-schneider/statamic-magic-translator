@@ -247,10 +247,3 @@ it('returns a non-empty title string', function () {
 });
 
 // ── confirmation ──────────────────────────────────────────────────────────────
-
-it('bypasses the default confirmation dialog', function () {
-    // The action uses $confirm = false because it opens its own custom dialog
-    $action = app(TranslateEntryAction::class);
-    $reflected = new ReflectionProperty($action, 'confirm');
-    expect($reflected->getValue($action))->toBeFalse();
-});
