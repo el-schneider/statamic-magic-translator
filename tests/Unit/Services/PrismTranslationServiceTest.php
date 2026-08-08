@@ -9,6 +9,9 @@ use ElSchneider\MagicTranslator\Exceptions\ProviderRateLimitedException;
 use ElSchneider\MagicTranslator\Exceptions\ProviderResponseInvalidException;
 use ElSchneider\MagicTranslator\Exceptions\ProviderUnavailableException;
 use ElSchneider\MagicTranslator\Services\PrismTranslationService;
+use Illuminate\Http\Client\ConnectionException;
+use Illuminate\Http\Client\RequestException;
+use Illuminate\Http\Client\Response;
 use Prism\Prism\Enums\FinishReason;
 use Prism\Prism\Exceptions\PrismException;
 use Prism\Prism\Exceptions\PrismRateLimitedException;
@@ -453,6 +456,35 @@ it('applies configured prism transport options and retries to requests', functio
         expect($retry[0])->toBe(2);
         expect($retry[1])->toBe(1500);
         expect($retry[2])->toBeCallable();
+    });
+});
+
+it('retries only transport failures that can succeed on a second attempt', function () {
+    $fake = Prism::fake([
+        makeStructuredResponse([
+            ['id' => 'title', 'text' => 'Bonjour'],
+        ]),
+    ]);
+
+    app(PrismTranslationService::class)->translate(
+        [new TranslationUnit('title', 'Hello', TranslationFormat::Plain)],
+        'en',
+        'fr',
+    );
+
+    $fake->assertRequest(function (array $requests) {
+        $shouldRetry = $requests[0]->clientRetry()[2];
+
+        $httpError = fn (int $status) => new RequestException(
+            new Response(new GuzzleHttp\Psr7\Response($status)),
+        );
+
+        expect($shouldRetry(new ConnectionException('Connection refused')))->toBeTrue()
+            ->and($shouldRetry($httpError(429)))->toBeTrue()
+            ->and($shouldRetry($httpError(503)))->toBeTrue()
+            ->and($shouldRetry($httpError(400)))->toBeFalse()
+            ->and($shouldRetry(new RuntimeException('cURL error 28: Operation timed out')))->toBeTrue()
+            ->and($shouldRetry(new RuntimeException('boom')))->toBeFalse();
     });
 });
 

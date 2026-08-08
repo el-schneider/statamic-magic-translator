@@ -732,6 +732,29 @@ it('full round-trip: extract → translate per-unit → reassemble', function ()
     expect($result['content'][1]['content'][0]['text'])->toBe('Deuxième paragraphe');
 });
 
+it('full round-trip with a bard field stored as a raw markdown string', function () {
+    $extractor = new ContentExtractor;
+
+    // Bard fields configured without `save_html` can hold a plain markdown
+    // string, which takes the markdown branch instead of the ".body" one.
+    $data = ['content' => "## Welcome\n\nSome **bold** text."];
+    $fields = ['content' => ['type' => 'bard', 'localizable' => true]];
+
+    $units = $extractor->extract($data, $fields);
+
+    expect($units)->toHaveCount(1)
+        ->and($units[0]->path)->toBe('content')
+        ->and($units[0]->format)->toBe(TranslationFormat::Markdown);
+
+    $result = $this->reassembler->reassemble(
+        $data,
+        [$units[0]->withTranslation("## Bienvenue\n\nDu texte **gras**.")],
+        $fields,
+    );
+
+    expect($result['content'])->toBe("## Bienvenue\n\nDu texte **gras**.");
+});
+
 it('full round-trip with bard inline marks preserved through translation', function () {
     $extractor = new ContentExtractor;
 

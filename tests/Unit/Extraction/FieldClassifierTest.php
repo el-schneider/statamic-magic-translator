@@ -77,3 +77,7 @@ it('classifies nested text without localizable key as tier 1', function () {
 it('skips nested fields with localizable false', function () {
     expect(FieldClassifier::classifyNested(['type' => 'text', 'localizable' => false]))->toBe(FieldTier::Skip);
 });
+
+it('skips nested fields with translatable false', function () {
+    expect(FieldClassifier::classifyNested(['type' => 'text', 'translatable' => false]))->toBe(FieldTier::Skip);
+});
