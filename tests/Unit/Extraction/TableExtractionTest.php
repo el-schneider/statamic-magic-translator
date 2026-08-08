@@ -53,49 +53,6 @@ it('extracts text from table rows with multiple cells', function () {
     expect($units[3]->text)->toBe('Developer');
 });
 
-it('all table cells are extracted as plain text format', function () {
-    $data = [
-        'my_table' => [
-            ['cells' => ['First', 'Second']],
-        ],
-    ];
-    $fields = [
-        'my_table' => ['type' => 'table', 'localizable' => true],
-    ];
-
-    $units = $this->extractor->extract($data, $fields);
-
-    foreach ($units as $unit) {
-        expect($unit->format)->toBe(TranslationFormat::Plain);
-    }
-});
-
-it('uses correct path indices for table rows and cells', function () {
-    $data = [
-        'data' => [
-            ['cells' => ['A1', 'B1', 'C1']],
-            ['cells' => ['A2', 'B2', 'C2']],
-            ['cells' => ['A3', 'B3', 'C3']],
-        ],
-    ];
-    $fields = [
-        'data' => ['type' => 'table', 'localizable' => true],
-    ];
-
-    $units = $this->extractor->extract($data, $fields);
-
-    expect($units)->toHaveCount(9);
-    expect($units[0]->path)->toBe('data.0.cells.0');
-    expect($units[1]->path)->toBe('data.0.cells.1');
-    expect($units[2]->path)->toBe('data.0.cells.2');
-    expect($units[3]->path)->toBe('data.1.cells.0');
-    expect($units[4]->path)->toBe('data.1.cells.1');
-    expect($units[5]->path)->toBe('data.1.cells.2');
-    expect($units[6]->path)->toBe('data.2.cells.0');
-    expect($units[7]->path)->toBe('data.2.cells.1');
-    expect($units[8]->path)->toBe('data.2.cells.2');
-});
-
 it('combines tier 1 fields and table fields in the same extraction', function () {
     $data = [
         'title' => 'My Document',

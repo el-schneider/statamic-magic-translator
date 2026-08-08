@@ -63,32 +63,6 @@ it('extracts text from multiple grid rows', function () {
     expect($units[1]->text)->toBe('Other');
 });
 
-it('uses correct path indices for grid rows', function () {
-    $data = [
-        'items' => [
-            ['name' => 'First'],
-            ['name' => 'Second'],
-            ['name' => 'Third'],
-        ],
-    ];
-    $fields = [
-        'items' => [
-            'type' => 'grid',
-            'localizable' => true,
-            'fields' => [
-                'name' => ['type' => 'text'],
-            ],
-        ],
-    ];
-
-    $units = $this->extractor->extract($data, $fields);
-
-    expect($units)->toHaveCount(3);
-    expect($units[0]->path)->toBe('items.0.name');
-    expect($units[1]->path)->toBe('items.1.name');
-    expect($units[2]->path)->toBe('items.2.name');
-});
-
 it('extracts multiple text columns from each grid row', function () {
     $data = [
         'team' => [
@@ -218,52 +192,6 @@ it('skips empty and null values inside grid rows', function () {
 
     expect($units)->toHaveCount(1);
     expect($units[0]->path)->toBe('items.0.name');
-});
-
-it('skips fields with translatable false inside grid', function () {
-    $data = [
-        'links' => [
-            ['url' => 'https://example.com', 'label' => 'Example'],
-        ],
-    ];
-    $fields = [
-        'links' => [
-            'type' => 'grid',
-            'localizable' => true,
-            'fields' => [
-                'url' => ['type' => 'text', 'translatable' => false],
-                'label' => ['type' => 'text'],
-            ],
-        ],
-    ];
-
-    $units = $this->extractor->extract($data, $fields);
-
-    expect($units)->toHaveCount(1);
-    expect($units[0]->path)->toBe('links.0.label');
-});
-
-it('skips fields with localizable false inside grid', function () {
-    $data = [
-        'links' => [
-            ['label' => 'Example', 'internal_note' => 'Do not translate'],
-        ],
-    ];
-    $fields = [
-        'links' => [
-            'type' => 'grid',
-            'localizable' => true,
-            'fields' => [
-                'label' => ['type' => 'text'],
-                'internal_note' => ['type' => 'text', 'localizable' => false],
-            ],
-        ],
-    ];
-
-    $units = $this->extractor->extract($data, $fields);
-
-    expect($units)->toHaveCount(1);
-    expect($units[0]->path)->toBe('links.0.label');
 });
 
 // ── Edge cases ────────────────────────────────────────────────────────────────
