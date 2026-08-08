@@ -2,6 +2,17 @@
 
 All notable changes to `el-schneider/statamic-magic-translator` will be documented in this file.
 
+## v0.2.1 - 2026-08-08
+
+### What's fixed
+
+- Reject excluded blueprints on the translate endpoint. `mark-current`, the Control Panel action and the CLI planner all honoured `exclude_blueprints`, but a direct request to the translate endpoint did not. (#29)
+
+### Maintenance
+
+- Test against Statamic 5 as well as 6, so the declared `^5.0 || ^6.0` support is actually exercised on every run. (#28)
+- Close five coverage gaps found by mutation testing, including the terminal job-failure state and the provider retry classifier, and remove redundant tests. (#29)
+
 ## v0.2.0 - 2026-08-07
 
 ### What's new
