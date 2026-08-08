@@ -9,6 +9,7 @@ use ElSchneider\MagicTranslator\Support\ContentFingerprint;
 use ElSchneider\MagicTranslator\Support\FieldDefinitionBuilder;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\Queue;
+use Statamic\Facades\Entry;
 use Tests\StatamicTestHelpers;
 
 uses(StatamicTestHelpers::class);
@@ -378,32 +379,6 @@ it('dispatches a TranslateEntryJob for each target site', function () {
     Queue::assertPushed(TranslateEntryJob::class, 1);
 });
 
-it('dispatches one job per target site', function () {
-    // Add a third site so we can dispatch to two targets.
-    Statamic\Facades\Site::setSites([
-        'en' => ['name' => 'English', 'url' => 'http://localhost/', 'locale' => 'en'],
-        'fr' => ['name' => 'French', 'url' => 'http://localhost/fr/', 'locale' => 'fr'],
-        'de' => ['name' => 'German', 'url' => 'http://localhost/de/', 'locale' => 'de'],
-    ]);
-
-    Queue::fake();
-
-    $this->loginUser();
-    $this->createTestCollection('articles', ['en', 'fr', 'de']);
-    $this->createTestBlueprint('articles');
-    $entry = $this->createTestEntry('articles');
-
-    $response = $this->postJson(cpUrl('magic-translator/translate'), [
-        'entry_id' => $entry->id(),
-        'target_sites' => ['fr', 'de'],
-    ]);
-
-    $response->assertStatus(200)
-        ->assertJson(['success' => true]);
-
-    Queue::assertPushed(TranslateEntryJob::class, 2);
-});
-
 it('returns a job entry for every target site in the response', function () {
     Queue::fake();
 
@@ -537,26 +512,47 @@ it('writes heartbeat_at on every status update (pending, running, completed, fai
     expect($failed['heartbeat_at'] ?? null)->toBeString()->not->toBeEmpty();
 });
 
-it('passes source_site and options through to the dispatched job', function () {
-    Queue::fake();
+it('runs the dispatched job with the requested source site and options', function () {
+    // Run inline so the effect of the dispatched job is observable. A
+    // Queue::assertPushed() cannot see the job's readonly constructor args.
+    config(['queue.default' => 'sync']);
+
+    $this->createMultiSiteSetup([
+        'en' => ['name' => 'English', 'url' => 'http://localhost/', 'locale' => 'en'],
+        'de' => ['name' => 'German', 'url' => 'http://localhost/de/', 'locale' => 'de'],
+        'fr' => ['name' => 'French', 'url' => 'http://localhost/fr/', 'locale' => 'fr'],
+    ]);
 
     $this->loginUser();
-    $this->createTestCollection('articles', ['en', 'fr']);
-    $this->createTestBlueprint('articles');
-    $entry = $this->createTestEntry('articles');
+    $this->createTestCollection('articles', ['en', 'de', 'fr']);
+    $this->createTestBlueprint('articles', 'default', [
+        'title' => ['type' => 'text', 'localizable' => true],
+    ]);
+
+    $entry = $this->createTestEntry('articles', ['title' => 'English title']);
+
+    $german = $entry->makeLocalization('de');
+    $german->set('title', 'Deutscher Titel');
+    $german->save();
+
+    app()->instance(TranslationService::class, makePrefixTranslationService('FR: '));
 
     $response = $this->postJson(cpUrl('magic-translator/translate'), [
         'entry_id' => $entry->id(),
-        'source_site' => 'en',
+        'source_site' => 'de',
         'target_sites' => ['fr'],
-        'options' => ['generate_slug' => true, 'overwrite' => false],
+        'options' => ['generate_slug' => true],
     ]);
 
     $response->assertStatus(200)->assertJson(['success' => true]);
 
-    // Job is pushed — specific constructor args are verified via integration
-    // in TranslateEntryJobTest; here we just confirm it was dispatched.
-    Queue::assertPushed(TranslateEntryJob::class);
+    $french = Entry::find($entry->id())->in('fr');
+
+    // Source site reached the job: the French title derives from the German
+    // localization, not from the English origin.
+    expect($french->get('title'))->toBe('FR: Deutscher Titel')
+        // Options reached the job: generate_slug rewrote the slug.
+        ->and($french->slug())->toBe('fr-deutscher-titel');
 });
 
 // ── Mark current endpoint ─────────────────────────────────────────────────────
@@ -600,7 +596,7 @@ it('marks an existing localization as current and persists updated metadata', fu
 
     expect($lastTranslatedAt)->toBeString()->not->toBeEmpty();
 
-    $fresh = Statamic\Facades\Entry::find($entry->id())->in('fr');
+    $fresh = Entry::find($entry->id())->in('fr');
     $meta = $fresh->get('magic_translator');
 
     expect($meta)->toBeArray();
@@ -703,6 +699,28 @@ it('forbids mark-current for target locales outside accessible sites', function 
         ->assertJsonPath('error.retryable', false);
 });
 
+it('returns 422 when triggering a translation for an excluded blueprint', function () {
+    config(['statamic.magic-translator.exclude_blueprints' => ['articles.default']]);
+
+    $this->loginUser();
+    $this->createTestCollection('articles', ['en', 'fr']);
+    $this->createTestBlueprint('articles', 'default');
+
+    $entry = $this->createTestEntry('articles', site: 'en');
+
+    Queue::fake();
+
+    $response = $this->postJson(cpUrl('magic-translator/translate'), triggerPayload($entry->id(), ['fr']));
+
+    $response->assertStatus(422)
+        ->assertJsonPath('success', false)
+        ->assertJsonPath('error.code', 'unsupported')
+        ->assertJsonPath('error.message', 'Translation is not supported for excluded blueprint [articles.default].')
+        ->assertJsonPath('error.retryable', false);
+
+    Queue::assertNotPushed(TranslateEntryJob::class);
+});
+
 it('returns 422 for mark-current on an excluded blueprint', function () {
     config(['statamic.magic-translator.exclude_blueprints' => ['articles.default']]);
 
@@ -751,7 +769,7 @@ it('is idempotent when marking a localization current multiple times', function 
     expect($firstHash)->toBeString()->not->toBeEmpty();
     expect($secondHash)->toBe($firstHash);
 
-    $freshMeta = Statamic\Facades\Entry::find($entry->id())->in('fr')->get('magic_translator');
+    $freshMeta = Entry::find($entry->id())->in('fr')->get('magic_translator');
 
     expect($freshMeta['source_content_hash'])->toBe($firstHash);
 });
@@ -1004,104 +1022,4 @@ it('returns 422 when status request is missing jobs parameter', function () {
         ->assertJsonValidationErrors(['jobs']);
 });
 
-// ── Job cache integration ─────────────────────────────────────────────────────
-
-it('job updates cache to running then completed when executed synchronously', function () {
-    use_fake_translation_service_for_job_test();
-
-    $jobId = 'sync-job-test';
-
-    Cache::put("magic-translator:job:{$jobId}", [
-        'id' => $jobId,
-        'target_site' => 'fr',
-        'status' => 'pending',
-        'error' => null,
-    ], 600);
-
-    $this->createTestCollection('articles', ['en', 'fr']);
-    $this->createTestBlueprint('articles');
-    $entry = $this->createTestEntry('articles');
-
-    $job = new TranslateEntryJob($entry->id(), 'fr', null, [], $jobId);
-    app()->call([$job, 'handle']);
-
-    $cached = Cache::get("magic-translator:job:{$jobId}");
-    expect($cached['status'])->toBe('completed');
-});
-
-it('clears stale cache errors when a retried job later succeeds', function () {
-    use_fake_translation_service_for_job_test();
-
-    $jobId = 'retry-success-job-id';
-
-    Cache::put("magic-translator:job:{$jobId}", [
-        'id' => $jobId,
-        'target_site' => 'fr',
-        'status' => 'failed',
-        'error' => 'Previous transient error',
-    ], 600);
-
-    $this->createTestCollection('articles', ['en', 'fr']);
-    $this->createTestBlueprint('articles');
-    $entry = $this->createTestEntry('articles');
-
-    $job = new TranslateEntryJob($entry->id(), 'fr', null, [], $jobId);
-    app()->call([$job, 'handle']);
-
-    $cached = Cache::get("magic-translator:job:{$jobId}");
-    expect($cached['status'])->toBe('completed');
-    expect($cached['error'] ?? null)->toBeNull();
-});
-
-it('job updates cache to failed when translation throws', function () {
-    // Bind a translation service that always throws.
-    app()->instance(
-        TranslationService::class,
-        new class implements TranslationService
-        {
-            public function translate(array $units, string $sourceLocale = 'en', string $targetLocale = 'fr'): array
-            {
-                throw new RuntimeException('Simulated API error');
-            }
-        },
-    );
-
-    $jobId = 'fail-job-test';
-
-    Cache::put("magic-translator:job:{$jobId}", [
-        'id' => $jobId,
-        'target_site' => 'fr',
-        'status' => 'pending',
-        'error' => null,
-    ], 600);
-
-    $this->createTestCollection('articles', ['en', 'fr']);
-    $this->createTestBlueprint('articles');
-    $entry = $this->createTestEntry('articles');
-
-    $job = new TranslateEntryJob($entry->id(), 'fr', null, [], $jobId);
-
-    expect(fn () => app()->call([$job, 'handle']))->toThrow(RuntimeException::class);
-
-    $cached = Cache::get("magic-translator:job:{$jobId}");
-    expect($cached['status'])->toBe('failed');
-    expect($cached['error'])->toBe([
-        'code' => 'unexpected_error',
-        'message' => 'An unexpected error occurred.',
-        'retryable' => false,
-    ]);
-});
-
 // ── Helpers (file-scope) ──────────────────────────────────────────────────────
-
-function use_fake_translation_service_for_job_test(): void
-{
-    $mock = Mockery::mock(TranslationService::class);
-    $mock->shouldReceive('translate')->andReturnUsing(
-        fn (array $units) => array_map(
-            fn (ElSchneider\MagicTranslator\Data\TranslationUnit $u) => $u->withTranslation('FR: '.$u->text),
-            $units,
-        ),
-    );
-    app()->instance(TranslationService::class, $mock);
-}

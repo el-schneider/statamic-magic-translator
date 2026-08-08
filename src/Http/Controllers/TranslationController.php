@@ -110,6 +110,20 @@ final class TranslationController extends Controller
             ], 403);
         }
 
+        $collectionHandle = $entry->collectionHandle();
+        $blueprintHandle = $entry->blueprint()->handle();
+
+        if (BlueprintExclusions::contains($collectionHandle, $blueprintHandle)) {
+            return response()->json([
+                'success' => false,
+                'error' => [
+                    'code' => 'unsupported',
+                    'message' => "Translation is not supported for excluded blueprint [{$collectionHandle}.{$blueprintHandle}].",
+                    'retryable' => false,
+                ],
+            ], 422);
+        }
+
         // ── Enforce collection + per-site authorization ───────────────────────
         $sourceSite = $validated['source_site'] ?? $entry->locale();
         $targetSites = $validated['target_sites'];
