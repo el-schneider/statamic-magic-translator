@@ -25,6 +25,12 @@ final class FieldDefinitionBuilder
      */
     private static function normalizeFieldConfig(array $config): array
     {
+        // Resolve here rather than in the classifier so extraction, reassembly and
+        // fingerprinting all see the same type for a custom fieldtype.
+        if (isset($config['type']) && is_string($config['type'])) {
+            $config['type'] = self::resolveFieldtypeAlias($config['type']);
+        }
+
         $type = $config['type'] ?? 'text';
 
         return match ($type) {
@@ -32,6 +38,17 @@ final class FieldDefinitionBuilder
             'grid' => self::normalizeGridConfig($config),
             default => $config,
         };
+    }
+
+    /**
+     * Resolve a custom fieldtype handle to the built-in type it behaves like,
+     * so a project or addon fieldtype holding plain text is not skipped.
+     */
+    private static function resolveFieldtypeAlias(string $type): string
+    {
+        $alias = config('statamic.magic-translator.fieldtype_aliases', [])[$type] ?? null;
+
+        return is_string($alias) ? $alias : $type;
     }
 
     /**

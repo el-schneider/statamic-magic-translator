@@ -2,6 +2,7 @@
 
 declare(strict_types=1);
 
+use ElSchneider\MagicTranslator\Data\TranslationFormat;
 use ElSchneider\MagicTranslator\Extraction\ContentExtractor;
 use ElSchneider\MagicTranslator\Support\FieldDefinitionBuilder;
 use Statamic\Facades\Fieldset;
@@ -76,4 +77,74 @@ it('extracts fields referenced via fieldset.handle string references', function 
     $paths = collect($units)->pluck('path');
 
     expect($paths)->toContain('content.0.attrs.values.tagline');
+});
+
+// ── Fieldtype aliases ─────────────────────────────────────────────────────────
+
+it('skips a custom fieldtype when no alias is configured', function () {
+    $blueprint = test()->createTestBlueprint('articles', 'custom_fieldtype', [
+        ['handle' => 'seo_title', 'field' => ['type' => 'addon_seo_title', 'localizable' => true]],
+    ]);
+
+    $units = (new ContentExtractor)->extract(
+        ['seo_title' => 'Heads up'],
+        FieldDefinitionBuilder::fromBlueprint($blueprint),
+    );
+
+    expect($units)->toBe([]);
+});
+
+it('extracts a custom fieldtype aliased to a built-in type', function () {
+    config()->set('statamic.magic-translator.fieldtype_aliases', ['addon_seo_title' => 'text']);
+
+    $blueprint = test()->createTestBlueprint('articles', 'custom_fieldtype', [
+        ['handle' => 'seo_title', 'field' => ['type' => 'addon_seo_title', 'localizable' => true]],
+    ]);
+
+    $units = (new ContentExtractor)->extract(
+        ['seo_title' => 'Heads up'],
+        FieldDefinitionBuilder::fromBlueprint($blueprint),
+    );
+
+    expect($units)->toHaveCount(1)
+        ->and($units[0]->path)->toBe('seo_title')
+        ->and($units[0]->text)->toBe('Heads up');
+});
+
+it('aliases a custom fieldtype nested inside a set', function () {
+    config()->set('statamic.magic-translator.fieldtype_aliases', ['addon_seo_title' => 'text']);
+
+    $units = extractFromBardBlueprint(
+        [['handle' => 'seo_title', 'field' => ['type' => 'addon_seo_title']]],
+        ['seo_title' => 'Heads up'],
+    );
+
+    expect(collect($units)->pluck('path'))->toContain('content.0.attrs.values.seo_title');
+});
+
+it('applies the format of the aliased type', function () {
+    config()->set('statamic.magic-translator.fieldtype_aliases', ['addon_body' => 'markdown']);
+
+    $blueprint = test()->createTestBlueprint('articles', 'custom_fieldtype', [
+        ['handle' => 'body', 'field' => ['type' => 'addon_body', 'localizable' => true]],
+    ]);
+
+    $units = (new ContentExtractor)->extract(
+        ['body' => '**bold**'],
+        FieldDefinitionBuilder::fromBlueprint($blueprint),
+    );
+
+    expect($units[0]->format)->toBe(TranslationFormat::Markdown);
+});
+
+it('leaves a built-in type untouched when it has no alias', function () {
+    config()->set('statamic.magic-translator.fieldtype_aliases', ['addon_seo_title' => 'text']);
+
+    $blueprint = test()->createTestBlueprint('articles', 'custom_fieldtype', [
+        ['handle' => 'title', 'field' => ['type' => 'text', 'localizable' => true]],
+    ]);
+
+    $fieldDefs = FieldDefinitionBuilder::fromBlueprint($blueprint);
+
+    expect($fieldDefs['title']['type'])->toBe('text');
 });

@@ -76,6 +76,23 @@ return [
 
     /*
     |--------------------------------------------------------------------------
+    | Fieldtype Aliases
+    |--------------------------------------------------------------------------
+    |
+    | Fields are classified by their fieldtype handle, so a custom fieldtype from
+    | an addon or your own project is skipped even when it holds plain text. Map
+    | such a handle to the built-in type it behaves like to have it translated.
+    |
+    | 'my_addon_meta_title' => 'text',
+    |
+    */
+
+    'fieldtype_aliases' => [
+        //
+    ],
+
+    /*
+    |--------------------------------------------------------------------------
     | Prism Configuration
     |--------------------------------------------------------------------------
     |
