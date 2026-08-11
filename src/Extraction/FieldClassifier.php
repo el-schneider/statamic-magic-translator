@@ -41,19 +41,7 @@ final class FieldClassifier
             return FieldTier::Skip;
         }
 
-        return match ($fieldConfig['type'] ?? '') {
-            // ── Tier 1: flat text ──────────────────────────────────────────
-            'text', 'textarea', 'markdown', 'link' => FieldTier::Tier1,
-
-            // ── Tier 2: structural containers ─────────────────────────────
-            'replicator', 'grid', 'table' => FieldTier::Tier2,
-
-            // ── Tier 3: bard (ProseMirror) ────────────────────────────────
-            'bard' => FieldTier::Tier3,
-
-            // ── Skip: everything else ──────────────────────────────────────
-            default => FieldTier::Skip,
-        };
+        return self::tierForType($fieldConfig['type'] ?? '');
     }
 
     /**
@@ -79,19 +67,15 @@ final class FieldClassifier
             return FieldTier::Skip;
         }
 
-        return match ($fieldConfig['type'] ?? '') {
-            // ── Tier 1: flat text ──────────────────────────────────────────
-            'text', 'textarea', 'markdown', 'link' => FieldTier::Tier1,
+        return self::tierForType($fieldConfig['type'] ?? '');
+    }
 
-            // ── Tier 2: structural containers ─────────────────────────────
-            'replicator', 'grid', 'table' => FieldTier::Tier2,
-
-            // ── Tier 3: bard (ProseMirror) ────────────────────────────────
-            'bard' => FieldTier::Tier3,
-
-            // ── Skip: everything else ──────────────────────────────────────
-            default => FieldTier::Skip,
-        };
+    /**
+     * Whether the addon already knows how to take this fieldtype apart.
+     */
+    public static function isBuiltIn(string $type): bool
+    {
+        return self::tierForType($type) !== FieldTier::Skip;
     }
 
     /**
@@ -103,6 +87,23 @@ final class FieldClassifier
         return match ($type) {
             'markdown' => TranslationFormat::Markdown,
             default => TranslationFormat::Plain,
+        };
+    }
+
+    private static function tierForType(string $type): FieldTier
+    {
+        return match ($type) {
+            // ── Tier 1: flat text ──────────────────────────────────────────
+            'text', 'textarea', 'markdown', 'link' => FieldTier::Tier1,
+
+            // ── Tier 2: structural containers ─────────────────────────────
+            'replicator', 'grid', 'table' => FieldTier::Tier2,
+
+            // ── Tier 3: bard (ProseMirror) ────────────────────────────────
+            'bard' => FieldTier::Tier3,
+
+            // ── Skip: everything else ──────────────────────────────────────
+            default => FieldTier::Skip,
         };
     }
 }

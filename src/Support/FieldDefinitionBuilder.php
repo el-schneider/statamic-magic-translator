@@ -4,6 +4,8 @@ declare(strict_types=1);
 
 namespace ElSchneider\MagicTranslator\Support;
 
+use ElSchneider\MagicTranslator\Exceptions\TranslationConfigException;
+use ElSchneider\MagicTranslator\Extraction\FieldClassifier;
 use Statamic\Fields\Blueprint;
 use Statamic\Fields\Fields;
 
@@ -25,12 +27,55 @@ final class FieldDefinitionBuilder
      */
     private static function normalizeFieldConfig(array $config): array
     {
+        // Resolve here rather than in the classifier so extraction, reassembly and
+        // fingerprinting all see the same type for a custom fieldtype.
+        if (isset($config['type']) && is_string($config['type'])) {
+            $config['type'] = self::resolveCustomFieldtype($config['type']);
+        }
+
         $type = $config['type'] ?? 'text';
 
         return match ($type) {
             'replicator', 'bard' => self::normalizeSetConfig($config),
             'grid' => self::normalizeGridConfig($config),
             default => $config,
+        };
+    }
+
+    /**
+     * Translate an opted-in custom fieldtype into the built-in type carrying the
+     * same content format, so a project or addon fieldtype holding plain text is
+     * not skipped.
+     *
+     * Only the two flat formats can be declared. A container type would send the
+     * extractor into a structure the custom fieldtype has no obligation to have.
+     */
+    private static function resolveCustomFieldtype(string $type): string
+    {
+        $declared = config('statamic.magic-translator.custom_fieldtypes', [])[$type] ?? null;
+
+        if ($declared === null) {
+            return $type;
+        }
+
+        // A built-in handle listed here would reclassify every field of that type
+        // in the installation, not just the one the author had in mind.
+        if (FieldClassifier::isBuiltIn($type)) {
+            throw new TranslationConfigException(
+                sprintf('custom_fieldtypes[%s] is a built-in fieldtype and cannot be redeclared.', $type)
+            );
+        }
+
+        return match ($declared) {
+            'plain' => 'text',
+            'markdown' => 'markdown',
+            default => throw new TranslationConfigException(
+                sprintf(
+                    'custom_fieldtypes[%s] is [%s], expected plain or markdown.',
+                    $type,
+                    is_scalar($declared) ? (string) $declared : get_debug_type($declared),
+                )
+            ),
         };
     }
 

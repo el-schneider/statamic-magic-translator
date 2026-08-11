@@ -211,6 +211,18 @@ The addon handles all idiomatic Statamic content patterns:
 
 Fields marked `localizable: false` in the blueprint are always skipped. Individual fields can be excluded with `translatable: false` in the field config.
 
+Custom fieldtypes from an addon or your own project are skipped, because a plain string can just as easily be a colour swatch or an ID as a meta title. Opt one in by declaring what it holds:
+
+```php
+// config/statamic/magic-translator.php
+'custom_fieldtypes' => [
+    'aardvark_seo_meta_title' => 'plain',
+    'my_addon_body' => 'markdown',
+],
+```
+
+Only `plain` and `markdown` can be declared. A fieldtype holding structured data cannot be opted in.
+
 Deeply nested structures (Bard → set → Replicator → set → Bard → …) work to arbitrary depth.
 
 ## Customizing Prompts
