@@ -46,6 +46,23 @@ it('serializes text node with empty string', function () {
     expect($result->markMap)->toBe([]);
 });
 
+it('escapes xml special characters in text content', function () {
+    $content = [['type' => 'text', 'text' => 'Research & advice for <10 percent']];
+
+    $result = $this->serializer->serialize($content);
+
+    expect($result->text)->toBe('Research &amp; advice for &lt;10 percent');
+    expect($result->markMap)->toBe([]);
+});
+
+it('escapes xml special characters inside marked text', function () {
+    $content = [['type' => 'text', 'marks' => [['type' => 'bold']], 'text' => 'R&D']];
+
+    $result = $this->serializer->serialize($content);
+
+    expect($result->text)->toBe('<b>R&amp;D</b>');
+});
+
 // ── Single known marks ────────────────────────────────────────────────────────
 
 it('serializes bold mark as <b> tag', function () {

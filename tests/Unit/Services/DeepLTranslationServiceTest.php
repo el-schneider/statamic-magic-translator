@@ -127,6 +127,78 @@ it('assigns sequential ids starting from 0 for each chunk', function () {
     );
 });
 
+// ─── Escaping ─────────────────────────────────────────────────────────────────
+
+it('escapes xml special characters in plain unit text', function () {
+    $capturedText = null;
+
+    $translator = Mockery::mock(Translator::class);
+    $translator->shouldReceive('translateText')
+        ->once()
+        ->andReturnUsing(function (string $text) use (&$capturedText) {
+            $capturedText = $text;
+
+            return deeplTextResult('<ct-unit id="0">Service &amp; support</ct-unit>');
+        });
+
+    $units = [new TranslationUnit('title', 'Diensten & support < altijd', TranslationFormat::Plain)];
+
+    deeplService($translator)->translate($units, 'nl', 'en-US');
+
+    expect($capturedText)->toBe(
+        '<ct-unit id="0">Diensten &amp; support &lt; altijd</ct-unit>'
+    );
+});
+
+it('produces a well-formed payload for text with a bare ampersand', function () {
+    $capturedText = null;
+
+    $translator = Mockery::mock(Translator::class);
+    $translator->shouldReceive('translateText')
+        ->once()
+        ->andReturnUsing(function (string $text) use (&$capturedText) {
+            $capturedText = $text;
+
+            return deeplTextResult('<ct-unit id="0">Customer experience &amp; self-service</ct-unit>');
+        });
+
+    $units = [new TranslationUnit('title', 'Klantbeleving & selfservice', TranslationFormat::Plain)];
+
+    deeplService($translator)->translate($units, 'nl', 'en-US');
+
+    expect(simplexml_load_string("<root>{$capturedText}</root>"))->not->toBeFalse();
+});
+
+it('decodes entities in the translated plain text', function () {
+    $translator = mockTranslator('<ct-unit id="0">Customer experience &amp; self-service</ct-unit>');
+
+    $units = [new TranslationUnit('title', 'Klantbeleving & selfservice', TranslationFormat::Plain)];
+
+    $result = deeplService($translator)->translate($units, 'nl', 'en-US');
+
+    expect($result[0]->translatedText)->toBe('Customer experience & self-service');
+});
+
+it('leaves html unit markup intact', function () {
+    $capturedText = null;
+
+    $translator = Mockery::mock(Translator::class);
+    $translator->shouldReceive('translateText')
+        ->once()
+        ->andReturnUsing(function (string $text) use (&$capturedText) {
+            $capturedText = $text;
+
+            return deeplTextResult('<ct-unit id="0"><b>Bold</b> &amp; more</ct-unit>');
+        });
+
+    $units = [new TranslationUnit('text.body', '<b>Vet</b> &amp; meer', TranslationFormat::Html)];
+
+    $result = deeplService($translator)->translate($units, 'nl', 'en-US');
+
+    expect($capturedText)->toBe('<ct-unit id="0"><b>Vet</b> &amp; meer</ct-unit>')
+        ->and($result[0]->translatedText)->toBe('<b>Bold</b> &amp; more');
+});
+
 // ─── Response splitting ───────────────────────────────────────────────────────
 
 it('splits response back by ct-unit tags and maps to units', function () {

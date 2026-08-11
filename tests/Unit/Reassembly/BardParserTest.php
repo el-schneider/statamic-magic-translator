@@ -148,6 +148,26 @@ it('unescapes html entities in link attribute values', function () {
     ]);
 });
 
+it('unescapes html entities in text content', function () {
+    $result = $this->parser->parse('Research &amp; advice for &lt;10 percent', []);
+
+    expect($result)->toBe([
+        ['type' => 'text', 'text' => 'Research & advice for <10 percent'],
+    ]);
+});
+
+it('round-trips text containing xml special characters', function () {
+    $original = [
+        ['type' => 'text', 'text' => 'Research & advice for '],
+        ['type' => 'text', 'marks' => [['type' => 'bold']], 'text' => 'more than <10 percent'],
+    ];
+
+    $serialized = $this->serializer->serialize($original);
+    $parsed = $this->parser->parse($serialized->text, $serialized->markMap);
+
+    expect($parsed)->toBe($original);
+});
+
 // ── Nested marks ──────────────────────────────────────────────────────────────
 
 it('parses nested tags back to multiple marks on single text node', function () {

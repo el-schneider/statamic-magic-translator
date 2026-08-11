@@ -57,7 +57,7 @@ final class BardSerializer
                 continue;
             }
 
-            $nodeText = $node['text'] ?? '';
+            $nodeText = $this->escapeText($node['text'] ?? '');
             $marks = $node['marks'] ?? [];
 
             if (empty($marks)) {
@@ -103,6 +103,16 @@ final class BardSerializer
         }
 
         return new BardSerializerResult($text, $markMap);
+    }
+
+    /**
+     * Escape text content so the serialized string stays well-formed XML.
+     * Providers using XML tag handling reject a payload containing a bare
+     * ampersand or angle bracket, which fails the whole request.
+     */
+    private function escapeText(string $text): string
+    {
+        return str_replace(['&', '<', '>'], ['&amp;', '&lt;', '&gt;'], $text);
     }
 
     /**

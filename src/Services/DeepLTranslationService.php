@@ -12,6 +12,7 @@ use DeepL\TooManyRequestsException;
 use DeepL\TranslateTextOptions;
 use DeepL\Translator;
 use ElSchneider\MagicTranslator\Contracts\TranslationService;
+use ElSchneider\MagicTranslator\Data\TranslationFormat;
 use ElSchneider\MagicTranslator\Data\TranslationUnit;
 use ElSchneider\MagicTranslator\Exceptions\ProviderAuthException;
 use ElSchneider\MagicTranslator\Exceptions\ProviderRateLimitedException;
@@ -151,10 +152,28 @@ final class DeepLTranslationService implements TranslationService
         $parts = [];
 
         foreach (array_values($units) as $index => $unit) {
-            $parts[] = "<ct-unit id=\"{$index}\">{$unit->text}</ct-unit>";
+            $text = $this->escapeUnitText($unit);
+            $parts[] = "<ct-unit id=\"{$index}\">{$text}</ct-unit>";
         }
 
         return implode('', $parts);
+    }
+
+    /**
+     * Escape unit text so the payload stays well-formed XML. A bare ampersand
+     * or angle bracket in editorial content makes DeepL reject the whole
+     * request with a tag handling parse error.
+     *
+     * Html units are markup produced by the bard serializer, which escapes its
+     * own text content, so their tags must be left intact.
+     */
+    private function escapeUnitText(TranslationUnit $unit): string
+    {
+        if ($unit->format === TranslationFormat::Html) {
+            return $unit->text;
+        }
+
+        return str_replace(['&', '<', '>'], ['&amp;', '&lt;', '&gt;'], $unit->text);
     }
 
     /**
@@ -193,10 +212,25 @@ final class DeepLTranslationService implements TranslationService
                 );
             }
 
-            $result[] = $unit->withTranslation($translatedByIndex[$index]);
+            $result[] = $unit->withTranslation(
+                $this->decodeUnitText($unit, $translatedByIndex[$index])
+            );
         }
 
         return $result;
+    }
+
+    /**
+     * Reverse escapeUnitText() on a translated string. Html units keep their
+     * entities because the bard parser decodes them while rebuilding nodes.
+     */
+    private function decodeUnitText(TranslationUnit $unit, string $translated): string
+    {
+        if ($unit->format === TranslationFormat::Html) {
+            return $translated;
+        }
+
+        return html_entity_decode($translated, ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8');
     }
 
     /**
