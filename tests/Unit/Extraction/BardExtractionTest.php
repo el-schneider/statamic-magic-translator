@@ -248,7 +248,7 @@ it('stores custom marks in the markMap with sequential indices across blocks', f
 
     expect($units)->toHaveCount(1);
     // First block: data-mark-0, second block: data-mark-1 (renumbered from 0)
-    expect($units[0]->text)->toBe("<span data-mark-0>first</span>\n\n<span data-mark-1>second</span>");
+    expect($units[0]->text)->toBe("<span data-mark-0=\"\">first</span>\n\n<span data-mark-1=\"\">second</span>");
     expect($units[0]->markMap)->toBe([
         0 => ['type' => 'btsSpan', 'attrs' => ['class' => 'brand']],
         1 => ['type' => 'myMark', 'attrs' => ['x' => 1]],

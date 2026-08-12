@@ -151,7 +151,7 @@ it('escapes xml special characters in plain unit text', function () {
     );
 });
 
-it('produces a well-formed payload for text with a bare ampersand', function () {
+it('produces a payload that parses as xml', function () {
     $capturedText = null;
 
     $translator = Mockery::mock(Translator::class);
@@ -164,6 +164,25 @@ it('produces a well-formed payload for text with a bare ampersand', function () 
         });
 
     $units = [new TranslationUnit('title', 'Klantbeleving & selfservice', TranslationFormat::Plain)];
+
+    deeplService($translator)->translate($units, 'nl', 'en-US');
+
+    expect(simplexml_load_string("<root>{$capturedText}</root>"))->not->toBeFalse();
+});
+
+it('produces a payload that parses as xml when a unit carries a custom mark', function () {
+    $capturedText = null;
+
+    $translator = Mockery::mock(Translator::class);
+    $translator->shouldReceive('translateText')
+        ->once()
+        ->andReturnUsing(function (string $text) use (&$capturedText) {
+            $capturedText = $text;
+
+            return deeplTextResult('<ct-unit id="0"><span data-mark-0="">styled</span></ct-unit>');
+        });
+
+    $units = [new TranslationUnit('body', '<span data-mark-0="">gestyled</span>', TranslationFormat::Html)];
 
     deeplService($translator)->translate($units, 'nl', 'en-US');
 

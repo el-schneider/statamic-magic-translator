@@ -212,14 +212,14 @@ it('serializes a custom mark as <span data-mark-N> with mark stored in markMap',
 
     $result = $this->serializer->serialize($content);
 
-    expect($result->text)->toBe('<span data-mark-0>styled</span>');
+    expect($result->text)->toBe('<span data-mark-0="">styled</span>');
     expect($result->markMap)->toBe([0 => ['type' => 'btsSpan', 'attrs' => ['class' => 'brand']]]);
 });
 
 it('serializes custom marks fixture preserving full mark definition', function () {
     $result = $this->serializer->serialize(bardFixture('custom-marks'));
 
-    expect($result->text)->toBe('This is <span data-mark-0>styled text</span> here');
+    expect($result->text)->toBe('This is <span data-mark-0="">styled text</span> here');
     expect($result->markMap[0])->toBe(['type' => 'btsSpan', 'attrs' => ['class' => 'brand', 'id' => 'logo']]);
 });
 
@@ -232,7 +232,7 @@ it('assigns sequential indexes to multiple custom marks', function () {
 
     $result = $this->serializer->serialize($content);
 
-    expect($result->text)->toBe('<span data-mark-0>first</span> <span data-mark-1>second</span>');
+    expect($result->text)->toBe('<span data-mark-0="">first</span> <span data-mark-1="">second</span>');
     expect($result->markMap[0])->toBe(['type' => 'customA', 'attrs' => ['x' => 1]]);
     expect($result->markMap[1])->toBe(['type' => 'customB', 'attrs' => ['y' => 2]]);
 });
@@ -244,7 +244,7 @@ it('nests a custom mark inside a known mark', function () {
 
     $result = $this->serializer->serialize($content);
 
-    expect($result->text)->toBe('<b><span data-mark-0>styled bold</span></b>');
+    expect($result->text)->toBe('<b><span data-mark-0="">styled bold</span></b>');
     expect($result->markMap[0])->toBe(['type' => 'myMark', 'attrs' => ['foo' => 'bar']]);
 });
 
