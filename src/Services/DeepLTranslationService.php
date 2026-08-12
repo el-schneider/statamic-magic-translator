@@ -18,6 +18,7 @@ use ElSchneider\MagicTranslator\Exceptions\ProviderAuthException;
 use ElSchneider\MagicTranslator\Exceptions\ProviderRateLimitedException;
 use ElSchneider\MagicTranslator\Exceptions\ProviderResponseInvalidException;
 use ElSchneider\MagicTranslator\Exceptions\ProviderUnavailableException;
+use ElSchneider\MagicTranslator\Exceptions\SourceContentInvalidException;
 use ElSchneider\MagicTranslator\Support\TranslationLogger;
 use InvalidArgumentException;
 
@@ -152,11 +153,38 @@ final class DeepLTranslationService implements TranslationService
         $parts = [];
 
         foreach (array_values($units) as $index => $unit) {
+            $this->assertXmlSafe($unit, $index);
+
             $text = $this->escapeUnitText($unit);
             $parts[] = "<ct-unit id=\"{$index}\">{$text}</ct-unit>";
         }
 
         return implode('', $parts);
+    }
+
+    /**
+     * Reject characters XML 1.0 cannot carry at all. Escaping does not help for
+     * these: control characters other than tab, newline and carriage return are
+     * forbidden in XML text, so DeepL would reject the whole chunk with the same
+     * opaque parse error. They reach content by way of pasted word processor and
+     * PDF text.
+     */
+    private function assertXmlSafe(TranslationUnit $unit, int $index): void
+    {
+        if (preg_match('/[\x{0}-\x{8}\x{B}\x{C}\x{E}-\x{1F}\x{FFFE}\x{FFFF}]/u', $unit->text, $match) !== 1) {
+            return;
+        }
+
+        $codepoint = sprintf('U+%04X', mb_ord($match[0], 'UTF-8'));
+
+        throw new SourceContentInvalidException(
+            sprintf('Field [%s] contains a character XML cannot carry (%s).', $unit->path, $codepoint),
+            context: [
+                'unit_index' => $index,
+                'unit_path' => $unit->path,
+                'codepoint' => $codepoint,
+            ]
+        );
     }
 
     /**

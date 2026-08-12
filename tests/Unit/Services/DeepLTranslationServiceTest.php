@@ -16,6 +16,7 @@ use ElSchneider\MagicTranslator\Exceptions\ProviderAuthException;
 use ElSchneider\MagicTranslator\Exceptions\ProviderRateLimitedException;
 use ElSchneider\MagicTranslator\Exceptions\ProviderResponseInvalidException;
 use ElSchneider\MagicTranslator\Exceptions\ProviderUnavailableException;
+use ElSchneider\MagicTranslator\Exceptions\SourceContentInvalidException;
 use ElSchneider\MagicTranslator\Services\DeepLTranslationService;
 
 uses(Tests\TestCase::class);
@@ -197,6 +198,48 @@ it('leaves html unit markup intact', function () {
 
     expect($capturedText)->toBe('<ct-unit id="0"><b>Vet</b> &amp; meer</ct-unit>')
         ->and($result[0]->translatedText)->toBe('<b>Bold</b> &amp; more');
+});
+
+it('rejects text containing a control character xml cannot carry', function () {
+    $translator = Mockery::mock(Translator::class);
+    $translator->shouldNotReceive('translateText');
+
+    $units = [
+        new TranslationUnit('title', 'Ok', TranslationFormat::Plain),
+        new TranslationUnit('hero.title', "Pasted\x0Btext", TranslationFormat::Plain),
+    ];
+
+    expect(fn () => deeplService($translator)->translate($units, 'nl', 'en-US'))
+        ->toThrow(SourceContentInvalidException::class, 'Field [hero.title] contains a character XML cannot carry (U+000B).');
+});
+
+it('rejects a control character inside html unit markup', function () {
+    $translator = Mockery::mock(Translator::class);
+    $translator->shouldNotReceive('translateText');
+
+    $units = [new TranslationUnit('text.body', "<b>Vet\x00</b>", TranslationFormat::Html)];
+
+    expect(fn () => deeplService($translator)->translate($units, 'nl', 'en-US'))
+        ->toThrow(SourceContentInvalidException::class);
+});
+
+it('keeps tab, newline and carriage return in unit text', function () {
+    $capturedText = null;
+
+    $translator = Mockery::mock(Translator::class);
+    $translator->shouldReceive('translateText')
+        ->once()
+        ->andReturnUsing(function (string $text) use (&$capturedText) {
+            $capturedText = $text;
+
+            return deeplTextResult('<ct-unit id="0">Line</ct-unit>');
+        });
+
+    $units = [new TranslationUnit('body', "Regel\ttwee\r\ndrie", TranslationFormat::Plain)];
+
+    deeplService($translator)->translate($units, 'nl', 'en-US');
+
+    expect($capturedText)->toBe("<ct-unit id=\"0\">Regel\ttwee\r\ndrie</ct-unit>");
 });
 
 // ─── Response splitting ───────────────────────────────────────────────────────
