@@ -57,7 +57,7 @@ final class BardSerializer
                 continue;
             }
 
-            $nodeText = $node['text'] ?? '';
+            $nodeText = $this->escapeText($node['text'] ?? '');
             $marks = $node['marks'] ?? [];
 
             if (empty($marks)) {
@@ -93,7 +93,7 @@ final class BardSerializer
                 } else {
                     // Unknown/custom mark — store in markMap and emit a placeholder.
                     $markMap[$customIndex] = $mark;
-                    $openTags .= "<span data-mark-{$customIndex}>";
+                    $openTags .= "<span data-mark-{$customIndex}=\"\">";
                     $closeTags = '</span>'.$closeTags;
                     $customIndex++;
                 }
@@ -103,6 +103,16 @@ final class BardSerializer
         }
 
         return new BardSerializerResult($text, $markMap);
+    }
+
+    /**
+     * Escape text content so the serialized string stays well-formed XML.
+     * Providers using XML tag handling reject a payload containing a bare
+     * ampersand or angle bracket, which fails the whole request.
+     */
+    private function escapeText(string $text): string
+    {
+        return str_replace(['&', '<', '>'], ['&amp;', '&lt;', '&gt;'], $text);
     }
 
     /**
@@ -121,10 +131,11 @@ final class BardSerializer
                 continue;
             }
 
+            // XML has no attribute minimisation, so a boolean attribute has to
+            // carry a value. The parser reads an empty one back as an empty
+            // string rather than true.
             if ($value === true) {
-                $serialized .= ' '.htmlspecialchars($name, ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8');
-
-                continue;
+                $value = '';
             }
 
             if (! is_scalar($value)) {

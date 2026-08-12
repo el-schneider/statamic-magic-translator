@@ -12,11 +12,13 @@ use DeepL\TooManyRequestsException;
 use DeepL\TranslateTextOptions;
 use DeepL\Translator;
 use ElSchneider\MagicTranslator\Contracts\TranslationService;
+use ElSchneider\MagicTranslator\Data\TranslationFormat;
 use ElSchneider\MagicTranslator\Data\TranslationUnit;
 use ElSchneider\MagicTranslator\Exceptions\ProviderAuthException;
 use ElSchneider\MagicTranslator\Exceptions\ProviderRateLimitedException;
 use ElSchneider\MagicTranslator\Exceptions\ProviderResponseInvalidException;
 use ElSchneider\MagicTranslator\Exceptions\ProviderUnavailableException;
+use ElSchneider\MagicTranslator\Exceptions\SourceContentInvalidException;
 use ElSchneider\MagicTranslator\Support\TranslationLogger;
 use InvalidArgumentException;
 
@@ -151,10 +153,64 @@ final class DeepLTranslationService implements TranslationService
         $parts = [];
 
         foreach (array_values($units) as $index => $unit) {
-            $parts[] = "<ct-unit id=\"{$index}\">{$unit->text}</ct-unit>";
+            $this->assertXmlSafe($unit, $index);
+
+            $text = $this->escapeUnitText($unit);
+            $parts[] = "<ct-unit id=\"{$index}\">{$text}</ct-unit>";
         }
 
         return implode('', $parts);
+    }
+
+    /**
+     * Reject characters XML 1.0 cannot carry at all. Escaping does not help for
+     * these: control characters other than tab, newline and carriage return are
+     * forbidden in XML text, so DeepL would reject the whole chunk with the same
+     * opaque parse error. They reach content by way of pasted word processor and
+     * PDF text.
+     */
+    private function assertXmlSafe(TranslationUnit $unit, int $index): void
+    {
+        // Checked before the pattern below, which returns false rather than 0 on
+        // malformed input and would otherwise report broken text as safe.
+        if (! mb_check_encoding($unit->text, 'UTF-8')) {
+            throw new SourceContentInvalidException(
+                sprintf('Field [%s] is not valid UTF-8.', $unit->path),
+                context: ['unit_index' => $index, 'unit_path' => $unit->path]
+            );
+        }
+
+        if (preg_match('/[\x{0}-\x{8}\x{B}\x{C}\x{E}-\x{1F}\x{FFFE}\x{FFFF}]/u', $unit->text, $match) !== 1) {
+            return;
+        }
+
+        $codepoint = sprintf('U+%04X', mb_ord($match[0], 'UTF-8'));
+
+        throw new SourceContentInvalidException(
+            sprintf('Field [%s] contains a character XML cannot carry (%s).', $unit->path, $codepoint),
+            context: [
+                'unit_index' => $index,
+                'unit_path' => $unit->path,
+                'codepoint' => $codepoint,
+            ]
+        );
+    }
+
+    /**
+     * Escape unit text so the payload stays well-formed XML. A bare ampersand
+     * or angle bracket in editorial content makes DeepL reject the whole
+     * request with a tag handling parse error.
+     *
+     * Html units are markup produced by the bard serializer, which escapes its
+     * own text content, so their tags must be left intact.
+     */
+    private function escapeUnitText(TranslationUnit $unit): string
+    {
+        if ($unit->format === TranslationFormat::Html) {
+            return $unit->text;
+        }
+
+        return str_replace(['&', '<', '>'], ['&amp;', '&lt;', '&gt;'], $unit->text);
     }
 
     /**
@@ -193,10 +249,29 @@ final class DeepLTranslationService implements TranslationService
                 );
             }
 
-            $result[] = $unit->withTranslation($translatedByIndex[$index]);
+            $result[] = $unit->withTranslation(
+                $this->decodeUnitText($unit, $translatedByIndex[$index])
+            );
         }
 
         return $result;
+    }
+
+    /**
+     * Reverse escapeUnitText() on a translated string. Html units keep their
+     * entities because the bard parser decodes them while rebuilding nodes.
+     *
+     * ENT_XHTML is what adds &apos; to the table. DeepL re-serializes the XML it
+     * returns and may emit it for an apostrophe; without the flag it would be
+     * stored literally.
+     */
+    private function decodeUnitText(TranslationUnit $unit, string $translated): string
+    {
+        if ($unit->format === TranslationFormat::Html) {
+            return $translated;
+        }
+
+        return html_entity_decode($translated, ENT_QUOTES | ENT_SUBSTITUTE | ENT_XHTML, 'UTF-8');
     }
 
     /**

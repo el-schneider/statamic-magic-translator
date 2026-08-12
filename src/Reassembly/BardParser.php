@@ -25,8 +25,8 @@ namespace ElSchneider\MagicTranslator\Reassembly;
  * Custom mark placeholders:
  *   <span data-mark-N> → look up markMap[N] and restore the full mark definition
  *
- * HTML entities in attribute values (e.g. &quot;) are decoded back to their
- * original characters.
+ * HTML entities in text content and attribute values (e.g. &amp;, &quot;) are
+ * decoded back to their original characters.
  */
 final class BardParser
 {
@@ -128,7 +128,10 @@ final class BardParser
                     ];
                 }
             } elseif (isset($match[2]) && $match[2] !== '') {
-                $tokens[] = ['type' => 'text', 'text' => $match[2]];
+                $tokens[] = [
+                    'type' => 'text',
+                    'text' => html_entity_decode($match[2], ENT_QUOTES | ENT_SUBSTITUTE | ENT_XHTML, 'UTF-8'),
+                ];
             }
         }
 
@@ -211,7 +214,7 @@ final class BardParser
                 continue;
             }
 
-            $attrs[$name] = html_entity_decode($rawValue, ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8');
+            $attrs[$name] = html_entity_decode($rawValue, ENT_QUOTES | ENT_SUBSTITUTE | ENT_XHTML, 'UTF-8');
         }
 
         return $attrs;

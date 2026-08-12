@@ -26,6 +26,7 @@ return [
     'error_provider_unavailable' => 'Translation service is temporarily unavailable. Please try again later.',
     'error_provider_response_invalid' => 'Translation service returned an invalid response.',
     'error_translation_config_invalid' => 'Translation configuration is invalid.',
+    'error_source_content_invalid' => 'A field contains a character that cannot be translated.',
     'error_resource_not_found' => 'The requested resource was not found.',
     'error_forbidden' => 'You do not have permission to perform this action.',
     'error_unauthorized' => 'Authentication is required.',

@@ -76,6 +76,31 @@ return [
 
     /*
     |--------------------------------------------------------------------------
+    | Custom Fieldtypes
+    |--------------------------------------------------------------------------
+    |
+    | Fields are classified by their fieldtype handle, so a custom fieldtype from
+    | an addon or your own project is skipped even when it holds plain text. List
+    | such a handle here to have it translated.
+    |
+    | A scalar value is not enough to go on: a meta title and a colour swatch are
+    | both plain strings, and only one of them should ever be sent to a provider.
+    | So the opt-in is explicit, and it declares what the field holds:
+    |
+    | 'aardvark_seo_meta_title' => 'plain',
+    | 'my_addon_body' => 'markdown',
+    |
+    | Fieldtypes holding structured data cannot be listed. Their shape is theirs
+    | alone, and nothing here can describe how to take it apart.
+    |
+    */
+
+    'custom_fieldtypes' => [
+        //
+    ],
+
+    /*
+    |--------------------------------------------------------------------------
     | Prism Configuration
     |--------------------------------------------------------------------------
     |

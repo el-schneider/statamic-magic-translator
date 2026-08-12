@@ -6,6 +6,7 @@ namespace ElSchneider\MagicTranslator\Extraction;
 
 use ElSchneider\MagicTranslator\Data\TranslationFormat;
 use ElSchneider\MagicTranslator\Data\TranslationUnit;
+use ElSchneider\MagicTranslator\Exceptions\SourceContentInvalidException;
 
 /**
  * Extracts translatable content from entry data into a flat list of
@@ -63,6 +64,21 @@ final class ContentExtractor
                 // Skip absent, null, or empty string values.
                 if ($value === null || $value === '') {
                     continue;
+                }
+
+                // Reassembly writes the translated string back over whatever was
+                // here, so a non-scalar would be replaced by "Array" rather than
+                // translated.
+                if (! is_scalar($value)) {
+                    throw new SourceContentInvalidException(
+                        sprintf(
+                            'Field [%s] is typed [%s] but holds %s.',
+                            $fullPath,
+                            $fieldConfig['type'],
+                            get_debug_type($value),
+                        ),
+                        context: ['unit_path' => $fullPath, 'type' => $fieldConfig['type']]
+                    );
                 }
 
                 $format = FieldClassifier::formatForType($fieldConfig['type']);
