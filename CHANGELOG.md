@@ -2,6 +2,32 @@
 
 All notable changes to `el-schneider/statamic-magic-translator` will be documented in this file.
 
+## v0.3.0 - 2026-08-12
+
+### What's new
+
+- Custom fieldtypes can opt in to translation. A fieldtype from an addon or your own project is skipped by default, because a plain string is as likely to be a colour swatch or an ID as a meta title. Declare what it holds to have it translated (#33, thanks @stijn-cube):
+  
+  ```php
+  'custom_fieldtypes' => [
+      'aardvark_seo_meta_title' => 'plain',
+      'my_addon_body' => 'markdown',
+  ],
+  
+  ```
+
+### What's fixed
+
+- Escape unit text before it reaches the DeepL payload. A bare `&` or `<` in a headline made the payload invalid XML, and because units are batched, one character failed every field in the chunk. (#33, thanks @stijn-cube)
+- Serialize bard custom mark placeholders as valid XML. `<span data-mark-0>` is a bare attribute, which DeepL's v2 tag handling rejects outright. (#33)
+- Reject content XML cannot carry, naming the field instead of letting DeepL fail the whole request with a parse error. Control characters from pasted word processor text are the usual source. (#33)
+- Refuse to flatten a field holding structured data. Tier 1 extraction cast any value to a string, so an array became the literal `"Array"` and reassembly wrote that back over the whole sub-array. (#33)
+- Decode `&apos;` in translated text, which the HTML 4.01 entity table does not cover. (#33)
+
+### Maintenance
+
+- Bump `actions/checkout`, `actions/setup-node`, `actions/cache`, `dependabot/fetch-metadata` and `git-auto-commit-action`.
+
 ## v0.2.1 - 2026-08-08
 
 ### What's fixed
