@@ -130,7 +130,7 @@ final class BardParser
             } elseif (isset($match[2]) && $match[2] !== '') {
                 $tokens[] = [
                     'type' => 'text',
-                    'text' => html_entity_decode($match[2], ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8'),
+                    'text' => html_entity_decode($match[2], ENT_QUOTES | ENT_SUBSTITUTE | ENT_XHTML, 'UTF-8'),
                 ];
             }
         }
@@ -214,7 +214,7 @@ final class BardParser
                 continue;
             }
 
-            $attrs[$name] = html_entity_decode($rawValue, ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8');
+            $attrs[$name] = html_entity_decode($rawValue, ENT_QUOTES | ENT_SUBSTITUTE | ENT_XHTML, 'UTF-8');
         }
 
         return $attrs;

@@ -171,6 +171,15 @@ final class DeepLTranslationService implements TranslationService
      */
     private function assertXmlSafe(TranslationUnit $unit, int $index): void
     {
+        // Checked before the pattern below, which returns false rather than 0 on
+        // malformed input and would otherwise report broken text as safe.
+        if (! mb_check_encoding($unit->text, 'UTF-8')) {
+            throw new SourceContentInvalidException(
+                sprintf('Field [%s] is not valid UTF-8.', $unit->path),
+                context: ['unit_index' => $index, 'unit_path' => $unit->path]
+            );
+        }
+
         if (preg_match('/[\x{0}-\x{8}\x{B}\x{C}\x{E}-\x{1F}\x{FFFE}\x{FFFF}]/u', $unit->text, $match) !== 1) {
             return;
         }
@@ -251,6 +260,10 @@ final class DeepLTranslationService implements TranslationService
     /**
      * Reverse escapeUnitText() on a translated string. Html units keep their
      * entities because the bard parser decodes them while rebuilding nodes.
+     *
+     * ENT_XHTML is what adds &apos; to the table. DeepL re-serializes the XML it
+     * returns and may emit it for an apostrophe; without the flag it would be
+     * stored literally.
      */
     private function decodeUnitText(TranslationUnit $unit, string $translated): string
     {
@@ -258,7 +271,7 @@ final class DeepLTranslationService implements TranslationService
             return $translated;
         }
 
-        return html_entity_decode($translated, ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8');
+        return html_entity_decode($translated, ENT_QUOTES | ENT_SUBSTITUTE | ENT_XHTML, 'UTF-8');
     }
 
     /**

@@ -223,6 +223,26 @@ it('rejects a control character inside html unit markup', function () {
         ->toThrow(SourceContentInvalidException::class);
 });
 
+it('rejects text that is not valid utf-8', function () {
+    $translator = Mockery::mock(Translator::class);
+    $translator->shouldNotReceive('translateText');
+
+    $units = [new TranslationUnit('title', "bad \xC3\x28 utf8", TranslationFormat::Plain)];
+
+    expect(fn () => deeplService($translator)->translate($units, 'nl', 'en-US'))
+        ->toThrow(SourceContentInvalidException::class, 'Field [title] is not valid UTF-8.');
+});
+
+it('decodes an apostrophe entity in the translated text', function () {
+    $translator = mockTranslator('<ct-unit id="0">the editor&apos;s choice</ct-unit>');
+
+    $units = [new TranslationUnit('title', 'de keuze van de redacteur', TranslationFormat::Plain)];
+
+    $result = deeplService($translator)->translate($units, 'nl', 'en-US');
+
+    expect($result[0]->translatedText)->toBe("the editor's choice");
+});
+
 it('keeps tab, newline and carriage return in unit text', function () {
     $capturedText = null;
 
