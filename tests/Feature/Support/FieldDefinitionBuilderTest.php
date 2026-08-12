@@ -3,6 +3,7 @@
 declare(strict_types=1);
 
 use ElSchneider\MagicTranslator\Data\TranslationFormat;
+use ElSchneider\MagicTranslator\Exceptions\SourceContentInvalidException;
 use ElSchneider\MagicTranslator\Exceptions\TranslationConfigException;
 use ElSchneider\MagicTranslator\Extraction\ContentExtractor;
 use ElSchneider\MagicTranslator\Support\FieldDefinitionBuilder;
@@ -169,4 +170,19 @@ it('rejects a built-in fieldtype being redeclared', function () {
 
     expect(fn () => FieldDefinitionBuilder::fromBlueprint($blueprint))
         ->toThrow(TranslationConfigException::class, 'custom_fieldtypes[bard] is a built-in fieldtype and cannot be redeclared.');
+});
+
+it('refuses to flatten a custom fieldtype that turns out to hold an array', function () {
+    config()->set('statamic.magic-translator.custom_fieldtypes', ['addon_seo' => 'plain']);
+
+    $blueprint = test()->createTestBlueprint('articles', 'custom_fieldtype', [
+        ['handle' => 'seo', 'field' => ['type' => 'addon_seo', 'localizable' => true]],
+    ]);
+
+    $extract = fn () => (new ContentExtractor)->extract(
+        ['seo' => ['title' => 'Heads up', 'description' => 'More']],
+        FieldDefinitionBuilder::fromBlueprint($blueprint),
+    );
+
+    expect($extract)->toThrow(SourceContentInvalidException::class, 'Field [seo] is typed [text] but holds array.');
 });
