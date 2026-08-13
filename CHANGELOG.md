@@ -2,6 +2,17 @@
 
 All notable changes to `el-schneider/statamic-magic-translator` will be documented in this file.
 
+## v0.3.1 - 2026-08-13
+
+### What's fixed
+
+- The addon can now be installed alongside packages still on Prism 0.99. The constraint was `^0.100` exclusively — a leftover from scaffolding, not a real requirement — which forced every consumer onto 0.100 (#35)
+
+### What's new
+
+- CI tests against both supported Prism minors (#35)
+- Dependabot now widens the Composer constraint range on updates instead of replacing it (#36)
+
 ## v0.3.0 - 2026-08-12
 
 ### What's new
@@ -13,6 +24,7 @@ All notable changes to `el-schneider/statamic-magic-translator` will be document
       'aardvark_seo_meta_title' => 'plain',
       'my_addon_body' => 'markdown',
   ],
+  
   
   ```
 
