@@ -33,7 +33,7 @@
   },
   "require": {
     "statamic/cms": "^5.0 || ^6.0",
-    "prism-php/prism": "^0.100",
+    "prism-php/prism": "^0.99 || ^0.100",
     "deeplcom/deepl-php": "^1.0"
   },
   "require-dev": {
