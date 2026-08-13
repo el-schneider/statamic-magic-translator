@@ -17,6 +17,9 @@ updates:
       interval: daily
       time: '01:30'
       timezone: Europe/Berlin
+    # This package is a library: widen constraints to keep both the old and new
+    # version installable, instead of forcing consumers onto the new one.
+    versioning-strategy: widen
     cooldown:
       default-days: 7
       semver-patch-days: 3
