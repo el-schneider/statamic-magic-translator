@@ -8,7 +8,7 @@ on:
 
 jobs:
   tests:
-    name: Tests – PHP ${{ matrix.php }} / Statamic ${{ matrix.statamic }}
+    name: Tests – PHP ${{ matrix.php }} / Statamic ${{ matrix.statamic }} / Prism ${{ matrix.prism }}
     runs-on: ubuntu-latest
     timeout-minutes: 10
 
@@ -17,11 +17,17 @@ jobs:
       matrix:
         php: ['8.3', '8.4']
         statamic: ['6']
+        prism: ['^0.100']
         # The addon supports Statamic 5 until Statamic 7 lands. Statamic 5 caps
         # at Laravel 12, so this leg also covers the older Testbench/Laravel.
         include:
           - php: '8.3'
             statamic: '5'
+            prism: '^0.100'
+          # Prism 0.x pins the minor, so each supported minor needs its own leg.
+          - php: '8.4'
+            statamic: '6'
+            prism: '^0.99'
 
     steps:
       - uses: actions/checkout@v7
@@ -45,11 +51,11 @@ jobs:
         uses: actions/cache@v6
         with:
           path: ${{ steps.composer-cache.outputs.dir }}
-          key: composer-${{ matrix.php }}-statamic${{ matrix.statamic }}-${{ hashFiles('composer.json') }}
+          key: composer-${{ matrix.php }}-statamic${{ matrix.statamic }}-prism${{ matrix.prism }}-${{ hashFiles('composer.json') }}
           restore-keys: |
-            composer-${{ matrix.php }}-statamic${{ matrix.statamic }}-
+            composer-${{ matrix.php }}-statamic${{ matrix.statamic }}-prism${{ matrix.prism }}-
 
-      - run: composer require "statamic/cms:^${{ matrix.statamic }}.0" --no-update --no-interaction
+      - run: composer require "statamic/cms:^${{ matrix.statamic }}.0" "prism-php/prism:${{ matrix.prism }}" --no-update --no-interaction
 
       - run: composer update --prefer-stable --prefer-dist --no-interaction
 
