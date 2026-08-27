@@ -2,6 +2,12 @@
 
 All notable changes to `el-schneider/statamic-magic-translator` will be documented in this file.
 
+## v0.3.2 - 2026-08-27
+
+### What's fixed
+
+- Translations no longer fail during reassembly on Statamic 5 installations using Laravel 11. The addon uses `Arr::has()` instead of the unavailable global `data_has()` helper (#38, #39)
+
 ## v0.3.1 - 2026-08-13
 
 ### What's fixed
@@ -24,6 +30,7 @@ All notable changes to `el-schneider/statamic-magic-translator` will be document
       'aardvark_seo_meta_title' => 'plain',
       'my_addon_body' => 'markdown',
   ],
+  
   
   
   ```
