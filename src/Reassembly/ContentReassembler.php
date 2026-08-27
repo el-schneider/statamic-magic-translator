@@ -6,6 +6,7 @@ namespace ElSchneider\MagicTranslator\Reassembly;
 
 use ElSchneider\MagicTranslator\Data\TranslationFormat;
 use ElSchneider\MagicTranslator\Data\TranslationUnit;
+use Illuminate\Support\Arr;
 
 /**
  * Reassembles translated TranslationUnit objects back into the original
@@ -64,7 +65,7 @@ final class ContentReassembler
                 // Plain or Markdown unit: only set existing paths.
                 // This avoids creating stale keys when blueprints/data changed
                 // after extraction but before reassembly.
-                if (! data_has($result, $unit->path)) {
+                if (! Arr::has($result, $unit->path)) {
                     continue;
                 }
 
