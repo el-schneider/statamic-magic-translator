@@ -14,10 +14,10 @@ use ElSchneider\MagicTranslator\Data\TranslationFormat;
  *   - `localizable` absent or false → Skip  (field does not vary per locale)
  *
  * Tiers:
- *   Tier 1 — flat text  : text, textarea, markdown, link
+ *   Tier 1 — flat text  : text, textarea, markdown
  *   Tier 2 — structural : replicator, grid, table
  *   Tier 3 — bard       : bard
- *   Skip   — everything else (assets, toggle, integer, float, date, color,
+ *   Skip   — everything else (assets, link, toggle, integer, float, date, color,
  *             code, select, radio, checkboxes, entries, terms, users, video,
  *             yaml, template, section, slug, unknown)
  */
@@ -94,7 +94,7 @@ final class FieldClassifier
     {
         return match ($type) {
             // ── Tier 1: flat text ──────────────────────────────────────────
-            'text', 'textarea', 'markdown', 'link' => FieldTier::Tier1,
+            'text', 'textarea', 'markdown' => FieldTier::Tier1,
 
             // ── Tier 2: structural containers ─────────────────────────────
             'replicator', 'grid', 'table' => FieldTier::Tier2,

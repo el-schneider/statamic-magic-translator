@@ -5,11 +5,12 @@ declare(strict_types=1);
 use ElSchneider\MagicTranslator\Extraction\FieldClassifier;
 use ElSchneider\MagicTranslator\Extraction\FieldTier;
 
-dataset('tier1 types', ['text', 'textarea', 'markdown', 'link']);
+dataset('tier1 types', ['text', 'textarea', 'markdown']);
 dataset('tier2 types', ['replicator', 'grid', 'table']);
 dataset('tier3 types', ['bard']);
 dataset('skip types', [
     'assets',
+    'link',
     'toggle',
     'integer',
     'float',

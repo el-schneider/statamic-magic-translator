@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 use ElSchneider\MagicTranslator\Data\TranslationFormat;
 use ElSchneider\MagicTranslator\Extraction\ContentExtractor;
+use ElSchneider\MagicTranslator\Reassembly\ContentReassembler;
 
 beforeEach(function () {
     $this->extractor = new ContentExtractor;
@@ -105,6 +106,44 @@ it('skips fields with translatable false', function () {
 
     expect($units)->toHaveCount(1);
     expect($units[0]->path)->toBe('title');
+});
+
+it('preserves link references while translating adjacent text', function () {
+    $data = [
+        'title' => 'Read more',
+        'destination' => 'entry::abc-123',
+        'links' => [
+            ['label' => 'About us', 'target' => 'https://example.com/about'],
+            ['label' => 'Contact', 'target' => '@child'],
+        ],
+    ];
+    $fields = [
+        'title' => ['type' => 'text', 'localizable' => true],
+        'destination' => ['type' => 'link', 'localizable' => true],
+        'links' => [
+            'type' => 'grid',
+            'localizable' => true,
+            'fields' => [
+                'label' => ['type' => 'text'],
+                'target' => ['type' => 'link'],
+            ],
+        ],
+    ];
+
+    $units = $this->extractor->extract($data, $fields);
+
+    expect(array_map(fn ($unit) => $unit->path, $units))->toBe([
+        'title', 'links.0.label', 'links.1.label',
+    ]);
+
+    $translated = array_map(fn ($unit) => $unit->withTranslation('Translated '.$unit->text), $units);
+    $result = (new ContentReassembler)->reassemble($data, $translated, $fields);
+
+    expect($result['title'])->toBe('Translated Read more')
+        ->and($result['destination'])->toBe('entry::abc-123')
+        ->and($result['links'][0]['label'])->toBe('Translated About us')
+        ->and($result['links'][0]['target'])->toBe('https://example.com/about')
+        ->and($result['links'][1]['target'])->toBe('@child');
 });
 
 // ── Skipping wrong types ───────────────────────────────────────────────────────
