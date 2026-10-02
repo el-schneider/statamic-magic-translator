@@ -173,6 +173,31 @@ it('rejects a built-in fieldtype being redeclared', function () {
         ->toThrow(TranslationConfigException::class, 'custom_fieldtypes[bard] is a built-in fieldtype and cannot be redeclared.');
 });
 
+it('rejects a link fieldtype override and preserves its reference string', function () {
+    config()->set('statamic.magic-translator.custom_fieldtypes', ['link' => 'plain']);
+
+    $blueprint = test()->createTestBlueprint('articles', 'custom_fieldtype', [
+        ['handle' => 'title', 'field' => ['type' => 'text', 'localizable' => true]],
+        ['handle' => 'destination', 'field' => ['type' => 'link', 'localizable' => true]],
+    ]);
+
+    expect(fn () => FieldDefinitionBuilder::fromBlueprint($blueprint))
+        ->toThrow(TranslationConfigException::class, 'custom_fieldtypes[link] is a built-in fieldtype and cannot be redeclared.');
+
+    config()->set('statamic.magic-translator.custom_fieldtypes', []);
+
+    $data = ['title' => 'Read more', 'destination' => 'entry::abc-123'];
+    $fieldDefs = FieldDefinitionBuilder::fromBlueprint($blueprint);
+    $units = (new ContentExtractor)->extract($data, $fieldDefs);
+    $translated = array_map(fn ($unit) => $unit->withTranslation('Translated '.$unit->text), $units);
+    $result = (new ContentReassembler)->reassemble($data, $translated, $fieldDefs);
+
+    expect($units)->toHaveCount(1)
+        ->and($units[0]->path)->toBe('title')
+        ->and($result['title'])->toBe('Translated Read more')
+        ->and($result['destination'])->toBe('entry::abc-123');
+});
+
 it('refuses to flatten a custom fieldtype that turns out to hold an array', function () {
     config()->set('statamic.magic-translator.custom_fieldtypes', ['addon_seo' => 'plain']);
 

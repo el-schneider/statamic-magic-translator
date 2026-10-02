@@ -66,6 +66,36 @@ it('creates localization when it does not exist', function () {
     expect($entry->in('fr'))->not->toBeNull();
 });
 
+it('preserves a link-only source reference on a new localization', function () {
+    ['entry' => $entry, 'action' => $action] = setUpTranslationTest(
+        ['destination' => 'entry::source'],
+        ['destination' => ['type' => 'link', 'localizable' => true]],
+    );
+
+    $action->handle($entry->id(), 'fr');
+
+    $fr = Entry::find($entry->id())->in('fr');
+
+    expect($fr->data()->get('destination'))->toBe('entry::source');
+});
+
+it('preserves a link-only source reference when overwriting a localization', function () {
+    ['entry' => $entry, 'action' => $action] = setUpTranslationTest(
+        ['destination' => 'entry::source'],
+        ['destination' => ['type' => 'link', 'localizable' => true]],
+    );
+
+    $entry->makeLocalization('fr')
+        ->data(['destination' => 'entry::old-target'])
+        ->save();
+
+    $action->handle($entry->id(), 'fr');
+
+    $fr = Entry::find($entry->id())->in('fr');
+
+    expect($fr->data()->get('destination'))->toBe('entry::source');
+});
+
 it('overwrites existing localization by default', function () {
     ['entry' => $entry, 'action' => $action] = setUpTranslationTest();
 

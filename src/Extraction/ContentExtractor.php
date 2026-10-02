@@ -12,7 +12,7 @@ use ElSchneider\MagicTranslator\Exceptions\SourceContentInvalidException;
  * Extracts translatable content from entry data into a flat list of
  * TranslationUnit value objects.
  *
- * Tier 1 — flat text fields (text, textarea, markdown, link)
+ * Tier 1 — flat text fields (text, textarea, markdown)
  * Tier 2 — structural containers (replicator, grid, group, table)
  * Tier 3 — bard (ProseMirror) — body text + set field recursion
  */

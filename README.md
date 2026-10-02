@@ -207,7 +207,7 @@ The addon handles all idiomatic Statamic content patterns:
 | **Grid**                               | Each row's columns are recursively extracted and translated.                                                                                                                                             |
 | **Group**                              | Nested fields are recursively extracted and translated.                                                                                                                                                  |
 | **Table**                              | Each cell is translated as plain text.                                                                                                                                                                   |
-| **Link**                               | `text` property is translated, `url` is preserved.                                                                                                                                                       |
+| **Link**                               | Skipped. Statamic stores a link as a URL or content reference, not a label. Use a separate Text field for translatable link text.                                                                                                                                                       |
 | **Assets, Toggle, Integer, Select, …** | Skipped (non-text fields are never translated).                                                                                                                                                          |
 
 Fields marked `localizable: false` in the blueprint are always skipped. Individual fields can be excluded with `translatable: false` in the field config.

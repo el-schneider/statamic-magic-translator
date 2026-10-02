@@ -81,10 +81,10 @@ final class TranslateEntry
 
         // ── 6. Extract TranslationUnits ───────────────────────────────────────
         $sourceData = $sourceEntry->data()->all();
-        $units = $this->extractor->extract($sourceData, $fieldDefs);
+        $extractedUnits = $this->extractor->extract($sourceData, $fieldDefs);
 
         // ── 7. Fire BeforeEntryTranslation event ──────────────────────────────
-        $beforeEvent = new BeforeEntryTranslation($sourceEntry, $targetSite, $units);
+        $beforeEvent = new BeforeEntryTranslation($sourceEntry, $targetSite, $extractedUnits);
         event($beforeEvent);
         $units = $beforeEvent->units;
 
@@ -103,10 +103,9 @@ final class TranslateEntry
         }
 
         // ── 9. Reassemble ─────────────────────────────────────────────────────
-        // When all units were removed by a BeforeEntryTranslation listener
-        // (or nothing was extracted), skip reassembly and use an empty map so
-        // the localization is created with no translated data.
-        if ($units === []) {
+        // Preserve an explicit listener removal while allowing reassembly to
+        // carry source values when extraction found no translatable fields.
+        if ($units === [] && $extractedUnits !== []) {
             $translatedData = [];
         } else {
             $translatedData = $this->reassembler->reassemble($sourceData, $units, $fieldDefs);
