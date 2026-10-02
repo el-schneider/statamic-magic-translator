@@ -71,11 +71,11 @@ final class FieldClassifier
     }
 
     /**
-     * Whether the addon already knows how to take this fieldtype apart.
+     * Whether this fieldtype has built-in behavior that cannot be overridden.
      */
     public static function isBuiltIn(string $type): bool
     {
-        return self::tierForType($type) !== FieldTier::Skip;
+        return $type === 'link' || self::tierForType($type) !== FieldTier::Skip;
     }
 
     /**
