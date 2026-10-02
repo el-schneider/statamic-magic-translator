@@ -37,7 +37,7 @@ final class FieldDefinitionBuilder
 
         return match ($type) {
             'replicator', 'bard' => self::normalizeSetConfig($config),
-            'grid' => self::normalizeGridConfig($config),
+            'grid', 'group' => self::normalizeChildFields($config),
             default => $config,
         };
     }
@@ -123,7 +123,7 @@ final class FieldDefinitionBuilder
      * @param  array<string, mixed>  $config
      * @return array<string, mixed>
      */
-    private static function normalizeGridConfig(array $config): array
+    private static function normalizeChildFields(array $config): array
     {
         $rawFields = $config['fields'] ?? [];
 
