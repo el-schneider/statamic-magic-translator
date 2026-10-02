@@ -9,7 +9,7 @@ enum FieldTier
     /** Flat text: text, textarea, markdown, link */
     case Tier1;
 
-    /** Structural containers: replicator, grid, table */
+    /** Structural containers: replicator, grid, group, table */
     case Tier2;
 
     /** Bard (ProseMirror) fields */

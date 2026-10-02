@@ -15,7 +15,7 @@ use ElSchneider\MagicTranslator\Data\TranslationFormat;
  *
  * Tiers:
  *   Tier 1 — flat text  : text, textarea, markdown, link
- *   Tier 2 — structural : replicator, grid, table
+ *   Tier 2 — structural : replicator, grid, group, table
  *   Tier 3 — bard       : bard
  *   Skip   — everything else (assets, toggle, integer, float, date, color,
  *             code, select, radio, checkboxes, entries, terms, users, video,
@@ -46,7 +46,7 @@ final class FieldClassifier
 
     /**
      * Classify a field config array for use inside a structural container
-     * (replicator set, grid row). The `localizable` guard is skipped because
+     * (replicator set, grid row, group). The `localizable` guard is skipped because
      * the parent container already passed that check — nested field definitions
      * typically do not carry a `localizable` key. If `localizable` is
      * explicitly present and false, still skip.
@@ -97,7 +97,7 @@ final class FieldClassifier
             'text', 'textarea', 'markdown', 'link' => FieldTier::Tier1,
 
             // ── Tier 2: structural containers ─────────────────────────────
-            'replicator', 'grid', 'table' => FieldTier::Tier2,
+            'replicator', 'grid', 'group', 'table' => FieldTier::Tier2,
 
             // ── Tier 3: bard (ProseMirror) ────────────────────────────────
             'bard' => FieldTier::Tier3,
