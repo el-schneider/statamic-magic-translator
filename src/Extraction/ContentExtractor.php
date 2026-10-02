@@ -13,7 +13,7 @@ use ElSchneider\MagicTranslator\Exceptions\SourceContentInvalidException;
  * TranslationUnit value objects.
  *
  * Tier 1 — flat text fields (text, textarea, markdown)
- * Tier 2 — structural containers (replicator, grid, table)
+ * Tier 2 — structural containers (replicator, grid, group, table)
  * Tier 3 — bard (ProseMirror) — body text + set field recursion
  */
 final class ContentExtractor
@@ -134,7 +134,7 @@ final class ContentExtractor
      * Dispatch extraction to the appropriate Tier 2 handler.
      *
      * @param  array<string, mixed>  $fieldConfig
-     * @param  array<int, mixed>  $value
+     * @param  array<int|string, mixed>  $value
      * @return TranslationUnit[]
      */
     private function extractTier2(array $fieldConfig, array $value, string $path): array
@@ -142,6 +142,7 @@ final class ContentExtractor
         return match ($fieldConfig['type']) {
             'replicator' => $this->extractReplicator($fieldConfig, $value, $path),
             'grid' => $this->extractGrid($fieldConfig, $value, $path),
+            'group' => $this->extractWithPrefix($value, $fieldConfig['fields'] ?? [], $path, insideContainer: true),
             'table' => $this->extractTable($value, $path),
             default => [],
         };

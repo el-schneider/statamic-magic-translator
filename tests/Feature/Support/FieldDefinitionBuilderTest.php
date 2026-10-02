@@ -212,3 +212,99 @@ it('refuses to flatten a custom fieldtype that turns out to hold an array', func
 
     expect($extract)->toThrow(SourceContentInvalidException::class, 'Field [seo] is typed [text] but holds array.');
 });
+
+// ── Group fields ──────────────────────────────────────────────────────────────
+
+it('extracts and reassembles localizable fields inside a group', function () {
+    $blueprint = test()->createTestBlueprint('articles', 'with_group', [
+        [
+            'handle' => 'seo',
+            'field' => [
+                'type' => 'group',
+                'localizable' => true,
+                'fields' => [
+                    ['handle' => 'title', 'field' => ['type' => 'text']],
+                    ['handle' => 'description', 'field' => ['type' => 'textarea']],
+                    ['handle' => 'settings', 'field' => [
+                        'type' => 'group',
+                        'fields' => [
+                            ['handle' => 'tagline', 'field' => ['type' => 'markdown']],
+                            ['handle' => 'fixed', 'field' => ['type' => 'text', 'localizable' => false]],
+                        ],
+                    ]],
+                    ['handle' => 'internal', 'field' => ['type' => 'text', 'translatable' => false]],
+                    ['handle' => 'enabled', 'field' => ['type' => 'toggle']],
+                ],
+            ],
+        ],
+    ]);
+
+    $data = ['seo' => [
+        'title' => 'Hello',
+        'description' => 'A description',
+        'settings' => ['tagline' => '**Welcome**', 'fixed' => 'Unchanged'],
+        'internal' => 'Private',
+        'enabled' => true,
+    ]];
+    $fields = FieldDefinitionBuilder::fromBlueprint($blueprint);
+    $units = (new ContentExtractor)->extract($data, $fields);
+
+    expect(collect($units)->pluck('path')->all())->toBe([
+        'seo.title', 'seo.description', 'seo.settings.tagline',
+    ]);
+    expect(collect($units)->pluck('text')->all())->toBe([
+        'Hello', 'A description', '**Welcome**',
+    ]);
+    expect($units[2]->format)->toBe(TranslationFormat::Markdown);
+
+    $translated = array_map(fn ($unit) => $unit->withTranslation('FR: '.$unit->text), $units);
+    $result = (new ContentReassembler)->reassemble($data, $translated, $fields);
+
+    expect($result['seo'])->toBe([
+        'title' => 'FR: Hello',
+        'description' => 'FR: A description',
+        'settings' => ['tagline' => 'FR: **Welcome**', 'fixed' => 'Unchanged'],
+        'internal' => 'Private',
+        'enabled' => true,
+    ]);
+    expect($data['seo']['title'])->toBe('Hello');
+});
+
+it('resolves fieldset imports inside a group', function () {
+    $blueprint = test()->createTestBlueprint('articles', 'group_import', [
+        ['handle' => 'callout', 'field' => [
+            'type' => 'group',
+            'localizable' => true,
+            'fields' => [['import' => 'callout_fields']],
+        ]],
+    ]);
+
+    $units = (new ContentExtractor)->extract(
+        ['callout' => ['callout_label' => 'Heads up', 'callout_text' => 'Important']],
+        FieldDefinitionBuilder::fromBlueprint($blueprint),
+    );
+
+    expect(collect($units)->pluck('path')->all())->toBe([
+        'callout.callout_label', 'callout.callout_text',
+    ]);
+});
+
+it('skips non-localizable and opted-out groups', function () {
+    $blueprint = test()->createTestBlueprint('articles', 'group_opt_out', [
+        ['handle' => 'fixed', 'field' => [
+            'type' => 'group', 'localizable' => false,
+            'fields' => [['handle' => 'title', 'field' => ['type' => 'text']]],
+        ]],
+        ['handle' => 'excluded', 'field' => [
+            'type' => 'group', 'localizable' => true, 'translatable' => false,
+            'fields' => [['handle' => 'title', 'field' => ['type' => 'text']]],
+        ]],
+    ]);
+
+    $units = (new ContentExtractor)->extract(
+        ['fixed' => ['title' => 'Hello'], 'excluded' => ['title' => 'World']],
+        FieldDefinitionBuilder::fromBlueprint($blueprint),
+    );
+
+    expect($units)->toBe([]);
+});

@@ -8,28 +8,9 @@ Package: `el-schneider/statamic-magic-translator`
 
 > ⚠️ **Pre-v1, active development.** Backwards compatibility is generally **not** a reason to hold back changes — breaking changes are acceptable and expected. **Remove this notice from AGENTS.md as soon as v1 is released.**
 
-## Sandbox Environments
+## Local Environment
 
-This addon has companion Statamic sandboxes for testing. They may live as **siblings** or this addon may be **nested inside** a sandbox's `addons/` directory.
-
-### Sibling layout (typical)
-
-```
-../statamic-magic-translator/              # ← you are here
-../statamic-magic-translator-test/         # Statamic v5 sandbox
-../statamic-magic-translator-test-v6/      # Statamic v6 sandbox
-```
-
-### Nested layout (alternative)
-
-```
-./                              # Statamic sandbox root
-└── addons/
-    └── el-schneider/
-        └── statamic-magic-translator/     # ← you are here
-```
-
-**How to detect:** Check if `../../artisan` or `../../../artisan` exists — if so, you're nested inside a sandbox.
+Sandboxes, URLs, ports, and credentials are machine-specific and live in an untracked `AGENTS.local.md` (in this directory or a parent). Read it before running the addon in a Statamic app.
 
 ## Development Commands
 
@@ -47,17 +28,16 @@ npm run fix     # the same two, writing
 ./vendor/bin/pest --filter=SomeTest
 ```
 
-### Running Artisan from the Addon Directory
+### Running Artisan
 
-If sibling layout: `php ../statamic-magic-translator-test/artisan {command}`
-If nested layout: `php ../../artisan {command}` (or `../../../artisan`)
+Run artisan from the Statamic app that has this addon installed (see `AGENTS.local.md`).
 
 ### Async / Queue Testing
 
 Translations dispatched to the queue need a running worker. Before testing async behavior, ensure a queue listener is running in the background for the target sandbox:
 
 ```bash
-php ../statamic-magic-translator-test/artisan queue:listen --tries=1 --timeout=0 &
+php <sandbox>/artisan queue:listen --tries=1 --timeout=0 &
 ```
 
 Check first: `pgrep -f 'queue:listen'` — only start one if none is running.
